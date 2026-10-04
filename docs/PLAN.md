@@ -58,7 +58,7 @@ Goal: replace every ❓ in ARCHITECTURE.md with a ✅ or a documented fallback. 
 
 - [ ] **A0 — Scaffolding** (tier A, parallel with spikes)
   Create `manifest.json` (id `latentoperator.audible`, kinds `service`, `bar-widget`, `panel`, entry points per ARCHITECTURE §2), empty `Service.qml`/`BarWidget.qml`/`Panel.qml` that load cleanly, `bin/omarchy-audible` stub, `backend/` package skeleton, `tests/`, `pyproject.toml` (pytest only as dev dep), `.editorconfig`, a `Makefile` with `test`, `lint`, `dev-link` (symlink into `~/.config/omarchy/plugins/`), `dev-unlink`.
-  Done when: `make dev-link && omarchy-shell shell rescanPlugins` lists the plugin without errors, and `make test` runs (even with zero tests).
+  Done when: `make dev-link && omarchy-shell shell rescanPlugins` lists the plugin without errors (if the shell refuses a symlinked plugin dir, switch `dev-link` to an rsync-based sync and note it), `omarchy plugin validate .` passes, the repo contains no symlinks (add a `make check-symlinks` target: `find . -type l -not -path './.git/*'` must print nothing), and `make test` runs (even with zero tests). Add `validate` and `check-symlinks` to `make lint`.
 
 **GATE G0** — maintainer reviews `SPIKE-RESULTS.md`, resolves D4 and D5, and confirms the architecture still holds. Edit ARCHITECTURE.md to reflect reality before continuing.
 
@@ -175,15 +175,15 @@ Depends on S5/S6 results and the fake backend.
 - [ ] **R3 — MPRIS (optional)** (tier B) — detect `mpv-mpris`; if installed, pass `--script=`; confirm media keys and the stock media widget. Document the optional package. Never required.
 - [ ] **R4 — Idle-cost audit** (tier B) — verify no timers/polling when nothing plays, and measure memory (target < 100 MB excluding mpv). Fix offenders.
 - [ ] **R5 — Clean-install test** (tier B) — on a fresh Omarchy install (VM or a spare user account): `omarchy plugin add <repo-url> --enable --yes`, then J1 → J7 using only the UI. Record time to first audio (target ≤ 5 min).
-- [ ] **R6 — Docs and release assets** (tier A) — README with screenshots/GIF, install, hotkeys, FAQ ("Does removing a book delete it from Audible?" → no), the legal/ToS statement from SCOPE §7, CHANGELOG, LICENSE (per D1), `docs/RELEASING.md`, tag `v0.1.0`.
-- [ ] **R7 — Upstream conversation** (tier maintainer) — decide whether to submit to the Omarchy plugin list/community channels.
+- [ ] **R6 — Docs and release assets** (tier A) — README with screenshots/GIF, install, hotkeys, FAQ ("Does removing a book delete it from Audible?" → no), the legal/ToS statement from SCOPE §7, a **"What setup installs" section** documenting the first-run venv and `pip install` (what is downloaded, from where, where it is written, how to remove it) as the marketplace asks, CHANGELOG, LICENSE (per D1, decided after S1), `docs/RELEASING.md` (including `omarchy plugin validate .`), tag `v0.1.0`.
+- [ ] **R7 — Marketplace submission** (tier maintainer) — repo must be public with `manifest.json`, README, and license. Read https://plugins.omarchy.org/publish.html first, then submit via its issue form with a category and 1–3 tags. Expect automated validation of the exact commit and a maintainer decision; a maintainer may decline a plugin that decrypts DRM, so be ready to rely on `omarchy plugin add <git-url>` instead.
 
 ---
 
 ## Definition of done (every PR)
 
 1. Acceptance checklist for the task is satisfied and ticked here.
-2. `make test` passes; new behavior has tests (or a MANUAL-TEST entry for QML).
+2. `make test` and `make lint` pass (lint includes `omarchy plugin validate .` and the no-symlink check); new behavior has tests (or a MANUAL-TEST entry for QML).
 3. No secrets, real library data, or personal paths in the diff.
 4. No hard-coded colors in QML; theme tokens only.
 5. No code path that mutates the Audible account other than position write-back.

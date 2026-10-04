@@ -12,7 +12,8 @@ You are implementing one task from [docs/PLAN.md](docs/PLAN.md). Read [docs/SCOP
 6. **Network only in the Python backend.** QML never opens network connections. The only QML-side I/O is the mpv socket, local files, and spawning the backend.
 7. **Backend launcher uses the Python standard library only.** Third-party imports (`audible`) belong inside `backend/omarchy_audible/` and run in the plugin venv.
 8. **Do not vendor** `audible`/`audible-cli` (AGPL). They are installed at runtime via `setup`.
-9. Protocol changes: update `docs/ARCHITECTURE.md` and `tests/schemas/` first, then code.
+9. **Omarchy plugin rules:** never start a second Quickshell process; never add a symlink inside the repo; third-party ids may not start with `omarchy.`; use only manifest fields the shell supports. Run `omarchy plugin validate .` before opening a PR.
+10. Protocol changes: update `docs/ARCHITECTURE.md` and `tests/schemas/` first, then code.
 
 ## Working on this machine
 

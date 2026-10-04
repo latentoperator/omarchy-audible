@@ -33,7 +33,7 @@ Companion to [SCOPE.md](SCOPE.md). Facts marked ✅ were verified by hand on 202
 
 ## 2. Plugin shape (Omarchy shell)
 
-A plugin is a git repo with `manifest.json` at its root. Users install with `omarchy plugin add <git-url>`. Developers symlink the repo into `~/.config/omarchy/plugins/latentoperator.audible/`. Saving a file there hot-reloads it.
+A plugin is a git repo with `manifest.json` at its root. Users install with `omarchy plugin add <git-url>`. Developers link the repo into `~/.config/omarchy/plugins/latentoperator.audible/` (a symlink *to* the repo from outside is fine; a symlink *inside* the repo is not, see below). Saving a file there hot-reloads it. ❓ Task A0 must confirm the shell loads a symlinked plugin directory; if it does not, `make dev-link` falls back to `rsync` on save.
 
 ```
 omarchy-audible/                     (repo root == plugin root)
@@ -57,6 +57,8 @@ Reference implementations to read before writing QML, all on this machine:
 - `~/.config/omarchy/plugins/chrisgray.kanban/` (smallest possible bar widget)
 - `/usr/share/omarchy/shell/plugins/panels/audio/` (first-party panel using the shared `Ui` components)
 - `/usr/share/omarchy/shell/Ui/` and `Commons/` (theme singletons and components)
+
+Marketplace/validator rules (from plugins.omarchy.org/develop): run `omarchy plugin validate .` before every release. Third-party ids cannot start with `omarchy.`. **The plugin folder (this repo) may not contain symlinks.** Never start a second Quickshell process. Manifest fields must be ones the shell supports; do not invent new ones.
 
 Theming rule: import `qs.Commons` and `qs.Ui` and use `Style`/theme tokens only. Never hard-code a color.
 
