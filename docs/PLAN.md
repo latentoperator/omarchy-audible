@@ -56,7 +56,7 @@ Goal: replace every ❓ in ARCHITECTURE.md with a ✅ or a documented fallback. 
   Study `quickshell.spotify` and `panels/audio`. Determine: how a third-party bar widget opens/toggles its own panel anchored to the icon; how to size the panel; how to close on click-away/Esc; how to read theme tokens; how to register a shell IPC target; how the manifest `schema` appears in settings; what the third-party capability facade blocks. Build the smallest widget → panel → close loop.
   Done when: a book-glyph widget opens a themed empty panel that closes on Esc/click-away, and the answers are in `SPIKE-RESULTS.md`.
 
-- [ ] **A0 — Scaffolding** (tier A, parallel with spikes)
+- [x] **A0 — Scaffolding** (tier A, parallel with spikes)
   Create `manifest.json` (id `latentoperator.audible`, kinds `service`, `bar-widget`, `panel`, entry points per ARCHITECTURE §2), empty `Service.qml`/`BarWidget.qml`/`Panel.qml` that load cleanly, `bin/omarchy-audible` stub, `backend/` package skeleton, `tests/`, `pyproject.toml` (pytest only as dev dep), `.editorconfig`, a `Makefile` with `test`, `lint`, `dev-link` (symlink into `~/.config/omarchy/plugins/`), `dev-unlink`.
   Done when: `make dev-link && omarchy-shell shell rescanPlugins` lists the plugin without errors (if the shell refuses a symlinked plugin dir, switch `dev-link` to an rsync-based sync and note it), `omarchy plugin validate .` passes, the repo contains no symlinks (add a `make check-symlinks` target: `find . -type l -not -path './.git/*'` must print nothing), and `make test` runs (even with zero tests). Add `validate` and `check-symlinks` to `make lint`.
 

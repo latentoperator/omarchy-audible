@@ -33,7 +33,7 @@ Companion to [SCOPE.md](SCOPE.md). Facts marked ✅ were verified by hand on 202
 
 ## 2. Plugin shape (Omarchy shell)
 
-A plugin is a git repo with `manifest.json` at its root. Users install with `omarchy plugin add <git-url>`. Developers link the repo into `~/.config/omarchy/plugins/latentoperator.audible/` (a symlink *to* the repo from outside is fine; a symlink *inside* the repo is not, see below). Saving a file there hot-reloads it. ❓ Task A0 must confirm the shell loads a symlinked plugin directory; if it does not, `make dev-link` falls back to `rsync` on save.
+A plugin is a git repo with `manifest.json` at its root. Users install with `omarchy plugin add <git-url>`. Developers link the repo into `~/.config/omarchy/plugins/latentoperator.audible/` (a symlink *to* the repo from outside is fine; a symlink *inside* the repo is not, see below). Saving a file there hot-reloads it. ✅ Confirmed 2026-10-04 (task A0): the shell discovers and lists a plugin whose directory is a symlink to the repo, so `make dev-link` works as written.
 
 ```
 omarchy-audible/                     (repo root == plugin root)

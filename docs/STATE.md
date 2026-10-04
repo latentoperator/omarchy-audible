@@ -2,7 +2,7 @@
 
 Update this file in every PR that changes status. Newest first. See [WORKFLOW.md](WORKFLOW.md) for how work is run.
 
-**Last updated:** 2026-10-04 · **Phase:** M0 (spikes + scaffolding) · **Gate G0:** not reached
+**Last updated:** 2026-10-04 (evening) · **Phase:** M0 (spikes + scaffolding) · **Gate G0:** not reached
 
 ## Where we are
 
@@ -11,7 +11,7 @@ Update this file in every PR that changes status. Newest first. See [WORKFLOW.md
 | Scope, architecture, plan, agent rules | Written and pushed (`docs/`, `AGENTS.md`) |
 | Workflow and handoff doc | Written (`docs/WORKFLOW.md`) |
 | Repo | `latentoperator/omarchy-audible`, **private** |
-| A0 scaffolding | **In progress.** Attempt 1 produced nothing (opencode blocked reading outside the repo, exited 0). Attempt 2 (DeepSeek Flash with in-repo `.reference/` copies) was running on branch `a0-scaffolding`; **not yet verified, reviewed, or committed**. |
+| A0 scaffolding | **Done.** Live-shell check passed on the laptop 2026-10-04 (`scripts/dev-live-check.sh`: shell discovered `latentoperator.audible` via the symlinked dir; plugin left linked but not enabled). Branch `a0-scaffolding`. Worker (DeepSeek Flash) took 3 attempts: #1 blocked reading outside the repo, #2 hung with no model output (killed), #3 succeeded with `--format json` + timeout. Supervisor re-ran `pytest` (1 passed), `make check-symlinks`, `omarchy plugin validate .` (passes; fails correctly on a missing entry point) and fixed a `dev-link`/`dev-unlink` safety bug. Codex adversarial review: **approve, no findings**. |
 | Spikes S1–S6 | Not started |
 | Backend / player / UI | Not started |
 
@@ -41,10 +41,9 @@ Update this file in every PR that changes status. Newest first. See [WORKFLOW.md
 
 ## Next steps (in order)
 
-1. Finish A0: verify the worker output yourself (`git status`, diff, `python -m pytest -q`, `make check-symlinks`, `omarchy plugin validate .`), then test `make dev-link` plus `omarchy-shell shell rescanPlugins` on the laptop. Codex adversarial review. Commit, PR, tick A0.
-2. Spikes, strongest model, laptop: S6 and S5 first (they decide the UI and player design), then S1, S2, S4, S3. Write findings in `docs/SPIKE-RESULTS.md`.
-3. Gate G0: Chris reviews the spike results, resolves D1/D4/D5, and the docs are corrected to match reality.
-4. M1 backend can then run on the laptop or the VPS (fake mode only on the VPS).
+1. ~~Finish A0~~ Done. Next: spikes S6 and S5 (they decide the UI and player design), then S1, S2, S4, S3. Strongest model, on the laptop. Findings go in `docs/SPIKE-RESULTS.md`.
+2. Gate G0: Chris reviews the spike results, resolves D1/D4/D5, and the docs are corrected to match reality.
+3. M1 backend can then run on the laptop or the VPS (fake mode only on the VPS).
 
 ## Known risks to keep in mind
 

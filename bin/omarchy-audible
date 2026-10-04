@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+"""Omarchy Audible backend launcher.
+
+Standard-library only so it runs before the plugin venv exists. This stub
+answers every invocation with a single NDJSON error event and a nonzero exit;
+later tasks replace it with subcommand dispatch, fake mode and the venv
+bootstrap.
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+
+
+def emit_error(code: str, message: str) -> None:
+    json.dump({"type": "error", "code": code, "message": message}, sys.stdout)
+    sys.stdout.write("\n")
+
+
+def main(argv: list[str]) -> int:
+    emit_error(
+        "not_implemented",
+        "omarchy-audible backend is not implemented yet",
+    )
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
