@@ -21,6 +21,8 @@ A book icon in the [Omarchy](https://omarchy.org) bar. Click it to browse your A
 | [docs/SCOPE.md](docs/SCOPE.md) | What we're building, for whom, and what we're not |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How it works, verified facts, and open questions |
 | [docs/PLAN.md](docs/PLAN.md) | Milestones and tasks with acceptance criteria |
+| [docs/WORKFLOW.md](docs/WORKFLOW.md) | How work is run (roles, tools, loop) and how to resume on another machine |
+| [docs/STATE.md](docs/STATE.md) | Live status, decisions, and next steps |
 | [AGENTS.md](AGENTS.md) | Rules for AI coding agents working in this repo |
 
 ## Notice
