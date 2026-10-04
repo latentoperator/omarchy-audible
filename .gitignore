@@ -1,0 +1,32 @@
+# Secrets and personal data — never commit
+auth.json
+*.aax
+*.aaxc
+*.voucher
+activation_bytes
+config.toml
+catalog.json
+state.json
+lib.json
+*.m4b
+covers/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Editors / OS
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Synthetic test fixtures are allowed (invented titles only)
+!fixtures/catalog.json
+!fixtures/**/catalog.json
+!fixtures/state.json
+!fixtures/**/state.json
