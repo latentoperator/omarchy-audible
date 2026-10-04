@@ -214,7 +214,7 @@ Keep the newest-wins merge from ARCHITECTURE §4.6.
 | Device | A new device (`device_type A2CZJZGLK2JJVM`, new serial). `cleanup` deregistered **only that device** (`deregister_all=False`) and the existing `~/.audible` login still worked afterward. ✅ |
 | Pasted URL never persisted | The authorization code was searched for after `finish` and found in **none** of: `clipboard-history.json`, `.bash_history`, user journal, system journal (last 30 min), and the new login files. ✅ |
 | Import of `~/.audible` | Validate with `Authenticator.from_file`, then copy into the private dir as `0600` and write a `plugin` profile. With `~/.audible` temporarily renamed away, `audible -P plugin library list` (91) and `audible activation-bytes` both worked from the copy alone. ✅ |
-| Captcha / 2FA | Not observed by the script (the browser handles both, so they don't affect the backend). Ask Chris. |
+| Captcha / 2FA | Neither appeared. Amazon asked for Chris's **passkey**, which Bitwarden supplied as usual, and it worked in the private window. Every sign-in step (password, passkey, OTP, captcha) happens in the browser, and the backend only sees the final redirect URL, so none of them need backend support. |
 | Marketplaces | The library has templates for 11 stores (us, uk, de, fr, ca, it, au, in, jp, es, br). Only **US** was tested. |
 
 ### Leak paths the backend and UI must close
