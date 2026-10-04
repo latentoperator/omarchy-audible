@@ -149,7 +149,7 @@ Both paths work. aaxc uses a per-book key from the voucher instead of the accoun
 
 ---
 
-## S3 — Position write-back ✅ (API level; phone check pending)
+## S3 — Position write-back ✅
 
 **Question.** Can we write "last position heard" so other devices see it?
 
@@ -166,11 +166,26 @@ Both paths work. aaxc uses a per-book key from the voucher instead of the accoun
 | Restore | Exact (delta 0 ms). The book stayed first in "recently listened". |
 | `last_updated` format | `YYYY-MM-DD HH:MM:SS.f`, **no timezone**. Treating it as UTC gave a plausible age (3.5 h), but that is inferred. B6 should confirm it against a write made at a known time. |
 
-**Not yet done:** confirming in the Audible phone app. The API round trip is exact, but the plan asks for a phone check. It takes Chris one minute: move one book by a known amount, then look at the phone.
+### Phone check ✅ (2026-10-04)
+
+`spikes/s3_phone.py` picked the most recently played unfinished book whose position was more than an hour old, moved it back **10 minutes**, and then restored it. Chris checked the Audible phone app after each write by closing and reopening the app and opening the book without pressing play.
+
+| Check | Result |
+|---|---|
+| Write, then API read back | Delta 0 ms |
+| Phone after the write | Showed the test position ✅ |
+| Phone behavior | **The app moves to the newer position by itself and shows a notice ("moved ahead/back") with an undo option.** It doesn't ask first. Chris has never seen it ask. |
+| Restore, then API read back | Delta 0 ms |
+| Phone after the restore | Showed the original position again ✅ |
 
 ### Decision D4 (proposed for G0): ship position write-back
 
-Keep the newest-wins merge from ARCHITECTURE §4.6. If the phone check fails, fall back to read-only sync, as the plan already allows.
+Keep the newest-wins merge from ARCHITECTURE §4.6.
+
+**Because the phone follows a write without asking, a wrong push moves Chris's phone.** The undo on the phone limits the damage, but B6/P3 must push only positions that came from **actually listening on this machine**:
+- Push on pause, stop, book switch, and drawer close, plus a slow periodic push while playing. Never push as part of `sync` or the merge.
+- Never push a position that is older than the remote `last_updated` (the user listened elsewhere since).
+- Never push for a book that hasn't been played locally since it was downloaded.
 
 ### Facts B6 must use
 
@@ -180,6 +195,46 @@ Keep the newest-wins merge from ARCHITECTURE §4.6. If the phone check fails, fa
 
 ---
 
-## S1 — Programmatic login
+## S1 — Programmatic login ✅
 
-Not started. It needs Chris to sign in through a browser and paste the redirect URL into the drawer.
+**Question.** Can the backend run the sign-in in two steps (build a link; finish from a pasted redirect URL) without the pasted URL touching disk or logs? Does importing an existing `~/.audible` login work?
+
+**Method.** `spikes/s1_login.py` (subcommands `start`, `finish`, `verify`, `import`, `cleanup`) and `spikes/s1_run.sh`, run on HMSP-OMARCHYXPS on 2026-10-04 with audible 0.12.0 from the `audible-cli` uv tool venv. Chris signed in to the US store in a private Chrome window and pasted the redirect URL into a hidden prompt in a foot terminal. The scripts print booleans, counts and timings only.
+
+### Results
+
+| Check | Result |
+|---|---|
+| `start` | `audible.login.build_oauth_url(country_code, domain, market_place_id, code_verifier)` returns `(url, serial)`. `{verifier, serial, country, created}` is kept in a `0600` file under `$XDG_RUNTIME_DIR` (tmpfs), with a 10-minute TTL. No network call. ✅ |
+| Sign-in | Normal Amazon sign-in in the browser. It ends on Amazon's "page not found" `…/ap/maplanding?…openid.oa2.authorization_code=…` page, as documented. The URL was 1138 characters. |
+| `finish` | Parse the `openid.oa2.authorization_code` query value, then `audible.register.register(authorization_code, code_verifier, domain, serial)` (0.55 s). Build `Authenticator()`, set `locale`, `_update_attrs(with_username=False, **reg)`, `get_activation_bytes()`, `to_file(auth.json, encryption=False)`. The session file is deleted on success and on failure. ✅ |
+| Files | `auth.json`, `activation_bytes`, `config.toml` all `0600`, directory `0700`. ✅ |
+| New login works | `AUDIBLE_CONFIG_DIR=<dir> audible -P plugin library list` returned 91 lines (exit 0). Direct API: 91 items. ✅ |
+| Activation bytes | Identical to the existing login's (they are account-wide), so books already decrypted elsewhere keep working. ✅ |
+| Device | A new device (`device_type A2CZJZGLK2JJVM`, new serial). `cleanup` deregistered **only that device** (`deregister_all=False`) and the existing `~/.audible` login still worked afterward. ✅ |
+| Pasted URL never persisted | The authorization code was searched for after `finish` and found in **none** of: `clipboard-history.json`, `.bash_history`, user journal, system journal (last 30 min), and the new login files. ✅ |
+| Import of `~/.audible` | Validate with `Authenticator.from_file`, then copy into the private dir as `0600` and write a `plugin` profile. With `~/.audible` temporarily renamed away, `audible -P plugin library list` (91) and `audible activation-bytes` both worked from the copy alone. ✅ |
+| Captcha / 2FA | Not observed by the script (the browser handles both, so they don't affect the backend). Ask Chris. |
+| Marketplaces | The library has templates for 11 stores (us, uk, de, fr, ca, it, au, in, jp, es, br). Only **US** was tested. |
+
+### Leak paths the backend and UI must close
+
+The leak risk is in the **clipboard and the browser**, not in our code:
+
+1. **Omarchy's clipboard history.** The shell's clipboard plugin runs `wl-paste --watch` and writes every text copy to `~/.local/state/omarchy/clipboard-history.json` (300 entries, mode 644). It skips entries when the source offers the `x-kde-passwordManagerHint` MIME type or when `CLIPBOARD_STATE=sensitive`, but a URL copied from Chrome's address bar has neither. The spike paused the watchers (`pkill -STOP`) during the paste and cleared the clipboard afterward. **The plugin can't do that.** Proposed design: the drawer has a **text field** the user pastes into with Ctrl+V. The redirect URL still passes through the clipboard and so lands in history. To avoid that, after a successful `login-finish` the backend checks for the code in clipboard history and, if found, **tells the user** (it doesn't edit a file it doesn't own). Alternatively the drawer suggests selecting the address and **dragging** it in. B3 decides; the spike shows the problem is real.
+2. **Browser history.** The `maplanding` URL with the code goes into normal browser history. The code is single-use and was already redeemed, so the residual risk is low. Opening the link in a private window avoids it, but `xdg-open` can't request one. Accept it and document it.
+3. **Process arguments.** ARCHITECTURE §4.2 has `login-finish --url <pasted>`, which would put the code in `/proc/<pid>/cmdline` (visible to every local user) and in any process accounting. **Proposed (G0): `login-finish` reads the URL from stdin.**
+4. **The library itself.** `audible.login` and `register` don't log the URL or code. `default_login_url_callback` prints to stdout, which we don't use.
+
+### Other findings for B3
+
+- `~/.audible/<profile>.json` written by `audible-cli` is **mode 644** on the laptop. The import must write `0600` regardless of the source mode.
+- `Authenticator.to_file` uses `write_text`, so the file mode comes from the umask. Create the file `0600` first (or set `umask 077`) instead of `chmod` afterward.
+- A legacy-crypto `UserWarning` goes to stderr unless the venv installs `audible[cryptography]`. Install that extra in `setup`.
+- `logout` should call `deregister_device(deregister_all=False)` before deleting files, so the device list on Amazon stays clean. It must never pass `deregister_all=True`.
+
+### Decision
+
+In-drawer login works. Proceed with B3 as designed, with the stdin change and the clipboard handling above. The terminal fallback is not needed.
+
+**For D1 (license):** `finish` imports `audible` (`build_oauth_url`, `register`, `Authenticator`), and so do S2–S4. The `audible-cli` subprocess can't do the two-step login (its `quickstart` is interactive). So the backend imports an AGPL library, and **the plugin should be AGPL-3.0-only** (or AGPL-3.0-or-later). MIT would only be possible by rewriting the login and API signing ourselves.

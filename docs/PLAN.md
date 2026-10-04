@@ -31,7 +31,7 @@ M1 (backend) and M2/M3 (QML) can overlap after G0 because the fake backend freez
 
 Goal: replace every ❓ in ARCHITECTURE.md with a ✅ or a documented fallback. Output goes in `docs/SPIKE-RESULTS.md` (one section per spike: question, method, result, decision, code snippet that works).
 
-- [ ] **S1 — Programmatic Audible login** (tier S)
+- [x] **S1 — Programmatic Audible login** (tier S) — done 2026-10-04, see SPIKE-RESULTS.md
   Prove the in-drawer login (nice-to-have; a one-time terminal login is the fallback): build the sign-in URL, take a pasted redirect URL, register a device, write an auth file, get activation bytes. Use the `audible` library's `login`/`register` modules (read their source and docs at audible.readthedocs.io).
   Done when: a throwaway script `login-start` prints a URL, `login-finish <pasted>` produces a working auth file, `audible -P <profile> library list` works with it, and the pasted URL is not written anywhere. Also test: an existing-`~/.audible` import. Note the marketplaces supported and any CAPTCHA/2FA behavior seen.
   *Fallback if impossible:* document why, and propose the copy-paste-a-command alternative.
@@ -40,7 +40,7 @@ Goal: replace every ❓ in ARCHITECTURE.md with a ✅ or a documented fallback. 
   Using the plugin-owned config dir (`AUDIBLE_CONFIG_DIR`), download one `.aax` book and one book that is **aaxc-only** (find one in the library, or note none exists). Decrypt both to m4b with `ffmpeg -c copy`. For aaxc, prove `-audible_key/-audible_iv` from the voucher JSON.
   Done when: both produce playable m4b with chapters and the sanity check (duration within 1% of catalog) passes. Record the exact commands and the voucher JSON field names. Measure peak disk use during conversion.
 
-- [x] **S3 — Position write-back** (tier S) — API round trip done 2026-10-04; phone-app check pending
+- [x] **S3 — Position write-back** (tier S) — done 2026-10-04 incl. phone-app check, see SPIKE-RESULTS.md
   Find a reliable way to write "last position heard" so the phone picks it up (the community-documented endpoint involves an `acr` value from a content-license request). Verify on a real book by pushing a position and reading it back with `lastpositions`, then confirm in the Audible phone app.
   Done when: a script does a round trip, or `SPIKE-RESULTS.md` records that it's unreliable and D4 is resolved to "read-only sync". Restore any position you changed afterward.
 
