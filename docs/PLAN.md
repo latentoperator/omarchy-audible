@@ -93,7 +93,7 @@ All commands follow the protocol in ARCHITECTURE §4.2. Build the **fake mode fi
   `position-get` (writes `remote.json`) and `position-push <asin> <ms>`. A pure newest-wins `merge()` helper that the service's QML port must match. `position-push` re-reads the remote position first and refuses with `error(code=stale)` when remote is newer than the pushed local timestamp (ARCHITECTURE §4.6 push rules).
   Acceptance: unit tests for merge edge cases (equal timestamps, missing remote, remote newer); the stale-refusal test; `lastpositions` batching ≤ 25; `acr` read from `meta.json`, else fetched from content metadata; a test that `sync` never calls `position-push`. Real-account round trip with restore by Dante on the laptop.
 
-- [ ] **B7 — Protocol schemas and contract tests** (tier A; needs B1; extended as commands land)
+- [x] **B7 — Protocol schemas and contract tests** (tier A; needs B1; extended as commands land)
   JSON Schema file per event type; a test that runs every command in fake mode and validates every emitted line.
   Acceptance: CI-style `make test` fails if a command emits an unknown or malformed event.
 

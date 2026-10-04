@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "login_url event",
+  "description": "Payload of `login-start` (ARCHITECTURE 4.2, 4.7): the sign-in URL the user opens and the identifier of the pending login session. The URL is never logged or persisted.",
+  "type": "object",
+  "required": ["type", "url", "session"],
+  "properties": {
+    "type": { "const": "login_url" },
+    "url": { "type": "string", "minLength": 1 },
+    "session": { "type": "string", "minLength": 1 }
+  },
+  "additionalProperties": false
+}

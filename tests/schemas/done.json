@@ -1,11 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "done event",
-  "description": "Final event of a successful backend run (ARCHITECTURE 4.2).",
+  "description": "Final event of a successful backend run (ARCHITECTURE 4.2). The optional fields carry the payload of the command that finished: `path` for `get`, `freed_bytes` for `remove`, and `clipboard_history_contains_code` for `login-finish` (ARCHITECTURE 4.7).",
   "type": "object",
   "required": ["type"],
   "properties": {
-    "type": { "const": "done" }
+    "type": { "const": "done" },
+    "path": { "type": "string" },
+    "freed_bytes": { "type": "integer", "minimum": 0 },
+    "clipboard_history_contains_code": { "type": "boolean" }
   },
-  "additionalProperties": true
+  "additionalProperties": false
 }

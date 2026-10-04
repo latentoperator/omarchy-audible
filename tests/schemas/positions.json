@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "positions event",
+  "description": "Payload of `position-get` (ARCHITECTURE 4.2, 4.6): one entry per requested ASIN, keyed by ASIN. `updated_at` is null when the account has no position for the book.",
+  "type": "object",
+  "required": ["type", "items"],
+  "properties": {
+    "type": { "const": "positions" },
+    "items": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["ms", "updated_at"],
+        "properties": {
+          "ms": { "type": "integer", "minimum": 0 },
+          "updated_at": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -55,7 +55,13 @@ def paths(env: dict[str, str]) -> Paths:
 
 @pytest.fixture
 def run_cli(env: dict[str, str]):
-    def _run(*args: str, fake: bool = False, extra_env=None, timeout: int = 60):
+    def _run(
+        *args: str,
+        fake: bool = False,
+        extra_env=None,
+        timeout: int = 60,
+        stdin: str | None = None,
+    ):
         child_env = dict(env)
         if extra_env:
             child_env.update(extra_env)
@@ -65,6 +71,7 @@ def run_cli(env: dict[str, str]):
         return subprocess.run(
             [sys.executable, str(LAUNCHER), *argv],
             env=child_env,
+            input=stdin,
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -72,6 +79,11 @@ def run_cli(env: dict[str, str]):
         )
 
     return _run
+
+
+@pytest.fixture
+def schemas_dir() -> Path:
+    return SCHEMAS_DIR
 
 
 @pytest.fixture
