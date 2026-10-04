@@ -1,0 +1,139 @@
+{
+  "_comment": "Spike S4 fixture. Field shapes copied from a real 1.0/library response (response_groups=product_desc,media,contributors,series,product_attrs,listening_status,percent_complete,is_finished,relationships). Every value is invented.",
+  "items": [
+    {
+      "asin": "B0FAKE0001",
+      "title": "The Lighthouse Ledger",
+      "subtitle": null,
+      "authors": [{"asin": "B0AUTH0001", "name": "Mara Quill"}],
+      "narrators": [{"asin": null, "name": "Owen Hale"}],
+      "series": null,
+      "content_type": "Product",
+      "content_delivery_type": "SinglePartBook",
+      "format_type": "unabridged",
+      "runtime_length_min": 512,
+      "language": "english",
+      "is_listenable": true,
+      "is_finished": false,
+      "percent_complete": 12.5,
+      "listening_status": {"is_finished": false, "percent_complete": 12.5, "time_remaining_seconds": 26880, "finished_at_timestamp": null},
+      "product_images": {"500": "https://example.invalid/covers/B0FAKE0001._SL500_.jpg"},
+      "purchase_date": "2025-03-14T18:22:05.000Z",
+      "release_date": "2024-11-05",
+      "library_status": {"date_added": "2025-03-14T18:22:05.000Z", "is_pending": null, "is_preordered": null, "is_removable": null, "is_visible": null},
+      "available_codecs": [
+        {"name": "aax", "format": "Enhanced", "enhanced_codec": "LC_64_22050_stereo", "is_kindle_enhanced": true},
+        {"name": "aax_44_128", "format": "Enhanced", "enhanced_codec": "LC_128_44100_stereo", "is_kindle_enhanced": true}
+      ],
+      "relationships": null
+    },
+    {
+      "asin": "B0FAKE0002",
+      "title": "Ember Road",
+      "subtitle": "The Cinder Cycle, Book 2",
+      "authors": [{"asin": "B0AUTH0002", "name": "Ilse Varga"}],
+      "narrators": [{"asin": null, "name": "Priya Ndlovu"}],
+      "series": [{"asin": "B0SERIES01", "title": "The Cinder Cycle", "sequence": "2", "url": "/series/The-Cinder-Cycle/B0SERIES01"}],
+      "content_type": "Product",
+      "content_delivery_type": "SinglePartBook",
+      "format_type": "unabridged",
+      "runtime_length_min": 731,
+      "language": "english",
+      "is_listenable": true,
+      "is_finished": false,
+      "percent_complete": 0.0,
+      "listening_status": {"is_finished": false, "percent_complete": 0.0, "time_remaining_seconds": 43860, "finished_at_timestamp": null},
+      "product_images": {"500": "https://example.invalid/covers/B0FAKE0002._SL500_.jpg"},
+      "purchase_date": "2026-01-02T09:10:11.000Z",
+      "release_date": "2025-09-30",
+      "library_status": {"date_added": "2026-01-02T09:10:11.000Z", "is_pending": null, "is_preordered": null, "is_removable": null, "is_visible": null},
+      "available_codecs": [
+        {"name": "aax", "format": "Enhanced", "enhanced_codec": "LC_64_22050_stereo", "is_kindle_enhanced": true},
+        {"name": "mp4_44_128", "format": "Enhanced", "enhanced_codec": "LC_128_44100_stereo", "is_kindle_enhanced": true}
+      ],
+      "relationships": [
+        {"asin": "B0SERIES01", "content_delivery_type": "BookSeries", "relationship_to_product": "parent", "relationship_type": "series", "sequence": "2", "sku": "SR_FAKE_01", "sku_lite": "SR_FAKE_01", "sort": "2", "title": "The Cinder Cycle", "url": "/series/The-Cinder-Cycle/B0SERIES01"}
+      ]
+    },
+    {
+      "asin": "B0FAKE0003",
+      "title": "Collected Winter Tales",
+      "subtitle": "Seven Novels in One Volume",
+      "authors": [{"asin": "B0AUTH0003", "name": "Edmund Fairweather"}],
+      "narrators": [{"asin": null, "name": "Various"}],
+      "series": null,
+      "content_type": "Product",
+      "content_delivery_type": "MultiPartBook",
+      "format_type": "unabridged",
+      "runtime_length_min": 2244,
+      "language": "english",
+      "is_listenable": true,
+      "is_finished": false,
+      "percent_complete": 41.0,
+      "listening_status": {"is_finished": false, "percent_complete": 41.0, "time_remaining_seconds": 79440, "finished_at_timestamp": null},
+      "product_images": {"500": "https://example.invalid/covers/B0FAKE0003._SL500_.jpg"},
+      "purchase_date": "2023-12-24T20:00:00.000Z",
+      "release_date": "2019-10-01",
+      "library_status": {"date_added": "2023-12-24T20:00:00.000Z", "is_pending": null, "is_preordered": null, "is_removable": null, "is_visible": null},
+      "available_codecs": [
+        {"name": "aax", "format": "Enhanced", "enhanced_codec": "LC_64_22050_stereo", "is_kindle_enhanced": true},
+        {"name": "aax_22_64", "format": "Enhanced", "enhanced_codec": "LC_64_22050_stereo", "is_kindle_enhanced": true}
+      ],
+      "relationships": [
+        {"asin": "B0FAKEPT01", "content_delivery_type": "SinglePartBook", "relationship_to_product": "child", "relationship_type": "component", "sequence": "1", "sku": "BK_FAKE_P1", "sku_lite": "BK_FAKE_P1", "sort": "1", "title": "Collected Winter Tales, Part 1", "url": "/pd/B0FAKEPT01"},
+        {"asin": "B0FAKEPT02", "content_delivery_type": "SinglePartBook", "relationship_to_product": "child", "relationship_type": "component", "sequence": "2", "sku": "BK_FAKE_P2", "sku_lite": "BK_FAKE_P2", "sort": "2", "title": "Collected Winter Tales, Part 2", "url": "/pd/B0FAKEPT02"}
+      ]
+    },
+    {
+      "asin": "B0FAKE0004",
+      "title": "A Short Course in Starlight",
+      "subtitle": "Twelve Lectures on Observational Astronomy",
+      "authors": [{"asin": null, "name": "Dr. Tamsin Reyes"}],
+      "narrators": [{"asin": null, "name": "Dr. Tamsin Reyes"}],
+      "series": null,
+      "content_type": "Lecture",
+      "content_delivery_type": "SinglePartBook",
+      "format_type": "original_recording",
+      "runtime_length_min": 298,
+      "language": "english",
+      "is_listenable": true,
+      "is_finished": false,
+      "percent_complete": 3.2,
+      "listening_status": {"is_finished": false, "percent_complete": 3.2, "time_remaining_seconds": 17310, "finished_at_timestamp": null},
+      "product_images": {"500": "https://example.invalid/covers/B0FAKE0004._SL500_.jpg"},
+      "purchase_date": "2024-06-01T12:00:00.000Z",
+      "release_date": "2021-02-16",
+      "library_status": {"date_added": "2024-06-01T12:00:00.000Z", "is_pending": null, "is_preordered": null, "is_removable": null, "is_visible": null},
+      "available_codecs": [
+        {"name": "aax", "format": "Enhanced", "enhanced_codec": "LC_64_22050_stereo", "is_kindle_enhanced": true}
+      ],
+      "relationships": null
+    },
+    {
+      "asin": "B0FAKE0005",
+      "title": "The Quiet Orchard",
+      "subtitle": null,
+      "authors": [{"asin": "B0AUTH0005", "name": "June Abernathy"}],
+      "narrators": [{"asin": null, "name": "June Abernathy"}],
+      "series": null,
+      "content_type": "Product",
+      "content_delivery_type": "SinglePartBook",
+      "format_type": "unabridged",
+      "runtime_length_min": 145,
+      "language": "english",
+      "is_listenable": true,
+      "is_finished": true,
+      "percent_complete": 100.0,
+      "listening_status": {"is_finished": true, "percent_complete": 100.0, "time_remaining_seconds": 0, "finished_at_timestamp": "2025-08-09T21:14:03.000Z"},
+      "product_images": {"500": "https://example.invalid/covers/B0FAKE0005._SL500_.jpg"},
+      "purchase_date": "2025-07-20T15:45:00.000Z",
+      "release_date": "2025-05-13",
+      "library_status": {"date_added": "2025-07-20T15:45:00.000Z", "is_pending": null, "is_preordered": null, "is_removable": null, "is_visible": null},
+      "available_codecs": [
+        {"name": "aax", "format": "Enhanced", "enhanced_codec": "LC_64_22050_stereo", "is_kindle_enhanced": true},
+        {"name": "aax_44_128", "format": "Enhanced", "enhanced_codec": "LC_128_44100_stereo", "is_kindle_enhanced": true}
+      ],
+      "relationships": null
+    }
+  ]
+}

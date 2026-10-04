@@ -25,6 +25,10 @@ A book icon in the [Omarchy](https://omarchy.org) bar. Click it to browse your A
 | [docs/STATE.md](docs/STATE.md) | Live status, decisions, and next steps |
 | [AGENTS.md](AGENTS.md) | Rules for AI coding agents working in this repo |
 
+## License
+
+[AGPL-3.0-only](LICENSE). The backend imports the AGPL-licensed [`audible`](https://github.com/mkb79/Audible) library, which setup installs on your machine; it is not bundled here.
+
 ## Notice
 
 This is an unofficial project and is not affiliated with Audible or Amazon. It relies on community libraries and an unofficial API that may change or stop working. It is intended only for listening to books you have purchased, on your own computer. Decrypting audiobooks may violate Audible's terms of use or local law; you are responsible for how you use it.

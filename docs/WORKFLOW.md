@@ -13,6 +13,18 @@ This file describes **how work on this repo is run**, so the same workflow can b
 
 This mirrors the supervised-worker setup used in the omamail project (`omamail-private/planning/REVIEW-GATE.md`): workers implement, an independent reviewer produces findings, and the supervisor records the final judgment. Tier labels (A/B/S) in PLAN.md say which tasks go to which role: **A** worker alone, **B** worker plus review, **S** supervisor or the strongest model.
 
+## Kanban lane (M1 onward, Hopebox)
+
+From G0 on, backend tasks run as Hermes Kanban cards on Hopebox instead of the opencode loop below:
+
+| Card | Profile | Does |
+|------|---------|------|
+| Implement `<task>` | `deepseek` | Works in its own git worktree on branch `<task-id>-<slug>`, writes tests first, runs `make test`, commits, pushes the branch, and opens a PR against `main`. Never merges. |
+| Review `<task>` | `code-reviewer` | Reviews the PR at its exact head SHA, read-only. PASS: comments `PASS — exact-head review <sha>` and completes. FAIL: comments the findings and blocks. |
+| Verify and merge `<task>` | `dante` | Re-reads the diff, re-runs every acceptance check, and runs real-account checks on the laptop where the task requires them. Merges when everything holds, otherwise sends the work back. Completing this card releases the next task. |
+
+Tasks run one at a time in the order B1 → B7 → B5 → B2 → B3 → B4 → B6, because they share the backend package and the CLI dispatcher. Kanban workers on Hopebox run **fake mode only** and never touch real credentials. Hopebox has no Omarchy shell, so `omarchy plugin validate .` runs on the laptop in the merge card. The hard rules below still apply, except that the Kanban implementer commits and pushes its own branch.
+
 ## The loop (one task = one branch = one PR)
 
 1. **Branch** from `main`: `git checkout -b <task-id>-<slug>` (e.g. `a0-scaffolding`).
