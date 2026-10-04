@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "status event",
+  "description": "Payload of the `status` command (ARCHITECTURE 4.2).",
+  "type": "object",
+  "required": [
+    "type",
+    "ready",
+    "missing",
+    "authenticated",
+    "marketplace",
+    "account",
+    "catalog_age_s"
+  ],
+  "properties": {
+    "type": { "const": "status" },
+    "ready": { "type": "boolean" },
+    "missing": { "type": "array", "items": { "type": "string" } },
+    "authenticated": { "type": "boolean" },
+    "marketplace": { "type": ["string", "null"] },
+    "account": { "type": ["string", "null"] },
+    "catalog_age_s": { "type": ["integer", "null"], "minimum": 0 }
+  },
+  "additionalProperties": false
+}

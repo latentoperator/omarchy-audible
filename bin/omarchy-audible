@@ -1,29 +1,136 @@
 #!/usr/bin/env python3
 """Omarchy Audible backend launcher.
 
-Standard-library only so it runs before the plugin venv exists. This stub
-answers every invocation with a single NDJSON error event and a nonzero exit;
-later tasks replace it with subcommand dispatch, fake mode and the venv
-bootstrap.
+Standard library only, so it runs on a fresh machine before the plugin
+virtualenv exists. It inspects the subcommand just far enough to decide where to
+run it, then starts the backend package in ``backend/``:
+
+* ``status``, ``doctor`` and ``setup`` must work with no dependency installed,
+  so they run from the repository source with the system Python.
+* Fake mode (``--fake`` or ``OMARCHY_AUDIBLE_FAKE=1``) also runs from the
+  repository source: it never touches the network or the account, so it needs
+  no third-party dependency either.
+* Any other command needs the pinned ``audible`` dependency and runs under the
+  plugin virtualenv interpreter.
+
+The launcher never imports the backend package or any third-party module; it
+re-execs itself as ``python -m omarchy_audible`` so the backend replaces this
+process (same PID). Only NDJSON may reach stdout: the backend writes the
+protocol and the launcher writes at most one ``error`` event (``no_venv``) when
+there is nowhere to run a command.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+BACKEND_DIR = REPO_ROOT / "backend"
+MODULE = "omarchy_audible"
+
+# Commands the launcher can run from the repository source with no dependency.
+LAUNCHER_COMMANDS = frozenset({"status", "doctor", "setup"})
+
+# Every command the backend knows. Kept here (the launcher must not import the
+# backend package) and checked against the backend registry by a test so the two
+# cannot drift.
+KNOWN_COMMANDS = frozenset(
+    {
+        "status",
+        "doctor",
+        "setup",
+        "sync",
+        "get",
+        "remove",
+        "local",
+        "login-start",
+        "login-finish",
+        "login-import-cli",
+        "logout",
+        "cancel",
+        "position-get",
+        "position-push",
+    }
+)
+
+_TRUTHY = frozenset({"1", "true", "yes", "on"})
 
 
-def emit_error(code: str, message: str) -> None:
-    json.dump({"type": "error", "code": code, "message": message}, sys.stdout)
-    sys.stdout.write("\n")
+def _wants_fake(argv: list[str], env: dict[str, str]) -> bool:
+    if "--fake" in argv:
+        return True
+    return str(env.get("OMARCHY_AUDIBLE_FAKE", "")).strip().lower() in _TRUTHY
+
+
+def _command(argv: list[str]) -> str | None:
+    for token in argv:
+        if not token.startswith("-"):
+            return token
+    return None
+
+
+def _venv_python(env: dict[str, str]) -> Path:
+    data_home = env.get("XDG_DATA_HOME")
+    if data_home:
+        base = Path(data_home)
+    else:
+        home = env.get("HOME") or str(Path.home())
+        base = Path(home) / ".local" / "share"
+    return base / "omarchy-audible" / "venv" / "bin" / "python"
+
+
+def _emit_error(code: str, message: str, hint: str | None = None) -> None:
+    event: dict[str, str] = {"type": "error", "code": code, "message": message}
+    if hint:
+        event["hint"] = hint
+    sys.stdout.write(json.dumps(event, separators=(",", ":")) + "\n")
+    sys.stdout.flush()
+
+
+def _run_backend(argv: list[str], env: dict[str, str], fake: bool, python: str) -> int:
+    child_env = dict(env)
+    path_parts = [str(BACKEND_DIR)]
+    existing = child_env.get("PYTHONPATH")
+    if existing:
+        path_parts.append(existing)
+    child_env["PYTHONPATH"] = os.pathsep.join(path_parts)
+    if fake:
+        child_env["OMARCHY_AUDIBLE_FAKE"] = "1"
+    child_argv = [token for token in argv if token != "--fake"]
+    try:
+        # Replace this process with the backend (ARCHITECTURE 4.1). The job then
+        # runs under the PID the UI spawned, so killing that PID stops the job
+        # and releases job.lock (ARCHITECTURE 4.8).
+        os.execve(python, [python, "-m", MODULE, *child_argv], child_env)
+    except OSError as exc:
+        _emit_error("internal", f"could not start the backend: {exc}")
+        return 1
+    return 1  # unreachable on success: execve replaces the process image
 
 
 def main(argv: list[str]) -> int:
-    emit_error(
-        "not_implemented",
-        "omarchy-audible backend is not implemented yet",
-    )
-    return 1
+    env = dict(os.environ)
+    fake = _wants_fake(argv, env)
+    command = _command(argv)
+    python = sys.executable or "python3"
+
+    # Unknown commands are forwarded so the backend can report
+    # error(code=unknown_command) on stdout.
+    if fake or command is None or command in LAUNCHER_COMMANDS or command not in KNOWN_COMMANDS:
+        return _run_backend(argv, env, fake, python)
+
+    venv_python = _venv_python(env)
+    if not venv_python.is_file():
+        _emit_error(
+            "no_venv",
+            "the plugin virtualenv is not installed",
+            hint="run: omarchy-audible setup",
+        )
+        return 1
+    return _run_backend(argv, env, fake, str(venv_python))
 
 
 if __name__ == "__main__":
