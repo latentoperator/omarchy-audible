@@ -5,7 +5,7 @@ Companion to [SCOPE.md](SCOPE.md). Facts marked ✅ were verified by hand on 202
 ## 1. Big picture
 
 ```
- Bar ── BarWidget.qml ──click──▶ Panel.qml   (views: Library | Mini | Full)
+ Bar ── BarWidget.qml ──click──▶ KeyboardPanel drawer (views: Library | Mini | Full)
                                     │  binds to
                                     ▼
                               Service.qml   (kind: service, keepLoaded)
@@ -33,14 +33,13 @@ Companion to [SCOPE.md](SCOPE.md). Facts marked ✅ were verified by hand on 202
 
 ## 2. Plugin shape (Omarchy shell)
 
-A plugin is a git repo with `manifest.json` at its root. Users install with `omarchy plugin add <git-url>`. Developers link the repo into `~/.config/omarchy/plugins/latentoperator.audible/` (a symlink *to* the repo from outside is fine; a symlink *inside* the repo is not, see below). Saving a file there hot-reloads it. ✅ Confirmed 2026-10-04 (task A0): the shell discovers and lists a plugin whose directory is a symlink to the repo, so `make dev-link` works as written.
+A plugin is a git repo with `manifest.json` at its root. Users install with `omarchy plugin add <git-url>`. Developers link the repo into `~/.config/omarchy/plugins/latentoperator.audible/` (a symlink *to* the repo from outside is fine; a symlink *inside* the repo is not, see below). `omarchy-shell shell rescanPlugins` reloads the bar widget; `Service.qml` changes need `omarchy-restart-shell` (✅ S6). ✅ Confirmed 2026-10-04 (task A0): the shell discovers and lists a plugin whose directory is a symlink to the repo, so `make dev-link` works as written.
 
 ```
 omarchy-audible/                     (repo root == plugin root)
-  manifest.json                      kinds: service, bar-widget, panel
+  manifest.json                      kinds: service, bar-widget  (no `panel` kind, see §6)
   Service.qml                        singleton logic, mpv + backend control, IPC target
-  BarWidget.qml                      the book icon
-  Panel.qml                          hosts the three views
+  BarWidget.qml                      the book icon + the KeyboardPanel drawer hosting the views
   qml/
     LibraryView.qml  MiniView.qml  FullView.qml  OnboardingView.qml
     BookRow.qml  ChapterList.qml  ScrubBar.qml  Cover.qml  StateBadge.qml
@@ -202,7 +201,7 @@ cloud ──play/get──▶ queued ──▶ downloading ──▶ converting 
 
 ## 6. UI
 
-One `Panel.qml` window anchored under the bar icon, hosting a `StackLayout` of three views. View rules:
+The bar widget owns a `qs.Ui` `KeyboardPanel` anchored under the book icon (✅ S6), hosting a `StackLayout` of the views. Full view grows the same drawer; there is no separate window and no `panel` manifest kind (a `panel` kind would make `omarchy-shell shell summon` open a second, unanchored surface). Bar widgets exist once per monitor, so all UI and player state lives in `Service.qml`; widgets are views that register with the service. View rules:
 - Select a book in Library → hide the panel, start playback, and reopen on the **Mini** view when playback begins (so the user sees it work).
 - ✕ / Esc / click-away → hide the panel; audio continues.
 - Bar click → **Mini** if a book is loaded, otherwise **Library**.
@@ -211,9 +210,9 @@ One `Panel.qml` window anchored under the bar icon, hosting a `StackLayout` of t
 
 Keyboard: search field focused on open; ↑/↓ move; Enter play; Esc close; Space play/pause when the search field is empty; ←/→ skip in Mini/Full.
 
-Shell IPC target `omarchy-audible` for user hotkeys:
-`toggle`, `playPause`, `skip <seconds>`, `nextChapter`, `prevChapter`, `openLibrary`.
-Example Hyprland binding: `bind = SUPER, A, exec, omarchy-shell omarchy-audible toggle` (exact call syntax to be confirmed against how other plugin IPC targets are invoked ❓).
+Shell IPC target `latentoperator.audible`, registered by an `IpcHandler` in `Service.qml` (a handler in the per-monitor widget would be ignored as a duplicate) ✅ S6:
+`toggle`, `playPause`, `skip <seconds>`, `nextChapter`, `prevChapter`, `openLibrary`. Arguments and return values are strings.
+Call syntax ✅: `omarchy-shell latentoperator.audible toggle`. Example Hyprland binding: `bind = SUPER, A, exec, omarchy-shell latentoperator.audible toggle`.
 
 ## 7. Media keys / MPRIS (optional, M5)
 mpv does not export MPRIS by itself. The AUR/Arch package `mpv-mpris` provides it, which would make hardware media keys, `playerctl`, and Omarchy's stock media widget see the book. Make it **optional**: if the script is installed, pass it to mpv with `--script=`; otherwise skip. Do not make it a hard dependency.

@@ -121,7 +121,7 @@ Depends on S5/S6 results and the fake backend.
   Acceptance: simulated remote-newer position wins on play; offline pushes are queued and flushed later; auto-remove only fires when the setting is on and never during playback.
 
 - [ ] **P5 — Shell IPC target** (tier A; needs P2, S6)
-  Registers `omarchy-audible` with `toggle`, `playPause`, `skip`, `nextChapter`, `prevChapter`, `openLibrary`.
+  Registers `latentoperator.audible` (in `Service.qml`) with `toggle`, `playPause`, `skip`, `nextChapter`, `prevChapter`, `openLibrary`.
   Acceptance: each method works from a terminal using the call syntax documented in S6; documented in README with a sample Hyprland bind.
 
 **GATE G2** — you can start, pause, skip, change chapter, and restart the shell without losing playback, driven only by IPC calls and a debug panel. No real UI yet.
@@ -131,7 +131,7 @@ Depends on S5/S6 results and the fake backend.
 ## M3 — First usable UI
 
 - [ ] **U1 — Bar widget + Panel shell** (tier B; needs S6, P1)
-  Book glyph; play/pause state; optional title; tooltip; left click toggles the panel (Mini if loaded else Library); middle click toggles play/pause. `Panel.qml` hosts a stacked layout with Library/Mini/Full/Onboarding placeholders, closes on Esc/click-away, and never affects playback.
+  Book glyph; play/pause state; optional title; tooltip; left click toggles the drawer (Mini if loaded else Library); middle click toggles play/pause. The widget's `KeyboardPanel` (pattern in `spikes/s6-BarWidget.qml`) hosts a stacked layout with Library/Mini/Full/Onboarding placeholders, closes on Esc/click-away/popout switch, and never affects playback. Widgets are per monitor: keep state in the service.
   Acceptance: matches the behavior in SCOPE FR-U1/U5; works under three themes.
 
 - [ ] **U2 — Library view (drawer)** (tier B; needs U1, P3)
