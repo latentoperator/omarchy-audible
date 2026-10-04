@@ -74,6 +74,112 @@ Optional (P2): use a **fixed** unit name (`omarchy-audible-mpv`) so systemd refu
 
 ---
 
-## S1–S4
+## S2, S3, S4: shared method
 
-Not started. They need the real Audible account on the laptop.
+Run on HMSP-OMARCHYXPS on 2026-10-04, using the existing `~/.audible` login, audible 0.12.0 / audible-cli in its uv tool venv (Python 3.14.7), and ffmpeg. Scripts are in `spikes/`. They ran from a private `0700` directory, and the downloads went to a `0700` cache directory and `$XDG_RUNTIME_DIR`. **Only counts, field names and timings left the laptop.** No titles, ASINs, keys or audio were copied off it. Everything was deleted afterward.
+
+---
+
+## S4 — Catalog fields and multi-part books ✅
+
+**Question.** What response groups give the UI fields without timeouts, and how do multi-part books behave?
+
+### Results
+
+| Check | Result |
+|---|---|
+| Groups from ARCHITECTURE §4.5 (`product_desc,media,contributors,series,product_attrs,listening_status,percent_complete,is_finished`), `num_results=50`, paged | ✅ 91 items, 2 pages, **0.9 s**. No timeout. Adding `relationships` took 2.1 s. |
+| Fields present (of 91) | `title` 91, `subtitle` 43, `series` 57 (`[{asin, title, sequence, url}]`, where `sequence` is a string), `authors`/`narrators` 91 (`[{asin, name}]`), `runtime_length_min` 91, `content_type` 91, `content_delivery_type` 91, `percent_complete` 91, `is_finished` 91, `listening_status` 91 (`{is_finished, percent_complete, time_remaining_seconds, finished_at_timestamp}`), `purchase_date`, `release_date`, `library_status.date_added`, `language`, `is_listenable`. |
+| Covers | With these groups, `product_images` has only a `"500"` key (a 500 px URL). Asking for other sizes through the `image_sizes` parameter was **not tested**. B4 should either downscale the 500 px image or test `image_sizes=252`. |
+| `content_type` | `Product` 89, `Lecture` 2. This library has no podcasts. **Lectures must not be filtered out.** B4 should drop only podcast types (`Podcast*`), which need a library that has them to confirm. |
+| `content_delivery_type` | `MultiPartBook` 60, `SinglePartBook` 31. |
+| Multi-part shape | Each `MultiPartBook` lists its parts as `relationships` of type `component/child` (137 parts across the 60 books). **None of the parts are separate library items.** Two library items are themselves parts whose parent is not owned, and they behave like normal books. |
+| Multi-part content | Content metadata succeeded for all 60. Each is **one** content item: API runtime / catalog runtime = 1.000–1.001, 2–66 top-level chapters, codec `mp4a.40.2` (43 at 44 kHz, 17 at 22 kHz). |
+| Multi-part download (S2) | One `.aax` file, duration exact (see S2). |
+| Position lookup batch limit | **25 ASINs per `lastpositions` call.** 40 failed with "No more than 25 asins allowed". The plan said ≤ 50. |
+
+### Decision D5 (proposed for G0): multi-part books need no special handling
+
+`MultiPartBook` is how Audible's catalog describes the book. Download, decrypt, chapters and runtime all behave like a single book. Drop the `multipart` flag from `catalog.json`, or keep it for information only.
+
+Fixture: `fixtures/library-sample.json` has 5 items with the **real field shapes and invented values**: a single-part book, a series entry, a multi-part book, a lecture, and a finished book.
+
+---
+
+## S2 — Download and decrypt both formats ✅
+
+**Question.** Using a plugin-owned config dir, can we download and decrypt both `.aax` and `.aaxc` to m4b with chapters intact?
+
+**Method.** Created a private `AUDIBLE_CONFIG_DIR` containing a copy of the auth file and a minimal `config.toml` (`primary_profile = "plugin"`). Downloaded the shortest multi-part book with `--aax` and the shortest single-part book with `--aaxc`, both with `--chapter -q best -f asin_only`, then decrypted each with `ffmpeg -c copy`.
+
+**No aaxc-only book exists in this library.** Every item lists `aax` among its codecs. To prove the aaxc path anyway, it was **forced** with `--aaxc`.
+
+### Results
+
+| | `.aax` (multi-part, 544 min) | `.aaxc` (single-part, 145 min) |
+|---|---|---|
+| Download | 264 MB in 49 s | 140 MB in 26 s |
+| Files | `<ASIN>-LC_64_22050_stereo.aax`, `<ASIN>-chapters.json` | `<ASIN>-AAX_44_128.aaxc`, `.voucher`, `-chapters.json` |
+| Decrypt command | `ffmpeg -activation_bytes <hex> -i in.aax -map 0:a -c copy out.m4b` | `ffmpeg -audible_key <key> -audible_iv <iv> -i in.aaxc -map 0:a -c copy out.m4b` |
+| Decrypt time | 5.7 s | 2.9 s |
+| Duration vs catalog | 1.0000 ✅ | 1.0000 ✅ |
+| Audio | AAC 22.05 kHz ~63 kb/s | AAC 44.1 kHz ~126 kb/s |
+| 5 s decode from the middle | ✅ | ✅ |
+| Embedded chapters vs API | **20 vs 46** ⚠️ | 2 vs 2 ✅ |
+| Peak disk (raw + m4b) | 523 MB ≈ **2.0×** the book | 279 MB ≈ 2.0× |
+
+- **Private config dir works.** `AUDIBLE_CONFIG_DIR` plus a copied auth file and a minimal profile was enough for both `audible download` and `audible activation-bytes`.
+- **Voucher fields:** `content_license.license_response.key` and `.iv`. The other top-level keys are `content_license.license_response.rules` and `response_groups`.
+- **Quality:** `--aax -q best` returned a 22 kHz/64 k file even though that book also lists 44 kHz codecs, while the aaxc download was 44 kHz/128 k. These were **different books**, so this is a hint, not a like-for-like comparison. B5 should download one book both ways.
+- **Free-space pre-flight:** require at least 2.1× `content_size_in_bytes`, which the content metadata call returns before download.
+
+### Finding: embedded chapters can be coarser than Audible's chapter list
+
+The `.aax` carried 20 chapters, while the API had 46. A library-wide check of all 89 books showed:
+- `chapter_titles_type=Flat` always equals the **total** count of the `Tree` (89/89).
+- **41 books have nested chapters** (36 multi-part, 5 single-part), for example 17 top-level / 108 total.
+
+So the book's own chapter marks are not a reliable source.
+
+**Proposed (G0), untested:** at decrypt time, build an ffmetadata chapter file from `<ASIN>-chapters.json` (flat), and write it with `-map_chapters` in the same `-c copy` pass, so mpv's `chapter-list` matches the phone. Fall back to the embedded chapters if the JSON is missing. B5 should test this on a nested-chapter book.
+
+### Decision (proposed for G0): prefer aaxc, fall back to aax
+
+Both paths work. aaxc uses a per-book key from the voucher instead of the account-wide activation bytes. Community reports say it is the format newer titles ship in (not verified here, because this library has no aaxc-only book), and it probably gives the better file. Use `--aaxc` first and fall back to `--aax` when no voucher is offered, keeping the activation-bytes path for that fallback. Confirm the quality point in B5.
+
+---
+
+## S3 — Position write-back ✅ (API level; phone check pending)
+
+**Question.** Can we write "last position heard" so other devices see it?
+
+**Method.** Read positions for all 89 books in batches of 25. Picked the most recently updated position that was more than an hour old (so it could not be playing right now). Wrote the position minus 60 s, read it back, wrote the original value back, and read it again.
+
+### Results
+
+| Check | Result |
+|---|---|
+| Read | `GET 1.0/annotations/lastpositions?asins=…` (≤ 25): 74 `Exists`, 15 `DoesNotExist`. |
+| `acr` | Comes straight from `GET 1.0/content/{asin}/metadata?response_groups=content_reference` in `content_metadata.content_reference.acr`. **No license request is needed.** |
+| Write | `PUT 1.0/lastpositions/{asin}` with body `{"acr": …, "asin": …, "position_ms": …}` ✅. The response body is a string. |
+| Read back | Exact (delta 0 ms), and `last_updated` changed. |
+| Restore | Exact (delta 0 ms). The book stayed first in "recently listened". |
+| `last_updated` format | `YYYY-MM-DD HH:MM:SS.f`, **no timezone**. Treating it as UTC gave a plausible age (3.5 h), but that is inferred. B6 should confirm it against a write made at a known time. |
+
+**Not yet done:** confirming in the Audible phone app. The API round trip is exact, but the plan asks for a phone check. It takes Chris one minute: move one book by a known amount, then look at the phone.
+
+### Decision D4 (proposed for G0): ship position write-back
+
+Keep the newest-wins merge from ARCHITECTURE §4.6. If the phone check fails, fall back to read-only sync, as the plan already allows.
+
+### Facts B6 must use
+
+- Batch `lastpositions` at **≤ 25** ASINs, not 50.
+- Get `acr` from the content metadata call, and cache it per book in `meta.json` when the book downloads.
+- The write is the only mutating API call (ARCHITECTURE §4.4). The grep test must allow `PUT 1.0/lastpositions/` and nothing else.
+
+---
+
+## S1 — Programmatic login
+
+Not started. It needs Chris to sign in through a browser and paste the redirect URL into the drawer.

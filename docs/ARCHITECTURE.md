@@ -126,7 +126,7 @@ Pipeline for `get <asin>`:
 1. Pre-flight: free-space check (need ≈ 2.2× the expected size during conversion).
 2. Create `<booksDir>/<asin>/.partial/`.
 3. Download via `audible-cli` (`--aax-fallback`), no progress bars. Report progress by polling the partial file size.
-4. Decrypt: `.aax` uses `-activation_bytes`; `.aaxc` uses the voucher `key`/`iv` (`-audible_key`, `-audible_iv`) ❓ spike S2 must prove the aaxc path with a book that is not offered as aax.
+4. Decrypt: `.aax` uses `-activation_bytes`; `.aaxc` uses the voucher `key`/`iv` (`-audible_key`, `-audible_iv`) ✅ S2 proved both paths. Prefer aaxc, fall back to aax. Peak disk ≈ 2× book size.
 5. `ffmpeg -c copy` to `book.m4b.tmp`, then `ffprobe` sanity check (duration within 1% of catalog runtime; chapters present), then atomic rename to `book.m4b`.
 6. Write `meta.json`, delete `.partial/` and the raw `.aax`/`.aaxc` (**the raw file is never kept**).
 7. On failure or cancel at any step, delete `.partial/` and emit `error`.
@@ -149,9 +149,9 @@ Missing from the export and needed by the UI: **subtitle, series name and part n
 ```
 
 ### 4.6 Positions
-Read ✅: `audible api 1.0/annotations/lastpositions -p asins=A,B` returns, per asin, `last_position_heard` with `status` (`Exists`|`DoesNotExist`), `position_ms`, `last_updated`. It accepted two asins in one call; confirm the per-call maximum ❓ (batch at ≤50).
+Read ✅: `audible api 1.0/annotations/lastpositions -p asins=A,B` returns, per asin, `last_position_heard` with `status` (`Exists`|`DoesNotExist`), `position_ms`, `last_updated`. The API limit is **25 asins per call** ✅ S3.
 
-Write ❓ (spike S3): the community-known endpoint needs an `acr` value obtained from a content-license request. If the write cannot be made reliable, v1 ships read-only sync (resume from the phone's position) plus local positions, and `position-push` returns `error(code=unsupported)`.
+Write ✅ S3: `PUT 1.0/lastpositions/{asin}` with `{acr, asin, position_ms}`; `acr` comes from `1.0/content/{asin}/metadata?response_groups=content_reference`. Round trip was exact; phone-app confirmation pending. If the write cannot be made reliable, v1 ships read-only sync (resume from the phone's position) plus local positions, and `position-push` returns `error(code=unsupported)`.
 
 Merge rule: take the entry with the newest `updated_at` between local `state.json` and remote. If remote is newer, resume there (the user listened elsewhere).
 

@@ -36,15 +36,15 @@ Goal: replace every ❓ in ARCHITECTURE.md with a ✅ or a documented fallback. 
   Done when: a throwaway script `login-start` prints a URL, `login-finish <pasted>` produces a working auth file, `audible -P <profile> library list` works with it, and the pasted URL is not written anywhere. Also test: an existing-`~/.audible` import. Note the marketplaces supported and any CAPTCHA/2FA behavior seen.
   *Fallback if impossible:* document why, and propose the copy-paste-a-command alternative.
 
-- [ ] **S2 — Download and decrypt both formats** (tier S)
+- [x] **S2 — Download and decrypt both formats** (tier S) — done 2026-10-04, see SPIKE-RESULTS.md
   Using the plugin-owned config dir (`AUDIBLE_CONFIG_DIR`), download one `.aax` book and one book that is **aaxc-only** (find one in the library, or note none exists). Decrypt both to m4b with `ffmpeg -c copy`. For aaxc, prove `-audible_key/-audible_iv` from the voucher JSON.
   Done when: both produce playable m4b with chapters and the sanity check (duration within 1% of catalog) passes. Record the exact commands and the voucher JSON field names. Measure peak disk use during conversion.
 
-- [ ] **S3 — Position write-back** (tier S)
+- [x] **S3 — Position write-back** (tier S) — API round trip done 2026-10-04; phone-app check pending
   Find a reliable way to write "last position heard" so the phone picks it up (the community-documented endpoint involves an `acr` value from a content-license request). Verify on a real book by pushing a position and reading it back with `lastpositions`, then confirm in the Audible phone app.
   Done when: a script does a round trip, or `SPIKE-RESULTS.md` records that it's unreliable and D4 is resolved to "read-only sync". Restore any position you changed afterward.
 
-- [ ] **S4 — Catalog fields and multi-part books** (tier S)
+- [x] **S4 — Catalog fields and multi-part books** (tier S) — done 2026-10-04, fixture in `fixtures/library-sample.json`
   Use the raw `1.0/library` endpoint (paged, `num_results` ≤ 50) to obtain: subtitle, series name and number, `content_type`, `content_delivery_type`, runtime, cover URLs, `listening_status`, `percent_complete`. Pick the smallest `response_groups` that works without timeouts. Examine a `MultiPartBook` (e.g. the C. S. Lewis collection): does `download` produce one file or several? Are chapters sane?
   Done when: a sample JSON for 5 books is saved to `fixtures/` (sanitized, invented titles) and D5 is decided.
 
@@ -90,7 +90,7 @@ All commands follow the protocol in ARCHITECTURE §4.2. Build the **fake mode fi
 
 - [ ] **B6 — Positions** (tier B, S3 result required; needs B1)
   `position-get`, `position-push` (or `unsupported`). Newest-wins merge helper shared with `state.json` logic.
-  Acceptance: unit tests for merge rule edge cases (equal timestamps, missing remote, remote newer); batching ≤50.
+  Acceptance: unit tests for merge rule edge cases (equal timestamps, missing remote, remote newer); `lastpositions` batching ≤25 (API limit, S3); `acr` taken from content metadata and cached in `meta.json`.
 
 - [ ] **B7 — Protocol schemas and contract tests** (tier A; needs B1; extended as commands land)
   JSON Schema file per event type; a test that runs every command in fake mode and validates every emitted line.
