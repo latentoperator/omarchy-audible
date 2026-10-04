@@ -12,7 +12,8 @@ Update this file in every PR that changes status. Newest first. See [WORKFLOW.md
 | Workflow and handoff doc | Written (`docs/WORKFLOW.md`) |
 | Repo | `latentoperator/omarchy-audible`, **private** |
 | A0 scaffolding | **Done.** Live-shell check passed on the laptop 2026-10-04 (`scripts/dev-live-check.sh`: shell discovered `latentoperator.audible` via the symlinked dir; plugin left linked but not enabled). Branch `a0-scaffolding`. Worker (DeepSeek Flash) took 3 attempts: #1 blocked reading outside the repo, #2 hung with no model output (killed), #3 succeeded with `--format json` + timeout. Supervisor re-ran `pytest` (1 passed), `make check-symlinks`, `omarchy plugin validate .` (passes; fails correctly on a missing entry point) and fixed a `dev-link`/`dev-unlink` safety bug. Codex adversarial review: **approve, no findings**. |
-| Spikes S1–S6 | Not started |
+| Spikes S5, S6 | **Done 2026-10-04** (Dante, driving the laptop over SSH from Hopebox). Findings in `docs/SPIKE-RESULTS.md`, prototypes in `spikes/`. S6: a bar widget that owns a `qs.Ui` KeyboardPanel gives an anchored, themed drawer that closes on Esc, click-away, and popout switch; the IPC target lives in the service. S5: mpv started with `systemd-run --user --scope` survives `omarchy-restart-shell`, and the service reattaches in under 3 s with live state. Proposed G0 changes: drop the `panel` kind, rename the IPC target to `latentoperator.audible`, and note that `Service.qml` edits need a shell restart. The laptop was left as found: plugin disabled, checkout on `main`. |
+| Spikes S1–S4 | Not started (need the real account on the laptop) |
 | Backend / player / UI | Not started |
 
 ## Environment (laptop, HMSP-OMARCHYXPS)
@@ -41,7 +42,7 @@ Update this file in every PR that changes status. Newest first. See [WORKFLOW.md
 
 ## Next steps (in order)
 
-1. ~~Finish A0~~ Done. Next: spikes S6 and S5 (they decide the UI and player design), then S1, S2, S4, S3. Strongest model, on the laptop. Findings go in `docs/SPIKE-RESULTS.md`.
+1. ~~Finish A0~~ Done. ~~S6, S5~~ Done. Next: S1, S2, S4, S3 on the laptop with the real account. Findings go in `docs/SPIKE-RESULTS.md`.
 2. Gate G0: Chris reviews the spike results, resolves D1/D4/D5, and the docs are corrected to match reality.
 3. M1 backend can then run on the laptop or the VPS (fake mode only on the VPS).
 

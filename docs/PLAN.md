@@ -48,11 +48,11 @@ Goal: replace every ❓ in ARCHITECTURE.md with a ✅ or a documented fallback. 
   Use the raw `1.0/library` endpoint (paged, `num_results` ≤ 50) to obtain: subtitle, series name and number, `content_type`, `content_delivery_type`, runtime, cover URLs, `listening_status`, `percent_complete`. Pick the smallest `response_groups` that works without timeouts. Examine a `MultiPartBook` (e.g. the C. S. Lewis collection): does `download` produce one file or several? Are chapters sane?
   Done when: a sample JSON for 5 books is saved to `fixtures/` (sanitized, invented titles) and D5 is decided.
 
-- [ ] **S5 — mpv under Quickshell** (tier S)
+- [x] **S5 — mpv under Quickshell** (tier S) — done 2026-10-04, see SPIKE-RESULTS.md
   In a throwaway plugin, start mpv detached with an IPC socket, connect from QML via `Quickshell.Io` `Socket`, observe `time-pos`/`pause`/`chapter-list`, send `seek` and `loadfile … start=`. Restart the shell (`omarchy-restart-shell`) and prove mpv keeps playing and QML reattaches. Decide between `execDetached` and `systemd-run --user --scope`.
   Done when: a 40-line QML prototype does all of the above, and the decision is recorded.
 
-- [ ] **S6 — Panel + bar-widget mechanics** (tier S)
+- [x] **S6 — Panel + bar-widget mechanics** (tier S) — done 2026-10-04, see SPIKE-RESULTS.md
   Study `quickshell.spotify` and `panels/audio`. Determine: how a third-party bar widget opens/toggles its own panel anchored to the icon; how to size the panel; how to close on click-away/Esc; how to read theme tokens; how to register a shell IPC target; how the manifest `schema` appears in settings; what the third-party capability facade blocks. Build the smallest widget → panel → close loop.
   Done when: a book-glyph widget opens a themed empty panel that closes on Esc/click-away, and the answers are in `SPIKE-RESULTS.md`.
 
