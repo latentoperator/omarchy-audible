@@ -1,6 +1,6 @@
 # Instructions for coding agents
 
-You are implementing one task from [docs/PLAN.md](docs/PLAN.md). Read [docs/SCOPE.md](docs/SCOPE.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) first. They are the source of truth. If code and docs disagree, stop and say so; do not guess.
+You are implementing one task from [docs/PLAN.md](docs/PLAN.md). Read [docs/WORKFLOW.md](docs/WORKFLOW.md) for the worker rules and the review loop, and [docs/STATE.md](docs/STATE.md) for what is in progress. Then read [docs/SCOPE.md](docs/SCOPE.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Those two are the source of truth. If code and docs disagree, stop and say so; do not guess.
 
 ## Ground rules
 
