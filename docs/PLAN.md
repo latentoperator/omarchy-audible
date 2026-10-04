@@ -32,7 +32,7 @@ M1 (backend) and M2/M3 (QML) can overlap after G0 because the fake backend freez
 Goal: replace every ❓ in ARCHITECTURE.md with a ✅ or a documented fallback. Output goes in `docs/SPIKE-RESULTS.md` (one section per spike: question, method, result, decision, code snippet that works).
 
 - [ ] **S1 — Programmatic Audible login** (tier S)
-  Prove the no-terminal login: build the sign-in URL, take a pasted redirect URL, register a device, write an auth file, get activation bytes. Use the `audible` library's `login`/`register` modules (read their source and docs at audible.readthedocs.io).
+  Prove the in-drawer login (nice-to-have; a one-time terminal login is the fallback): build the sign-in URL, take a pasted redirect URL, register a device, write an auth file, get activation bytes. Use the `audible` library's `login`/`register` modules (read their source and docs at audible.readthedocs.io).
   Done when: a throwaway script `login-start` prints a URL, `login-finish <pasted>` produces a working auth file, `audible -P <profile> library list` works with it, and the pasted URL is not written anywhere. Also test: an existing-`~/.audible` import. Note the marketplaces supported and any CAPTCHA/2FA behavior seen.
   *Fallback if impossible:* document why, and propose the copy-paste-a-command alternative.
 

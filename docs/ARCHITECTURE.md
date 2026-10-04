@@ -157,7 +157,7 @@ Merge rule: take the entry with the newest `updated_at` between local `state.jso
 "Recently listened" sort key = `max(local last_played_at, remote last_updated)`. Fetch remote positions for all catalog asins in batches during `sync` and cache them in `state.json`.
 
 ### 4.7 Auth and login ❓ (spike S1)
-Goal: a login that needs no terminal prompts.
+Goal (nice-to-have, not a hard requirement): guide the user through login from the drawer, the same flow `audible quickstart` uses: open a link, sign in in the browser, paste the return URL back. A one-time terminal login is an acceptable fallback.
 - `login-start`: the `audible` library exposes an external-browser flow (`audible.login`: build the OAuth URL with a PKCE code verifier and device serial; the browser lands on a "page not found" URL whose query contains `openid.oa2.authorization_code`). Backend generates the URL and stores `{verifier, serial, marketplace}` under a short-lived session id (in memory of a tiny lock-guarded file, expiring in 10 minutes).
 - `login-finish`: extract the code from the pasted URL, register the device (`audible.register`), build an `Authenticator`, write `auth.json` (mode 0600), derive and store activation bytes, create the audible-cli `config.toml` profile.
 - The UI opens the URL with `xdg-open` and offers a "Paste URL from clipboard" button that calls `wl-paste`.
@@ -233,7 +233,7 @@ Never commit real library data, auth files, or activation bytes. Fixtures use in
 | Risk | Impact | Mitigation |
 |------|--------|-----------|
 | Audible changes API/DRM | Plugin stops syncing or downloading | Pin `audible-cli`; `doctor`; clear error UI; fast-follow releases |
-| Programmatic login harder than the CLI's | Blocks "no terminal" goal (the biggest goal) | Spike S1 first. Fallback: ship the "import existing audible-cli login" path and a one-line copy-paste command |
+| Programmatic login harder than the CLI's | In-drawer login (a nice-to-have) is delayed | Spike S1 first. Fallback: the drawer shows a one-line `audible quickstart`-style command for a one-time terminal login. "Import existing audible-cli login" helps only people who already ran the CLI, so it is a dev convenience, not the fallback |
 | `.aaxc` books need a different decrypt path | Some books fail | Spike S2 on a book that is aaxc-only; test both paths |
 | Position write-back unsupported | Phone and laptop positions diverge | D4: ship read-only sync |
 | Multi-part books | Odd files, wrong durations | Spike S4; mark unsupported if needed |

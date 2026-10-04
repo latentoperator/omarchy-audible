@@ -12,7 +12,7 @@ A book icon in the Omarchy bar that opens a themed drawer of your Audible librar
 2. **Native to Omarchy.** It's a Quickshell plugin using the shell's own theme, bar, and panel machinery. It must follow the current Omarchy theme with zero extra work, including live theme switches.
 3. **The laptop is a cache, not a mirror.** The full library is browsable from a small catalog. Audio is downloaded on demand and removed freely. Removing a local copy never touches the Audible account.
 4. **Playback outlives the UI.** Closing the panel or restarting the shell must not interrupt a book.
-5. **Shareable.** A stranger with an Audible account and a fresh Omarchy install can run `omarchy plugin add …` and be listening within five minutes, with no terminal login steps.
+5. **Shareable.** A stranger with an Audible account and a fresh Omarchy install can run `omarchy plugin add …` and be listening within five minutes. Signing in is guided from the drawer (open a link, sign in in the browser, paste the return link back). If that flow proves impractical, a one-time terminal login is an acceptable fallback; in-drawer login is a nice-to-have, not a hard requirement.
 
 ## 3. Users and primary journeys
 
@@ -124,7 +124,7 @@ Exposed through the plugin manifest's `schema`, so they appear in Omarchy's sett
 
 1. Fresh Omarchy machine to first audio in ≤5 minutes using only the drawer.
 2. Playback survives closing the panel and restarting the shell.
-3. All of J1–J7 work, with no terminal needed for the user.
+3. All of J1–J7 work from the UI. Sign-in from the drawer is the target; a one-time terminal login is acceptable if S1 fails.
 4. Removing a local book never changes anything in the Audible account (verified by test and by manual check against a real account).
 5. Visually correct under three themes and under a live theme switch.
 6. Backend test suite passes offline, using the fake backend.

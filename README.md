@@ -11,7 +11,7 @@ A book icon in the [Omarchy](https://omarchy.org) bar. Click it to browse your A
 - Playback survives closing the panel and restarting the shell
 - Downloads on demand, one-click "Remove from this laptop", optional auto-remove when finished
 - Resumes where you left off on your phone
-- Sign in from inside the drawer, with no terminal steps
+- Sign in from inside the drawer: open a link, sign in to Amazon in your browser, paste the return link back (a one-time terminal login is the fallback)
 - Follows the current Omarchy theme, including live theme switches
 
 ## Documents
