@@ -14,16 +14,16 @@ run it, then starts the backend package in ``backend/``:
   plugin virtualenv interpreter.
 
 The launcher never imports the backend package or any third-party module; it
-starts it with ``python -m omarchy_audible``. Only NDJSON may reach stdout: the
-child writes the protocol and the launcher writes at most one ``error`` event
-(``no_venv``) when there is nowhere to run a command.
+re-execs itself as ``python -m omarchy_audible`` so the backend replaces this
+process (same PID). Only NDJSON may reach stdout: the backend writes the
+protocol and the launcher writes at most one ``error`` event (``no_venv``) when
+there is nowhere to run a command.
 """
 
 from __future__ import annotations
 
 import json
 import os
-import subprocess
 import sys
 from pathlib import Path
 
@@ -101,11 +101,14 @@ def _run_backend(argv: list[str], env: dict[str, str], fake: bool, python: str) 
         child_env["OMARCHY_AUDIBLE_FAKE"] = "1"
     child_argv = [token for token in argv if token != "--fake"]
     try:
-        completed = subprocess.run([python, "-m", MODULE, *child_argv], env=child_env, check=False)
+        # Replace this process with the backend (ARCHITECTURE 4.1). The job then
+        # runs under the PID the UI spawned, so killing that PID stops the job
+        # and releases job.lock (ARCHITECTURE 4.8).
+        os.execve(python, [python, "-m", MODULE, *child_argv], child_env)
     except OSError as exc:
         _emit_error("internal", f"could not start the backend: {exc}")
         return 1
-    return completed.returncode
+    return 1  # unreachable on success: execve replaces the process image
 
 
 def main(argv: list[str]) -> int:

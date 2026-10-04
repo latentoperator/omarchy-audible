@@ -22,5 +22,22 @@ def test_scrub_redacts_codes_in_urls():
     assert "XYZ789" not in scrubbed
 
 
+def test_scrub_redacts_json_quoted_secrets():
+    text = '{"iv": "Q2hh", "activation_bytes": "deadbeef", "key": "Zm9v"}'
+    scrubbed = scrub(text)
+    for secret in ("Q2hh", "deadbeef", "Zm9v"):
+        assert secret not in scrubbed
+    assert '"iv"' in scrubbed
+    assert '"activation_bytes"' in scrubbed
+
+
+def test_scrub_redacts_dict_repr_secrets():
+    text = "{'iv': 'Q2hh', 'access_token': 'AT-123', 'refresh_token': 'RT-456'}"
+    scrubbed = scrub(text)
+    for secret in ("Q2hh", "AT-123", "RT-456"):
+        assert secret not in scrubbed
+    assert "'access_token'" in scrubbed
+
+
 def test_scrub_leaves_plain_text_alone():
     assert scrub("syncing library page 2 of 3") == "syncing library page 2 of 3"

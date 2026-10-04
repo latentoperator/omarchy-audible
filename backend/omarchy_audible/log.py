@@ -12,6 +12,8 @@ import sys
 
 _SECRET_KEYS = (
     "authorization_code",
+    "access_token",
+    "refresh_token",
     "activation_bytes",
     "password",
     "passwd",
@@ -22,8 +24,17 @@ _SECRET_KEYS = (
     "iv",
 )
 
+_SECRET_ALT = "|".join(_SECRET_KEYS)
+
+# ``key=value`` and ``key: value`` in plain logs and exception text.
 _KEY_VALUE = re.compile(
-    r"(?i)\b(" + "|".join(_SECRET_KEYS) + r")\b(\s*[=:]\s*)([\"']?)([^\s&\"']+)"
+    r"(?i)\b(" + _SECRET_ALT + r")\b(\s*[=:]\s*)([\"']?)([^\s&\"']+)"
+)
+# ``"key": "value"`` / ``'key': 'value'`` in JSON or dict ``repr()`` output: the
+# most likely leak shape when a voucher dict reaches a log line via ``repr``.
+_QUOTED_KEY_VALUE = re.compile(
+    r"(?i)(?P<qk>[\"'])(?P<key>" + _SECRET_ALT + r")(?P=qk)"
+    r"(?P<sep>\s*:\s*)(?P<qv>[\"'])(?P<value>.*?)(?P=qv)"
 )
 _BEARER = re.compile(r"(?i)\b(bearer)\s+([A-Za-z0-9._~+/\-]+=*)")
 _QUERY = re.compile(
@@ -33,6 +44,13 @@ _QUERY = re.compile(
 
 def scrub(text: str) -> str:
     """Return ``text`` with secret values replaced by ``***``."""
+    text = _QUOTED_KEY_VALUE.sub(
+        lambda m: (
+            f"{m.group('qk')}{m.group('key')}{m.group('qk')}{m.group('sep')}"
+            f"{m.group('qv')}***{m.group('qv')}"
+        ),
+        text,
+    )
     text = _KEY_VALUE.sub(lambda m: f"{m.group(1)}{m.group(2)}{m.group(3)}***", text)
     text = _BEARER.sub(lambda m: f"{m.group(1)} ***", text)
     text = _QUERY.sub(lambda m: f"{m.group(1)}***", text)
