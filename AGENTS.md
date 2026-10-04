@@ -17,7 +17,7 @@ You are implementing one task from [docs/PLAN.md](docs/PLAN.md). Read [docs/WORK
 
 ## Working on this machine
 
-- Link the plugin for live reload: `make dev-link` (symlinks the repo into `~/.config/omarchy/plugins/latentoperator.audible/`). Saving a file reloads the plugin. Force it with `omarchy-shell shell rescanPlugins`. Restart the whole shell with `omarchy-restart-shell`.
+- Link the plugin for development: `make dev-link` (symlinks the repo into `~/.config/omarchy/plugins/latentoperator.audible/`). The shell does not watch files (`QS_DISABLE_FILE_WATCHER=1`), so saving reloads nothing. After a bar-widget or view change, run `omarchy-shell shell rescanPlugins`. After a `Service.qml` change, run `omarchy-restart-shell`; a rescan keeps the old service running. Playback survives the restart because mpv runs in its own systemd scope.
 - Use `OMARCHY_AUDIBLE_FAKE=1` for all development. It needs no account and no network. Use the real account only when a task says so.
 - Reference plugins to copy patterns from: `~/.config/omarchy/plugins/quickshell.spotify/` (closest analogue), `~/.config/omarchy/plugins/chrisgray.kanban/` (minimal bar widget), `/usr/share/omarchy/shell/plugins/panels/audio/`. Shell docs: `/usr/share/omarchy/shell/README.md`, `plugins/README.md`.
 - Tests: `make test`. Lint: `make lint`.
