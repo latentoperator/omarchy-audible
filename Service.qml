@@ -40,6 +40,9 @@ Item {
   property var lastReply: null
 
   readonly property bool mpvConnected: socketLoader.item ? socketLoader.item.connected : false
+  // Subscribe here, not in Socket.onConnectionStateChanged: with connected:true
+  // set at creation the socket can connect before Loader.item is assigned.
+  onMpvConnectedChanged: if (mpvConnected) subscribe()
 
   function send(cmd) {
     if (!socketLoader.item || !socketLoader.item.connected) return false
@@ -86,7 +89,6 @@ Item {
         splitMarker: "\n"
         onRead: function(line) { root.handleLine(line) }
       }
-      onConnectionStateChanged: if (connected) root.subscribe()
     }
   }
 
