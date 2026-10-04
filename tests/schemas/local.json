@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "local event",
+  "description": "Payload of `local` (ARCHITECTURE 4.2): every book present under booksDir, from the filesystem scan.",
+  "type": "object",
+  "required": ["type", "books"],
+  "properties": {
+    "type": { "const": "local" },
+    "books": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["asin", "size", "downloaded_at"],
+        "properties": {
+          "asin": { "type": "string", "minLength": 1 },
+          "size": { "type": "integer", "minimum": 0 },
+          "downloaded_at": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
