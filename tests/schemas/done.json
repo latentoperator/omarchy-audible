@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "done event",
+  "description": "Final event of a successful backend run (ARCHITECTURE 4.2).",
+  "type": "object",
+  "required": ["type"],
+  "properties": {
+    "type": { "const": "done" }
+  },
+  "additionalProperties": true
+}

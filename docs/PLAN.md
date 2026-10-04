@@ -69,7 +69,7 @@ Goal: replace every ❓ in ARCHITECTURE.md with a ✅ or a documented fallback. 
 
 All commands follow the protocol in ARCHITECTURE §4.2. Build the **fake mode first** so everything after it is testable offline.
 
-- [ ] **B1 — Launcher, protocol helpers, fake mode skeleton** (tier B; needs A0)
+- [x] **B1 — Launcher, protocol helpers, fake mode skeleton** (tier B; needs A0)
   `bin/omarchy-audible` (stdlib only) dispatches subcommands; shared `emit()` NDJSON writer; error codes; secret-scrubbing logger; the **job lock** from ARCHITECTURE §4.8 (non-blocking `flock` on `job.lock` for job commands only, `error(code=busy)` when held; `job.json` helper); `--fake` / `OMARCHY_AUDIBLE_FAKE=1` switch; `status` and `doctor` working (checks for `mpv`, `ffmpeg`, `ffprobe`, `python`, `wl-paste`, `xdg-open`, `systemd-run`, venv, auth).
   Acceptance: `status` and `doctor` output validates against `tests/schemas/*.json`; works with no venv; unknown command exits nonzero with an `error` event; a second job command while one holds the lock gets `busy`; a non-job command (`status`) succeeds while the lock is held.
 
