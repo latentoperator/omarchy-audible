@@ -19,7 +19,7 @@ Read [SCOPE.md](SCOPE.md) (what and why) and [ARCHITECTURE.md](ARCHITECTURE.md) 
 M0  S1 S2 S3 S4 S5 S6   (all independent, run in parallel)  ──▶ GATE G0
 M1  B1 → B2 → B3 → B4 ; B5, B6, B7 after B1                 ──▶ GATE G1
 M2  P1 → P2 → P3 ; P4 after P2                              ──▶ GATE G2
-M3  U1 → U2 → U3 ; U4 after U1                              ──▶ GATE G3  (first usable build)
+M3  U1 → U2a → U2 → U3 ; U4 after U1                        ──▶ GATE G3  (first usable build)
 M4  U5, U6, U7 after G3                                     ──▶ GATE G4
 M5  R1 … R7                                                 ──▶ release v0.1.0
 ```
@@ -61,6 +61,7 @@ Goal: replace every ❓ in ARCHITECTURE.md with a ✅ or a documented fallback. 
   Done when: `make dev-link && omarchy-shell shell rescanPlugins` lists the plugin without errors (if the shell refuses a symlinked plugin dir, switch `dev-link` to an rsync-based sync and note it), `omarchy plugin validate .` passes, the repo contains no symlinks (add a `make check-symlinks` target: `find . -type l -not -path './.git/*'` must print nothing), and `make test` runs (even with zero tests). Add `validate` and `check-symlinks` to `make lint`.
 
 **GATE G0** — maintainer reviews `SPIKE-RESULTS.md`, resolves D4 and D5, and confirms the architecture still holds. Edit ARCHITECTURE.md to reflect reality before continuing.
+✅ **Passed 2026-10-04.** Chris approved: D5 no special handling for multi-part books; D4 ship write-back with local-listening-only push rules; aaxc first with aax fallback; chapters rebuilt from Audible's list; D1 AGPL-3.0-only; no `panel` kind; IPC target `latentoperator.audible`; `login-finish` reads stdin. ARCHITECTURE now has the ownership contracts (§4.8) and a minimal Mini view moved into M3 (U2).
 
 ---
 
@@ -69,28 +70,28 @@ Goal: replace every ❓ in ARCHITECTURE.md with a ✅ or a documented fallback. 
 All commands follow the protocol in ARCHITECTURE §4.2. Build the **fake mode first** so everything after it is testable offline.
 
 - [ ] **B1 — Launcher, protocol helpers, fake mode skeleton** (tier B; needs A0)
-  `bin/omarchy-audible` (stdlib only) dispatches subcommands; shared `emit()` NDJSON writer; error codes; secret-scrubbing logger; single-instance lock; `--fake` / `OMARCHY_AUDIBLE_FAKE=1` switch; `status` and `doctor` working (checks for `mpv`, `ffmpeg`, `ffprobe`, `python`, `wl-paste`, `xdg-open`, venv, auth).
-  Acceptance: `status` and `doctor` output validates against `tests/schemas/*.json`; works with no venv; unknown command exits nonzero with an `error` event.
+  `bin/omarchy-audible` (stdlib only) dispatches subcommands; shared `emit()` NDJSON writer; error codes; secret-scrubbing logger; the **job lock** from ARCHITECTURE §4.8 (non-blocking `flock` on `job.lock` for job commands only, `error(code=busy)` when held; `job.json` helper); `--fake` / `OMARCHY_AUDIBLE_FAKE=1` switch; `status` and `doctor` working (checks for `mpv`, `ffmpeg`, `ffprobe`, `python`, `wl-paste`, `xdg-open`, `systemd-run`, venv, auth).
+  Acceptance: `status` and `doctor` output validates against `tests/schemas/*.json`; works with no venv; unknown command exits nonzero with an `error` event; a second job command while one holds the lock gets `busy`; a non-job command (`status`) succeeds while the lock is held.
 
 - [ ] **B2 — Setup/venv bootstrap** (tier B; needs B1)
-  `setup` creates the venv, installs the pinned `audible-cli`, streams progress events, is idempotent, and cleans up on failure. Pin lives in one place (`backend/requirements.lock`).
-  Acceptance: from a clean `~/.local/share/omarchy-audible`, `setup` yields a venv where `python -c "import audible"` works; second run is a no-op; killing it midway then re-running recovers.
+  `setup` creates the venv, installs the pinned `audible-cli` and `audible[cryptography]` **and this repo's `backend/` package** (so `venv/bin/python -m omarchy_audible` works), streams progress events, is idempotent, and cleans up on failure. Pins live in one place (`backend/requirements.lock`; S1–S4 used audible-cli 0.6.0 / audible 0.12.0).
+  Acceptance: from a clean `~/.local/share/omarchy-audible`, `setup` yields a venv where `python -c "import audible, omarchy_audible"` works and the launcher dispatches into it; second run is a no-op; killing it midway then re-running recovers.
 
 - [ ] **B3 — Auth commands** (tier B, S1 result required; needs B2)
-  `login-start`, `login-finish`, `login-import-cli`, `logout`, plus `status.authenticated/account/marketplace`. Implements the approach S1 proved. Files created `0600`.
-  Acceptance: unit tests with mocked `audible` calls; file-mode test; a test asserting the pasted URL never appears in any log or file; manual run against a real account.
+  `login-start`, `login-finish`, `login-import-cli`, `logout`, plus `status.authenticated/account/marketplace`. Implements ARCHITECTURE §4.7 exactly; working reference code is `spikes/s1_login.py`. `login-finish` reads the URL from **stdin**. Files created `0600` under umask 077. The clipboard-history check and `logout` deregistering only this device are part of the task.
+  Acceptance: unit tests with mocked `audible` calls; file-mode test (including an import from a `0644` source); a test asserting the pasted URL and code never appear in argv, any log line, any event, or any file; expired/bad-URL tests; a test that `deregister_all=True` appears nowhere; manual run against a real account by Dante on the laptop.
 
 - [ ] **B4 — Catalog sync** (tier B, S4 result required; needs B3 or fake mode)
-  `sync` pages the library, builds `catalog.json` per the schema, filters out podcasts, downloads missing covers (thumbnail size ~252), fetches remote positions in batches into `state.json`, and writes everything atomically. Progress events per page.
+  `sync` pages the library (`num_results=50`, groups per ARCHITECTURE §4.5), builds `catalog.json` per the schema, filters out `Podcast*` types only (**keeps `Lecture`**), downloads missing covers (thumbnail ~252 px), fetches remote positions in batches of ≤ 25 into **`remote.json`** (never `state.json`, which the service owns), and writes everything atomically. Progress events per page. Never pushes a position.
   Acceptance: fake mode yields the fixture catalog; real mode matches `audible library list` count (minus filtered items); interrupted sync leaves the old catalog intact.
 
 - [ ] **B5 — `get` / `cancel` / `local` / `remove`** (tier B, S2 result required; needs B1)
-  Implements §4.3 pipeline and §4.4 safety. Fake mode generates a 3-chapter sine m4b and simulates progress and failures (`--fake-fail disk|network|decrypt`).
-  Acceptance (all as pytest): atomic rename; `.partial` and raw file removed on success **and** on each failure mode; cancel mid-download cleans up; free-space pre-flight; `remove` refuses a path outside `booksDir` and symlinks; `remove` never invokes any network call (assert by running with network access blocked); the "no mutating API calls" grep test from ARCHITECTURE §4.4.
+  Implements the §4.3 pipeline (aaxc first, aax fallback; chapters rebuilt from `chapters.json`; 2.1× free-space pre-flight; `acr` cached in `meta.json`), §4.4 safety, and `cancel` per §4.8. Fake mode generates a 3-chapter sine m4b plus a fake `chapters.json` with a different chapter count, and simulates progress and failures (`--fake-fail disk|network|decrypt|novoucher`).
+  Acceptance (all as pytest): atomic rename; `.partial` and raw file removed on success **and** on each failure mode; `cancel <asin>` mid-download (from a second process) cleans up and the job emits `error(code=cancelled)`; `novoucher` falls back to aax; output chapter count equals the `chapters.json` flat list; free-space pre-flight; `remove` refuses a path outside `booksDir` and symlinks; `remove` never invokes any network call (assert by running with network access blocked); the "no mutating API calls" grep test from ARCHITECTURE §4.4 (only `PUT 1.0/lastpositions/` allowed). Real-account check of one aaxc and one aax book by Dante on the laptop.
 
 - [ ] **B6 — Positions** (tier B, S3 result required; needs B1)
-  `position-get`, `position-push` (or `unsupported`). Newest-wins merge helper shared with `state.json` logic.
-  Acceptance: unit tests for merge rule edge cases (equal timestamps, missing remote, remote newer); `lastpositions` batching ≤25 (API limit, S3); `acr` taken from content metadata and cached in `meta.json`.
+  `position-get` (writes `remote.json`) and `position-push <asin> <ms>`. A pure newest-wins `merge()` helper that the service's QML port must match. `position-push` re-reads the remote position first and refuses with `error(code=stale)` when remote is newer than the pushed local timestamp (ARCHITECTURE §4.6 push rules).
+  Acceptance: unit tests for merge edge cases (equal timestamps, missing remote, remote newer); the stale-refusal test; `lastpositions` batching ≤ 25; `acr` read from `meta.json`, else fetched from content metadata; a test that `sync` never calls `position-push`. Real-account round trip with restore by Dante on the laptop.
 
 - [ ] **B7 — Protocol schemas and contract tests** (tier A; needs B1; extended as commands land)
   JSON Schema file per event type; a test that runs every command in fake mode and validates every emitted line.
@@ -113,12 +114,12 @@ Depends on S5/S6 results and the fake backend.
   Acceptance: with a fake m4b — play, pause, ±skip, chapter jump, speed change, sleep timer; `omarchy-restart-shell` mid-playback and audio continues and state reattaches; mpv crashing is detected and surfaced.
 
 - [ ] **P3 — LibraryModel and persistence** (tier B; needs P1, B4/B5 in fake mode)
-  Merges `catalog.json`, `state.json`, and the local-books scan into one list model with the book state machine (§5.3), sort (recent/added/title/author), filter (all/local/in-progress), and search. Single writer for `state.json` with atomic writes; saves position every 10 s while playing and on pause/switch/quit.
+  Merges `catalog.json`, `remote.json`, `state.json`, and the local-books scan into one list model with the book state machine (§5.3), sort (recent/added/title/author), filter (all/local/in-progress), and search. The service is the **only** writer of `state.json` (§4.8), with atomic writes; saves position every 10 s while playing and on pause/switch/quit.
   Acceptance: sort/filter/search verified against the fixture catalog; kill -9 the shell mid-playback and the position loss is ≤ 10 s.
 
 - [ ] **P4 — Remote position sync + finished handling** (tier B; needs P2, B6)
-  Push every ~60 s and on pause/stop; failures queued and retried; resume from newest of local/remote; finished detection and optional auto-remove (setting, default Off).
-  Acceptance: simulated remote-newer position wins on play; offline pushes are queued and flushed later; auto-remove only fires when the setting is on and never during playback.
+  Push every ~60 s and on pause/stop/switch/quit, following the push rules in ARCHITECTURE §4.6 (local listening only; never stale); failures queued and retried; resume from newest of local/remote; finished detection and optional auto-remove (setting, default Off).
+  Acceptance: simulated remote-newer position wins on play; a book that was never played locally is never pushed; offline pushes are queued and flushed later; a queued push that has become stale is dropped; auto-remove only fires when the setting is on and never during playback.
 
 - [ ] **P5 — Shell IPC target** (tier A; needs P2, S6)
   Registers `latentoperator.audible` (in `Service.qml`) with `toggle`, `playPause`, `skip`, `nextChapter`, `prevChapter`, `openLibrary`.
@@ -133,6 +134,10 @@ Depends on S5/S6 results and the fake backend.
 - [ ] **U1 — Bar widget + Panel shell** (tier B; needs S6, P1)
   Book glyph; play/pause state; optional title; tooltip; left click toggles the drawer (Mini if loaded else Library); middle click toggles play/pause. The widget's `KeyboardPanel` (pattern in `spikes/s6-BarWidget.qml`) hosts a stacked layout with Library/Mini/Full/Onboarding placeholders, closes on Esc/click-away/popout switch, and never affects playback. Widgets are per monitor: keep state in the service.
   Acceptance: matches the behavior in SCOPE FR-U1/U5; works under three themes.
+
+- [ ] **U2a — Minimal Mini view** (tier B; needs U1, P2) — moved into M3 at G0 because the Library view's "reopen on Mini when playback begins" and G3's "use it for a day" both need it.
+  Title and author, elapsed/remaining text, ⏯, ⏪15/⏩15, and a library button. No scrub bar, chapter popup, or speed (those stay in U5).
+  Acceptance: J3's basic controls work with the fake backend; U5 later extends this file rather than replacing it.
 
 - [ ] **U2 — Library view (drawer)** (tier B; needs U1, P3)
   Search field (autofocus), sort dropdown, filter chips, storage line, virtual-free `ListView` of `BookRow` (cover, title, author, runtime, progress bar, `StateBadge`). Enter/click plays; cloud books enqueue a download and show progress, then auto-play; row menu has Remove from laptop; "Remove all downloads"; designed empty/loading/offline/error states; placeholder cover.
@@ -152,7 +157,7 @@ Depends on S5/S6 results and the fake backend.
 
 ## M4 — Player UI
 
-- [ ] **U5 — Mini view** (tier B; needs G3)
+- [ ] **U5 — Mini view, complete** (tier B; needs G3, extends U2a)
   Per SCOPE FR-U3: cover, title/author, current chapter with a tap-to-open chapter popup, scrub bar (drag to seek, elapsed/remaining), ⏮ ⏪N ⏯ ⏩N ⏭, speed pill that cycles presets, maximize, library, dismiss.
   Acceptance: J3, J4 pass; dragging the scrub bar doesn't fight position updates; text elides cleanly for long titles.
 
@@ -175,7 +180,7 @@ Depends on S5/S6 results and the fake backend.
 - [ ] **R3 — MPRIS (optional)** (tier B) — detect `mpv-mpris`; if installed, pass `--script=`; confirm media keys and the stock media widget. Document the optional package. Never required.
 - [ ] **R4 — Idle-cost audit** (tier B) — verify no timers/polling when nothing plays, and measure memory (target < 100 MB excluding mpv). Fix offenders.
 - [ ] **R5 — Clean-install test** (tier B) — on a fresh Omarchy install (VM or a spare user account): `omarchy plugin add <repo-url> --enable --yes`, then J1 → J7 using only the UI. Record time to first audio (target ≤ 5 min).
-- [ ] **R6 — Docs and release assets** (tier A) — README with screenshots/GIF, install, hotkeys, FAQ ("Does removing a book delete it from Audible?" → no), the legal/ToS statement from SCOPE §7, a **"What setup installs" section** documenting the first-run venv and `pip install` (what is downloaded, from where, where it is written, how to remove it) as the marketplace asks, CHANGELOG, LICENSE (per D1, decided after S1), `docs/RELEASING.md` (including `omarchy plugin validate .`), tag `v0.1.0`.
+- [ ] **R6 — Docs and release assets** (tier A) — README with screenshots/GIF, install, hotkeys, FAQ ("Does removing a book delete it from Audible?" → no), the legal/ToS statement from SCOPE §7, a **"What setup installs" section** documenting the first-run venv and `pip install` (what is downloaded, from where, where it is written, how to remove it) as the marketplace asks, CHANGELOG, LICENSE (AGPL-3.0-only, added at G0), `docs/RELEASING.md` (including `omarchy plugin validate .`), tag `v0.1.0`.
 - [ ] **R7 — Marketplace submission** (tier maintainer) — repo must be public with `manifest.json`, README, and license. Read https://plugins.omarchy.org/publish.html first, then submit via its issue form with a category and 1–3 tags. Expect automated validation of the exact commit and a maintainer decision; a maintainer may decline a plugin that decrypts DRM, so be ready to rely on `omarchy plugin add <git-url>` instead.
 
 ---
@@ -191,4 +196,4 @@ Depends on S5/S6 results and the fake backend.
 
 ## Suggested order for a single agent working alone
 
-A0 → S6 → S5 → S1 → S2 → S4 → S3 → (G0) → B1 → B7 → B5 → B4 → B2 → B3 → B6 → (G1) → P1 → P2 → P3 → P5 → P4 → (G2) → U4 → U1 → U2 → U3 → (G3) → U5 → U6 → U7 → (G4) → R1 … R7.
+A0 → S6 → S5 → S1 → S2 → S4 → S3 → (G0) → B1 → B7 → B5 → B4 → B2 → B3 → B6 → (G1) → P1 → P2 → P3 → P5 → P4 → (G2) → U4 → U1 → U2a → U2 → U3 → (G3) → U5 → U6 → U7 → (G4) → R1 … R7.

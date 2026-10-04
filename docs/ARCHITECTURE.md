@@ -2,6 +2,8 @@
 
 Companion to [SCOPE.md](SCOPE.md). Facts marked ✅ were verified by hand on 2026-10-04 on an Omarchy machine with a real Audible account. Facts marked ❓ are assumptions that a spike in [PLAN.md](PLAN.md) must confirm before building on them.
 
+**Gate G0 passed 2026-10-04.** Spikes S1–S6 are complete. Evidence is in [SPIKE-RESULTS.md](SPIKE-RESULTS.md), and this document has been corrected to match it. Ownership contracts that parallel work depends on are in §4.8.
+
 ## 1. Big picture
 
 ```
@@ -68,14 +70,17 @@ Theming rule: import `qs.Commons` and `qs.Ui` and use `Style`/theme tokens only.
 | `~/.config/omarchy-audible/auth.json` | Audible auth (device key, tokens) | 0600 |
 | `~/.config/omarchy-audible/activation_bytes` | Account-wide decrypt key for legacy AAX | 0600 |
 | `~/.config/omarchy-audible/config.toml` | audible-cli profile pointing at `auth.json` (generated) | 0600 |
-| `~/.local/share/omarchy-audible/venv/` | Python venv with `audible-cli` (pinned) | |
-| `~/.local/share/omarchy-audible/catalog.json` | Library metadata cache | |
-| `~/.local/share/omarchy-audible/state.json` | Positions, last-played times, sync queue | |
+| `~/.local/share/omarchy-audible/venv/` | Python venv: pinned `audible-cli`, `audible[cryptography]`, and this repo's `backend/` package | |
+| `~/.local/share/omarchy-audible/catalog.json` | Library metadata cache. **Written only by the backend** (`sync`) | |
+| `~/.local/share/omarchy-audible/remote.json` | Remote positions cache `{asin: {ms, updated_at}}`. **Written only by the backend** (`sync`, `position-get`) | |
+| `~/.local/share/omarchy-audible/state.json` | Local positions, last-played times, push queue. **Written only by `Service.qml`** | |
 | `~/.local/share/omarchy-audible/covers/<asin>.jpg` | Cover thumbnails | |
 | `<booksDir>/<asin>/book.m4b` | Decrypted audio, chapters embedded | |
 | `<booksDir>/<asin>/meta.json` | Title, author, duration, size, downloaded_at | |
 | `$XDG_RUNTIME_DIR/omarchy-audible/mpv.sock` | mpv IPC socket | |
-| `$XDG_RUNTIME_DIR/omarchy-audible/backend.lock` | Single-instance lock | |
+| `$XDG_RUNTIME_DIR/omarchy-audible/job.lock` | Exclusive lock held by the running job command (§4.8) | |
+| `$XDG_RUNTIME_DIR/omarchy-audible/job.json` | `{pid, command, asin}` of the running job, for `cancel` | |
+| `$XDG_RUNTIME_DIR/omarchy-audible/login-<id>.json` | Login session `{verifier, serial, marketplace, created}`, 10-minute TTL, tmpfs | 0600 | |
 
 Books are keyed by **ASIN directory**, not by title. That makes removal a single `rm -r` of one directory, avoids filename-encoding problems, and makes "what is local?" a directory scan. The filesystem is the source of truth for "is this book local".
 
@@ -87,7 +92,7 @@ The audible-cli profile is created programmatically in a plugin-owned config dir
 `bin/omarchy-audible` uses **only the Python standard library** so it runs on a fresh machine. It:
 1. Handles `status`, `doctor`, and `setup` itself (these must work before any dependency exists).
 2. For everything else, re-execs `venv/bin/python -m omarchy_audible …`.
-3. `setup` creates the venv with `python -m venv`, then `pip install` of pinned `audible-cli` (which brings the `audible` library), streaming progress events.
+3. `setup` creates the venv with `python -m venv`, then `pip install` of the pinned `audible-cli` and `audible[cryptography]` (without the extra, `audible` warns on stderr about legacy crypto) **and of this repo's `backend/` package**, so that `venv/bin/python -m omarchy_audible` resolves. Progress is streamed as events.
 
 The shell's plugin installer never runs plugin code, so the first-run Setup button in the drawer triggers `setup`. System packages the backend needs but cannot install: `mpv`, `ffmpeg`, `python`. `status` reports what is missing and the exact `pacman`/`omarchy-pkg-add` command to fix it.
 
@@ -99,14 +104,14 @@ status                      → {"type":"status","ready":bool,"missing":["mpv"],
                                 "marketplace":"us","account":"j***@gmail.com","catalog_age_s":1234}
 setup                       → progress events, then done
 login-start --marketplace us→ {"type":"login_url","url":"https://www.amazon.com/ap/signin?…","session":"<id>"}
-login-finish --session <id> --url <pasted>   → done | error(code=bad_url|expired|auth_failed)
+login-finish --session <id>  (pasted URL on stdin) → done | error(code=bad_url|expired|auth_failed)
 login-import-cli [--dir ~/.audible]          → done | error(code=no_auth_file)
-logout                      → done (deletes auth.json, activation_bytes, config.toml; keeps books)
+logout                      → done (deregisters this device only, then deletes auth.json, activation_bytes, config.toml; keeps books)
 sync [--full]               → progress {"type":"progress","stage":"library","n":40,"of":91}, then done
                               (writes catalog.json atomically, fetches missing covers)
 get <asin>                  → {"type":"progress","stage":"download|convert","bytes":123,"total":456}
                               … then {"type":"done","path":".../book.m4b"}
-cancel <asin>               → done
+cancel <asin>               → done | error(code=not_running)   (signals the running `get`, see §4.8)
 remove <asin>               → {"type":"done","freed_bytes":N}      (LOCAL ONLY — see §4.4)
 local                       → {"type":"local","books":[{"asin":…,"size":N,"downloaded_at":…}]}
 position-get <asin…>        → {"type":"positions","items":{"<asin>":{"ms":N,"updated_at":"…"|null}}}
@@ -116,28 +121,32 @@ doctor                      → {"type":"doctor","checks":[{"name":…,"ok":bool
 
 `--fake` (or env `OMARCHY_AUDIBLE_FAKE=1`) runs the same protocol against `fixtures/` with no network and no account. This lets UI work and tests proceed without credentials, and is what CI runs. Fake `get` produces a short synthetic m4b with chapters using `ffmpeg -f lavfi` and simulates progress and failures (`--fake-fail <code>`).
 
-### 4.3 Download and decrypt pipeline ✅
+### 4.3 Download and decrypt pipeline ✅ (S2)
 Verified manually:
 - `audible download --asin <ASIN> --aax-fallback --cover --chapter -y -o <dir>` produced `*.aax` (264 MB for a 9-hour book, ~18 s), a 500px cover, and a chapters JSON.
 - `audible activation-bytes` returned the 8-hex-character account key.
 - `ffmpeg -activation_bytes <hex> -i book.aax -c copy book.m4b` is a lossless stream copy, **preserved all 20 chapters**, and ran in a few seconds. ffmpeg prints `Application provided duration … in stream 2 is invalid` warnings for the embedded cover stream; they are harmless.
 
 Pipeline for `get <asin>`:
-1. Pre-flight: free-space check (need ≈ 2.2× the expected size during conversion).
+1. Pre-flight: content metadata gives `content_size_in_bytes` before download; require ≥ 2.1× that in free space (S2 measured a 2.0× peak).
 2. Create `<booksDir>/<asin>/.partial/`.
-3. Download via `audible-cli` (`--aax-fallback`), no progress bars. Report progress by polling the partial file size.
-4. Decrypt: `.aax` uses `-activation_bytes`; `.aaxc` uses the voucher `key`/`iv` (`-audible_key`, `-audible_iv`) ✅ S2 proved both paths. Prefer aaxc, fall back to aax. Peak disk ≈ 2× book size.
-5. `ffmpeg -c copy` to `book.m4b.tmp`, then `ffprobe` sanity check (duration within 1% of catalog runtime; chapters present), then atomic rename to `book.m4b`.
+3. Download via `audible-cli` with `--aaxc --chapter -q best`, no progress bars. **Prefer aaxc; if no voucher is offered, retry with `--aax`** (G0 decision). Note that audible-cli's own `--aax-fallback` goes the other way (aax first), so don't use it. Report progress by polling the partial file size.
+4. Decrypt: `.aaxc` uses the voucher `content_license.license_response.key`/`.iv` (`-audible_key`, `-audible_iv`); `.aax` uses `-activation_bytes` ✅ S2 proved both paths.
+5. **Chapters come from Audible's list, not the file** (G0 decision; one book had 20 embedded chapters vs 46 in the API). Build an ffmetadata chapter file from `<ASIN>-chapters.json` (flat) and apply it in the same `-c copy` pass (`-i chapters.txt -map_metadata 1 -map_chapters 1`). Fall back to the embedded chapters if the JSON is missing. Write to `book.m4b.tmp`, then `ffprobe` sanity check (duration within 1% of catalog runtime; chapter count equals the flat list), then atomic rename to `book.m4b`.
 6. Write `meta.json`, delete `.partial/` and the raw `.aax`/`.aaxc` (**the raw file is never kept**).
 7. On failure or cancel at any step, delete `.partial/` and emit `error`.
 
 ### 4.4 Removal safety (hard requirement)
 `remove <asin>` only deletes `<booksDir>/<asin>/`. It must verify the resolved path is inside `booksDir` and refuse otherwise. The backend has no code path that calls an Audible endpoint with a mutating method except position write-back (§4.6). A test greps the package for `delete`, `remove`, and `return` calls to the API and fails if any is found.
 
-### 4.5 Catalog ✅ / ❓
+### 4.5 Catalog ✅ (S4)
 `audible library export --format json` ✅ returned 91 items with: `asin`, `title`, `authors`, `narrators`, `genres`, `cover_url`, `runtime_length_min`, `date_added`, `purchase_date`, `release_date`, `rating`, `is_finished`, `percent_complete`.
 
-Missing from the export and needed by the UI: **subtitle, series name and part number, content type (to hide podcasts), content delivery type (multi-part)**. These are in the raw `1.0/library` endpoint with extra `response_groups` ❓ spike S4 chooses the groups. Note: the raw call with a large response group list **timed out**; request `product_desc,media,contributors,series,product_attrs,listening_status,percent_complete,is_finished` with `num_results` ≤ 50 and page.
+Missing from the export and needed by the UI: **subtitle, series name and part number, content type (to hide podcasts), content delivery type (multi-part)**. These are in the raw `1.0/library` endpoint ✅ S4: request `product_desc,media,contributors,series,product_attrs,listening_status,percent_complete,is_finished` with `num_results=50` and page (91 items in 0.9 s; a much larger group list timed out). Covers: these groups give only a 500 px URL; try `image_sizes=252` or downscale.
+
+Filtering: drop only podcast content types (`Podcast*`). **Keep `Lecture`**, which is a real content type in the test library.
+
+Multi-part books (D5, G0 decision): `content_delivery_type: MultiPartBook` downloads, decrypts, and plays as one file with normal chapters. **No special handling.** `multipart` stays in the catalog for information only.
 
 `catalog.json` (written atomically, `schema` versioned):
 ```json
@@ -151,20 +160,49 @@ Missing from the export and needed by the UI: **subtitle, series name and part n
 ### 4.6 Positions
 Read ✅: `audible api 1.0/annotations/lastpositions -p asins=A,B` returns, per asin, `last_position_heard` with `status` (`Exists`|`DoesNotExist`), `position_ms`, `last_updated`. The API limit is **25 asins per call** ✅ S3.
 
-Write ✅ S3: `PUT 1.0/lastpositions/{asin}` with `{acr, asin, position_ms}`; `acr` comes from `1.0/content/{asin}/metadata?response_groups=content_reference`. Round trip was exact; phone-app confirmation pending. If the write cannot be made reliable, v1 ships read-only sync (resume from the phone's position) plus local positions, and `position-push` returns `error(code=unsupported)`.
+Write ✅ S3: `PUT 1.0/lastpositions/{asin}` with `{acr, asin, position_ms}`; `acr` comes from `1.0/content/{asin}/metadata?response_groups=content_reference` and is cached in `meta.json`. The round trip is exact, and the phone app follows it (D4: **ship write-back**, G0 decision).
+
+**The phone moves to a pushed position by itself** (it shows a notice with undo, it does not ask). So a wrong push silently moves the user's phone. Push rules:
+- Push only positions produced by **listening on this machine**: on pause, stop, book switch, quit, and every ~60 s while playing.
+- Never push from `sync`, from the merge, or for a book not played locally since it was downloaded.
+- Never push a position older than the remote `updated_at` (the user listened elsewhere since). Re-read the remote position immediately before a push.
+
+`last_updated` has no timezone (`YYYY-MM-DD HH:MM:SS.f`). It looks like UTC; B6 confirms against a write at a known time.
 
 Merge rule: take the entry with the newest `updated_at` between local `state.json` and remote. If remote is newer, resume there (the user listened elsewhere).
 
 "Recently listened" sort key = `max(local last_played_at, remote last_updated)`. Fetch remote positions for all catalog asins in batches during `sync` and cache them in `state.json`.
 
-### 4.7 Auth and login ❓ (spike S1)
-Goal (nice-to-have, not a hard requirement): guide the user through login from the drawer, the same flow `audible quickstart` uses: open a link, sign in in the browser, paste the return URL back. A one-time terminal login is an acceptable fallback.
-- `login-start`: the `audible` library exposes an external-browser flow (`audible.login`: build the OAuth URL with a PKCE code verifier and device serial; the browser lands on a "page not found" URL whose query contains `openid.oa2.authorization_code`). Backend generates the URL and stores `{verifier, serial, marketplace}` under a short-lived session id (in memory of a tiny lock-guarded file, expiring in 10 minutes).
-- `login-finish`: extract the code from the pasted URL, register the device (`audible.register`), build an `Authenticator`, write `auth.json` (mode 0600), derive and store activation bytes, create the audible-cli `config.toml` profile.
-- The UI opens the URL with `xdg-open` and offers a "Paste URL from clipboard" button that calls `wl-paste`.
-- Never log or persist the pasted URL.
+### 4.7 Auth and login ✅ (S1)
+In-drawer login works (tested on the US store with a passkey sign-in; captcha, 2FA, and passkeys all happen in the user's browser, so the backend never sees them). The terminal fallback is not needed. Working code: `spikes/s1_login.py`.
+- `login-start`: `audible.login.create_code_verifier()` and `build_oauth_url(country_code, domain, market_place_id, code_verifier)` → `(url, serial)`. No network call. Store `{verifier, serial, marketplace, created}` in `$XDG_RUNTIME_DIR/omarchy-audible/login-<id>.json` (0600, 10-minute TTL).
+- `login-finish --session <id>`: **reads the pasted URL from stdin**, never argv (argv is visible to every local user in `/proc`). Extract `openid.oa2.authorization_code`, call `audible.register.register(authorization_code, code_verifier, domain, serial)`, build an `Authenticator` (`locale`, `_update_attrs(with_username=False, **reg)`), fetch activation bytes, and write `auth.json`, `activation_bytes`, and `config.toml` created `0600` (umask 077; `Authenticator.to_file` uses the umask). Delete the session file on success and on failure. Drop the URL and code from memory as soon as they are used.
+- The UI opens the URL with `xdg-open` and offers a paste field plus "Paste from clipboard" (`wl-paste`).
+- **Clipboard history is a leak path.** Omarchy's clipboard plugin saves every copied text to `~/.local/state/omarchy/clipboard-history.json` (mode 644), so the redirect URL lands there when the user copies it. After a successful `login-finish`, the backend checks that file for the code and, if it's there, returns `{"clipboard_history_contains_code": true}` in `done` so the UI can tell the user to clear it (Omarchy's clipboard menu). The plugin never edits the shell's file. The code is single-use and already redeemed, so the residual risk is low; the notice is about hygiene.
+- `logout`: `deregister_device(deregister_all=False)` first (keeps Amazon's device list clean; best effort if offline), then delete the files. **Never** pass `deregister_all=True`.
+- Never log or persist the pasted URL. A test asserts it appears in no log line, event, or file.
 
-Existing-login import (`login-import-cli`) copies a valid `~/.audible/*.json` auth file and its marketplace into the plugin config dir (so it is independent from audible-cli afterward).
+Existing-login import (`login-import-cli`) validates `~/.audible/<primary profile>.json` with `Authenticator.from_file`, then copies it and its marketplace into the plugin config dir, written `0600` **regardless of the source mode** (audible-cli leaves it 644). The copy is independent of audible-cli afterward ✅ S1.
+
+### 4.8 Ownership contracts (G0)
+
+**Files: one writer each.**
+
+| File | Writer | Readers |
+|---|---|---|
+| `catalog.json`, covers | backend `sync` | Service/LibraryModel |
+| `remote.json` | backend `sync`, `position-get` | Service/LibraryModel |
+| `state.json` | `Service.qml` only (atomic `FileView` write) | Service; backend never reads it |
+| `<booksDir>/<asin>/` | backend `get`, `remove` | LibraryModel (directory scan) |
+| auth files | backend `login-*`, `logout` | backend |
+
+The merge rule (§4.6) runs in the service: it reads `state.json` and `remote.json` and picks the newest. The backend has a pure `merge()` helper with the unit tests (B6), and the QML port must match it.
+
+**Jobs: one at a time, owned by the service.**
+- `JobRunner.qml` is the only thing that spawns backend commands from the UI. It keeps a queue and runs one **job command** at a time.
+- Job commands (`setup`, `sync`, `get`, `remove`, `login-finish`, `login-import-cli`, `logout`) take an exclusive `flock` on `job.lock` **without waiting**. If it is held they exit with `error(code=busy)`. That guards against a second shell, a hotkey, or a user running the CLI.
+- Non-job commands never take the lock: `status`, `doctor`, `local`, `position-get`, `position-push`, `login-start`, and `cancel`. Pushes and status checks therefore work during a download.
+- `get` writes `job.json` `{pid, command, asin}` after taking the lock and removes it on exit. `cancel <asin>` reads `job.json`; if the asin matches it sends SIGTERM to that pid, otherwise `error(code=not_running)`. `get` handles SIGTERM by stopping its children, deleting `.partial/`, and emitting `error(code=cancelled)`. The UI can also just kill the process it spawned; both paths must clean up.
 
 ## 5. Player (QML)
 
@@ -175,7 +213,7 @@ mpv --no-config --no-video --idle=yes --keep-open=yes --no-terminal --audio-disp
     --input-ipc-server=$XDG_RUNTIME_DIR/omarchy-audible/mpv.sock \
     --force-window=no --volume=<saved> --speed=<default>
 ```
-`Quickshell.execDetached` (or `systemd-run --user --scope` ❓ choose in spike S5) keeps it independent of the shell.
+Launched as `systemd-run --user --scope --quiet --collect --unit=omarchy-audible-mpv mpv …` through `Quickshell.execDetached` ✅ S5 (own cgroup, survives `omarchy-restart-shell`; the fixed unit name refuses a second mpv). Fall back to plain `execDetached` if `systemd-run` is missing. Never use `Process`, whose child dies with the shell. P2 must handle the pitfalls listed in SPIKE-RESULTS S5.
 
 The service connects with Quickshell's unix-socket client (`Quickshell.Io` `Socket`) and speaks mpv's JSON IPC (`{"command":[…],"request_id":n}`; events as JSON lines). Observed properties: `time-pos`, `duration`, `pause`, `speed`, `chapter`, `chapter-list`, `path`, `idle-active`, `eof-reached`, `volume`.
 
@@ -184,8 +222,8 @@ Commands: `loadfile <path> replace 0 start=<seconds>`, `set pause yes|no`, `seek
 ### 5.2 PlayerController (QML object)
 Exposes: `loaded`, `playing`, `positionMs`, `durationMs`, `chapters[]`, `chapterIndex`, `speed`, `asin`, and functions `play(asin)`, `pause()`, `toggle()`, `skip(seconds)`, `nextChapter()`, `prevChapter()`, `seekMs()`, `setSpeed()`, `setSleepTimer()`.
 
-- Position persistence: write `state.json` every 10 s while playing (single writer: the service, via the backend `state` helper or QML `FileView` with atomic write ❓) and on pause/switch/quit.
-- Remote push: debounce, every ~60 s while playing and on pause/stop/switch, through `position-push`.
+- Position persistence: write `state.json` every 10 s while playing and on pause/switch/quit. The service is the only writer, using `FileView` with atomic writes (§4.8).
+- Remote push: every ~60 s while playing and on pause/stop/switch/quit, through `position-push`, following the push rules in §4.6. Failed pushes are queued in `state.json` and retried.
 - Finished detection: `eof-reached` or position ≥ duration − 30 s ⇒ mark finished and, if `autoRemoveFinished`, call `remove`.
 - Sleep timer lives in QML (a `Timer`; "end of chapter" watches `chapter`). It pauses and fades over 5 s.
 - Reattach: on service start, if the socket exists and answers, subscribe and restore state instead of spawning a new mpv.
@@ -234,10 +272,10 @@ Never commit real library data, auth files, or activation bytes. Fixtures use in
 | Risk | Impact | Mitigation |
 |------|--------|-----------|
 | Audible changes API/DRM | Plugin stops syncing or downloading | Pin `audible-cli`; `doctor`; clear error UI; fast-follow releases |
-| Programmatic login harder than the CLI's | In-drawer login (a nice-to-have) is delayed | Spike S1 first. Fallback: the drawer shows a one-line `audible quickstart`-style command for a one-time terminal login. "Import existing audible-cli login" helps only people who already ran the CLI, so it is a dev convenience, not the fallback |
-| `.aaxc` books need a different decrypt path | Some books fail | Spike S2 on a book that is aaxc-only; test both paths |
-| Position write-back unsupported | Phone and laptop positions diverge | D4: ship read-only sync |
-| Multi-part books | Odd files, wrong durations | Spike S4; mark unsupported if needed |
+| Programmatic login breaks (Amazon changes the flow) | In-drawer login fails | ✅ S1 works today. Fallback: the drawer shows a one-line `audible quickstart`-style command, plus import of an existing audible-cli login |
+| `.aaxc` books need a different decrypt path | Some books fail | ✅ S2 proved both paths; aaxc first, aax fallback |
+| A wrong position push | The phone silently jumps (it has undo) | §4.6 push rules: only push local listening, never older than remote |
+| Pasted login URL lingers in clipboard history | Single-use code readable locally | §4.7: detect it and tell the user |
 | Quickshell `Socket`/detached-process API limits | Player design changes | Spike S5 early. Fallback: a tiny helper script that owns mpv and exposes a simpler stdio protocol |
 | Third-party plugin capability facades block something needed | UI limits | Spike S6; follow the Spotify plugin, which solves the same problems |
-| AGPL dependency licensing | Distribution problems | Install at runtime from PyPI; never vendor |
+| AGPL dependency licensing | Distribution problems | D1: the plugin is AGPL-3.0-only, matching `audible`. Dependencies are still installed at runtime from PyPI, never vendored |

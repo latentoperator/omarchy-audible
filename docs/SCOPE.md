@@ -116,7 +116,7 @@ Exposed through the plugin manifest's `schema`, so they appear in Omarchy's sett
 - **Unofficial.** Audible has no public API for third-party players. This project uses the community libraries `audible` and `audible-cli` (both AGPL-3.0, by mkb79). Audible can change its API at any time and the plugin may break until updated.
 - **Personal use only.** The plugin is for listening to books you purchased, on your own machine. It must never include features that share, export in bulk, or upload decrypted audio. The README says this plainly. Decrypting Audible DRM may violate Audible's terms of use and, depending on jurisdiction, anti-circumvention law. Users decide for themselves.
 - **No keys in the repo.** Never commit auth files, activation bytes, vouchers, tokens, or a real library catalog. Test fixtures are synthetic.
-- **AGPL hygiene.** `audible`/`audible-cli` (verified AGPL-3.0-only, 2026-10-04) are installed on the end user's machine at setup (pip into a private venv). They are **not vendored** into this repo. Calling `audible-cli` as a separate program keeps our code independent of its license. Importing the `audible` library from our backend may make the combined work a derivative under the AGPL, so the license choice (D1) depends on which approach spike S1 requires.
+- **AGPL hygiene.** `audible`/`audible-cli` (verified AGPL-3.0-only, 2026-10-04) are installed on the end user's machine at setup (pip into a private venv). They are **not vendored** into this repo. S1 showed the backend must import the `audible` library (the two-step login and device registration aren't available through the `audible-cli` subprocess), so the plugin is licensed **AGPL-3.0-only** (D1, decided at G0).
 - **Marketplace.** Omarchy's official marketplace (plugins.omarchy.org) requires a public GitHub repo with `manifest.json`, a README, and a license file. It does not mandate a specific license (all third-party plugins installed locally use MIT, which is convention). Listing is by automated validation plus maintainer approval; whether a maintainer would accept a plugin that decrypts Audible DRM is unknown. The plugin must work via `omarchy plugin add <git-url>` regardless of listing.
 - **Documented installer.** The marketplace asks authors to document every external dependency, setup step, installer, and privilege boundary. Our first-run step (create a venv and `pip install` pinned `audible-cli`) must be described in the README, including what it downloads and where it writes.
 - **Credentials at rest.** The Audible auth file contains a device private key and tokens, and activation bytes are an account-wide secret. Both are stored under the user's config directory with mode `0600`, never logged, and never printed to the UI. The pasted redirect URL contains a one-time code and is never logged or persisted.
@@ -136,9 +136,9 @@ Exposed through the plugin manifest's `schema`, so they appear in Omarchy's sett
 
 | ID | Question | Recommendation |
 |----|----------|----------------|
-| D1 | License | **Decide after S1.** AGPL-3.0 is the safe choice if the backend imports `audible` and fits the "everything free" intent. MIT matches the ecosystem convention but only if the backend drives `audible-cli` purely as a subprocess. The marketplace accepts either. |
+| D1 | License | **Decided (G0, 2026-10-04): AGPL-3.0-only.** The backend imports `audible` (S1). `LICENSE` is in the repo root. |
 | D2 | Repo visibility | Private until M3 is done, then public. A public repo is required for marketplace listing. |
 | D3 | Name and id | Repo `omarchy-audible`, plugin id `latentoperator.audible`. |
-| D4 | Position write-back to Audible | Spike S3 decides. If it's unreliable, v1 ships read-only sync plus local positions. |
-| D5 | Multi-part books | Spike S4 decides. |
+| D4 | Position write-back to Audible | **Decided (G0): ship write-back.** The phone follows a push without asking, so only positions from local listening are pushed (ARCHITECTURE §4.6). |
+| D5 | Multi-part books | **Decided (G0): no special handling.** They are single files with normal chapters (S4). |
 | D6 | Encrypt the auth file with a password | No for v1. The file is `0600`. Revisit if sharing widely. |
