@@ -102,9 +102,18 @@ Item {
   // reopens the panel on Mini once it is playing (`reopenAsin`).
   property string askAsin: ""
   property string reopenAsin: ""
+  // The last book the user chose to play; a finished download plays only
+  // if it is still this one.
+  property string latestPick: ""
+  // Books to remove once the player has unloaded them.
+  property var removeAfterUnload: []
+  property real lastSyncAttemptAtMs: 0
 
   // mpv may report playing before the new path, so check on both.
-  onLoadedAsinChanged: reopenOnMini()
+  onLoadedAsinChanged: {
+    reopenOnMini()
+    flushRemovals()
+  }
 
   readonly property string runtimeDir: status && status.runtime_dir ? String(status.runtime_dir) : ""
   readonly property string booksDir: status && status.books_dir ? String(status.books_dir) : ""
@@ -202,6 +211,8 @@ Item {
   // Checked by the job runner just before a queued job starts. An auto-remove
   // that waited behind another job must not run if the book is playing again.
   function jobAllowed(job) {
+    // A removal queued before the book was played again must not delete it.
+    if (job.command === "remove" && job.purpose === "user") return Drawer.removalAllowed(job.args[0], loadedAsin)
     if (job.purpose !== "autoremove") return true
     return Positions.autoRemoveAllowed(autoRemoveFinished, atEnd(job.args[0]), player.playing)
   }
@@ -266,10 +277,11 @@ Item {
   function pick(asin) {
     var row = library.rowFor(asin)
     if (!row) return "error: unknown book"
+    latestPick = asin
+    askAsin = ""
     var action = LibraryUi.primaryAction(row, syncFailure.offline)
     if (action === LibraryUi.ACTION_PLAY) return playPicked(asin, true)
     if (action === LibraryUi.ACTION_DOWNLOAD || action === LibraryUi.ACTION_RETRY) {
-      askAsin = ""
       return run("get", [asin], "autoplay") ? "ok" : "error: refused"
     }
     return "error: nothing to do"
@@ -297,6 +309,8 @@ Item {
   }
 
   function startPicked(asin, startSec, hidePanel) {
+    askAsin = ""
+    latestPick = asin
     var open = anySurfaceOpen()
     if (hidePanel) closeSurfaces()
     reopenAsin = hidePanel || open ? asin : ""
@@ -327,26 +341,47 @@ Item {
 
   // Opening the drawer on Library syncs when the catalog is old (FR-L2).
   function libraryOpened() {
-    if (syncing) return
-    var age = Drawer.catalogAgeS(status ? status.catalog_age_s : null, statusAtMs, lastSyncAtMs, Date.now())
-    if (LibraryUi.syncDue(age, Drawer.SYNC_HOURS)) run("sync", [], "auto")
+    var now = Date.now()
+    if (syncing || Drawer.autoSyncBlocked(lastSyncAttemptAtMs, now)) return
+    var age = Drawer.catalogAgeS(status ? status.catalog_age_s : null, statusAtMs, lastSyncAtMs, now)
+    if (LibraryUi.syncDue(age, Drawer.SYNC_HOURS)) startSync("auto")
   }
 
   function refreshLibrary() {
     if (syncing) return "busy"
-    return run("sync", [], "manual") ? "ok" : "error: refused"
+    return startSync("manual") ? "ok" : "error: refused"
   }
 
+  function startSync(purpose) {
+    lastSyncAttemptAtMs = Date.now()
+    return run("sync", [], purpose)
+  }
+
+  // Any local book can be removed (FR-S2). The loaded one is unloaded first
+  // (the player saves its position) and removed once it is gone.
   function removeBook(asin) {
-    if (!Drawer.canRemove(library.rowFor(asin), loadedAsin)) return "error: not removable"
+    if (!Drawer.canRemove(library.rowFor(asin))) return "error: not removable"
+    if (asin === loadedAsin) {
+      if (removeAfterUnload.indexOf(asin) < 0) removeAfterUnload = removeAfterUnload.concat([asin])
+      player.quit()
+      return "unloading"
+    }
     return run("remove", [asin], "user") ? "ok" : "error: refused"
   }
 
+  function flushRemovals() {
+    var waiting = removeAfterUnload.filter(function(asin) { return asin === loadedAsin })
+    var ready = removeAfterUnload.filter(function(asin) { return asin !== loadedAsin })
+    removeAfterUnload = waiting
+    ready.forEach(function(asin) { run("remove", [asin], "user") })
+  }
+
   function removeAll() {
-    var asins = Drawer.removableAsins(library.allRows, loadedAsin)
-    asins.forEach(function(asin) { run("remove", [asin], "user") })
+    var asins = Drawer.removableAsins(library.allRows)
+    asins.forEach(function(asin) { removeBook(asin) })
     return String(asins.length)
   }
+
 
   function refreshLocal() {
     run("local", [])
@@ -501,8 +536,8 @@ Item {
 
     // Test methods so agents can drive the service without input. They stay
     // through M3; R6 documents or removes them.
-    function play(asin: string): string { return root.playBook(asin, -1) }
-    function playAt(asin: string, startSec: string): string { return root.playBook(asin, Number(startSec) || 0) }
+    function play(asin: string): string { root.latestPick = asin; return root.playBook(asin, -1) }
+    function playAt(asin: string, startSec: string): string { root.latestPick = asin; return root.playBook(asin, Number(startSec) || 0) }
     function pause(): string { player.pause(); return "ok" }
     function resume(): string { player.resume(); return "ok" }
     function chapter(index: string): string { player.setChapter(Number(index) || 0); return "ok" }
@@ -608,7 +643,8 @@ Item {
       } else if (job.command === "get" || job.command === "remove") {
         root.refreshLocal()
       }
-      if (job.command === "get" && job.purpose === "autoplay" && outcome.ok) {
+      if (job.command === "get" && job.purpose === "autoplay" && outcome.ok
+          && Drawer.autoplayAllowed(job.args[0], root.latestPick)) {
         root.playPicked(job.args[0], false)
       }
     }

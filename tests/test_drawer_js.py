@@ -93,23 +93,68 @@ def test_row_progress(drawer):
     assert drawer.call("rowProgress", "B0FAKE0001", active, None) is None
 
 
-@pytest.mark.parametrize("row,loaded,ok", [
-    ({"asin": "A", "local": True}, "", True),
-    ({"asin": "A", "local": True}, "B", True),
-    ({"asin": "A", "local": True}, "A", False),
-    ({"asin": "A", "local": False}, "", False),
-    ({"local": True}, "", False),
-    (None, "", False),
+@pytest.mark.parametrize("row,ok", [
+    ({"asin": "A", "local": True}, True),
+    ({"asin": "A", "local": False}, False),
+    ({"local": True}, False),
+    (None, False),
 ])
-def test_can_remove(drawer, row, loaded, ok):
-    assert drawer.call("canRemove", row, loaded) is ok
+def test_can_remove(drawer, row, ok):
+    assert drawer.call("canRemove", row) is ok
 
 
 def test_removable_asins(drawer):
     rows = [{"asin": "A", "local": True}, {"asin": "B", "local": False},
             {"asin": "C", "local": True}, None]
-    assert drawer.call("removableAsins", rows, "C") == ["A"]
-    assert drawer.call("removableAsins", None, "") == []
+    assert drawer.call("removableAsins", rows) == ["A", "C"]
+    assert drawer.call("removableAsins", None) == []
+
+
+@pytest.mark.parametrize("asin,loaded,ok", [
+    ("A", "", True), ("A", "B", True), ("A", "A", False), ("", "", False), (None, "", False),
+])
+def test_removal_allowed(drawer, asin, loaded, ok):
+    assert drawer.call("removalAllowed", asin, loaded) is ok
+
+
+@pytest.mark.parametrize("asin,latest,ok", [
+    ("A", "A", True), ("A", "B", False), ("A", "", False), ("", "", False), (None, None, False),
+])
+def test_autoplay_allowed(drawer, asin, latest, ok):
+    assert drawer.call("autoplayAllowed", asin, latest) is ok
+
+
+@pytest.mark.parametrize("row,text", [
+    ({"state": "error", "error": "Not enough disk space"}, "Not enough disk space"),
+    ({"state": "error", "error": "  "}, "Download failed"),
+    ({"state": "error"}, "Download failed"),
+    ({"state": "local", "error": "x"}, ""),
+    (None, ""),
+])
+def test_error_text(drawer, row, text):
+    assert drawer.call("errorText", row) == text
+
+
+@pytest.mark.parametrize("last,now,blocked", [
+    (0, 1000, False), (None, 1000, False), (1000, 1000, True),
+    (1000, 600999, True), (1000, 601000, False), (1000, None, False),
+])
+def test_auto_sync_blocked(drawer, last, now, blocked):
+    assert drawer.call("autoSyncBlocked", last, now) is blocked
+
+
+@pytest.mark.parametrize("index,count,ok", [
+    (0, 1, True), (4, 5, True), (5, 5, False), (-1, 5, False), (1.5, 5, False), (None, 5, False), (0, 0, False),
+])
+def test_valid_index(drawer, index, count, ok):
+    assert drawer.call("validIndex", index, count) is ok
+
+
+@pytest.mark.parametrize("selected,count,result", [
+    (2, 5, 2), (7, 5, 4), (-1, 5, -1), (3, 0, -1), (None, 5, -1), (2.9, 5, 2),
+])
+def test_clamp_selection(drawer, selected, count, result):
+    assert drawer.call("clampSelection", selected, count) == result
 
 
 @pytest.mark.parametrize("count,text", [

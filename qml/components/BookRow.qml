@@ -6,7 +6,8 @@ import "../lib/Drawer.js" as Drawer
 import "../lib/Format.js" as Format
 
 // One Library row (FR-L6): cover, title, author, runtime, progress bar and
-// state badge, plus Remove from laptop for a removable book. Bind the row
+// state badge, a failure line for a failed download, plus Remove from
+// laptop for a book on this laptop. Bind the row
 // and the flags; `picked` and `removeRequested` go back to the view.
 Rectangle {
   id: root
@@ -84,6 +85,17 @@ Rectangle {
           font.family: Style.font.family
           font.pixelSize: Style.font.bodySmall
         }
+      }
+
+      Text {
+        Layout.fillWidth: true
+        visible: text.length > 0
+        text: Drawer.errorText(root.row)
+        textFormat: Text.PlainText
+        wrapMode: Text.WordWrap
+        color: Color.urgent
+        font.family: Style.font.family
+        font.pixelSize: Style.font.bodySmall
       }
 
       RowLayout {

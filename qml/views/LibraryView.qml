@@ -6,6 +6,8 @@ import "../components"
 import "../lib/Drawer.js" as Drawer
 import "../lib/Format.js" as Format
 import "../lib/LibraryUi.js" as LibraryUi
+import "../lib/Mini.js" as Mini
+import "../lib/Panel.js" as Panel
 
 // Library view (U2): search, sort, filters, the book list, the storage line
 // and Remove all downloads. Every decision comes from `LibraryUi.js` and
@@ -18,10 +20,10 @@ ColumnLayout {
   readonly property var library: service ? service.library : null
   readonly property var list: service ? service.listState : ({ "state": "loading", "banner": null })
   readonly property bool offline: service ? service.syncFailure.offline : false
-  readonly property string loadedAsin: service ? service.loadedAsin : ""
   readonly property var askRow: service && service.askAsin.length > 0 ? library.rowFor(service.askAsin) : null
   readonly property var storage: LibraryUi.storage(library ? library.localBooks : [])
-  readonly property var removable: Drawer.removableAsins(library ? library.allRows : [], loadedAsin)
+  readonly property var removable: Drawer.removableAsins(library ? library.allRows : [])
+  readonly property bool loaded: service ? service.player.loaded : false
   readonly property bool searchFocused: search.activeFocus
   property int selected: -1
   property bool confirmRemoveAll: false
@@ -40,7 +42,7 @@ ColumnLayout {
   }
 
   function pickAt(index) {
-    if (!service || !library || index < 0 || index >= library.count) return
+    if (!service || !library || !Drawer.validIndex(index, library.count)) return
     selected = index
     service.pick(library.rows[index].asin)
   }
@@ -48,7 +50,7 @@ ColumnLayout {
   Connections {
     target: root.library
     function onRowsChanged() {
-      if (root.selected >= root.library.count) root.selected = root.library.count - 1
+      root.selected = Drawer.clampSelection(root.selected, root.library.count)
     }
   }
 
@@ -190,7 +192,7 @@ ColumnLayout {
         dataDir: root.service ? root.service.dataDir : ""
         coverPresent: root.library ? root.library.hasCover(modelData.asin) : false
         coverVersion: root.library ? root.library.coverVersion(modelData.asin) : 0
-        removable: Drawer.canRemove(modelData, root.loadedAsin)
+        removable: Drawer.canRemove(modelData)
         onPicked: root.pickAt(index)
         onRemoveRequested: root.service.removeBook(modelData.asin)
       }
@@ -230,6 +232,47 @@ ColumnLayout {
       visible: root.confirmRemoveAll
       text: "Cancel"
       onClicked: root.confirmRemoveAll = false
+    }
+  }
+
+  // Now-playing strip (FR-U2): the loaded book, play/pause, and a click
+  // through to Mini.
+  Rectangle {
+    Layout.fillWidth: true
+    visible: root.loaded
+    implicitHeight: strip.implicitHeight + Style.spacing.md * 2
+    radius: Style.cornerRadius
+    color: stripMouse.containsMouse ? Style.hoverFill : Style.normalFill
+
+    MouseArea {
+      id: stripMouse
+      anchors.fill: parent
+      hoverEnabled: true
+      onClicked: if (root.service) root.service.showView(Panel.VIEW_MINI)
+    }
+
+    RowLayout {
+      id: strip
+      anchors.fill: parent
+      anchors.leftMargin: Style.spacing.lg
+      anchors.rightMargin: Style.spacing.md
+      spacing: Style.spacing.md
+
+      Text {
+        Layout.fillWidth: true
+        text: Mini.title(root.loaded, root.service ? root.service.loadedRow : null)
+        textFormat: Text.PlainText
+        elide: Text.ElideRight
+        color: Color.popups.text
+        font.family: Style.font.family
+        font.pixelSize: Style.font.body
+      }
+
+      PanelActionButton {
+        iconText: Mini.playGlyph(root.service ? root.service.player.playing : false)
+        tooltipText: "Play / pause"
+        onClicked: if (root.service) root.service.player.toggle()
+      }
     }
   }
 }

@@ -11,6 +11,10 @@
 // SCOPE 4.6 `syncOnOpenHours` default; the setting arrives in R1.
 var SYNC_HOURS = 6;
 
+// After any sync attempt, an automatic sync waits this long, so a failing
+// sync (offline) is not retried on every open.
+var SYNC_RETRY_MS = 600000;
+
 // Sort and filter choices (FR-L3, FR-L4). Values are the `Library.js` keys.
 var SORTS = [
   { "value": "recent", "label": "Recently listened" },
@@ -95,6 +99,32 @@ function searchKey(key, text) {
   return KEY_TYPE;
 }
 
+// Whether an automatic sync must wait: one was attempted less than
+// `SYNC_RETRY_MS` ago.
+function autoSyncBlocked(lastAttemptMs, nowMs) {
+  var last = _p.number(lastAttemptMs);
+  var now = _p.number(nowMs);
+  if (last === null || last <= 0 || now === null) return false;
+  return now - last < SYNC_RETRY_MS;
+}
+
+// Whether `index` is a row of a list of `count` rows.
+function validIndex(index, count) {
+  var i = _p.number(index);
+  var n = _p.number(count);
+  return i !== null && n !== null && i >= 0 && i < n && Math.floor(i) === i;
+}
+
+// The selection after the list changed to `count` rows: kept when still in
+// range, else moved to the last row, or -1 for an empty list.
+function clampSelection(selected, count) {
+  var n = _p.number(count);
+  var i = _p.number(selected);
+  if (n === null || n < 1) return -1;
+  if (i === null || i < 0) return -1;
+  return Math.min(Math.floor(i), n - 1);
+}
+
 // The row Enter picks: the selection, else the first row, else none (-1).
 function pickIndex(selected, count) {
   var size = _p.number(count);
@@ -113,20 +143,38 @@ function rowProgress(asin, active, progress) {
   return jobAsin === asin && progress && typeof progress === "object" ? progress : null;
 }
 
-// A book can be removed from the laptop when it is on it and not loaded in
-// the player (its file is open while loaded).
-function canRemove(row, loadedAsin) {
-  return !!row && row.local === true && typeof row.asin === "string" && row.asin !== loadedAsin;
+// Any book on the laptop can be removed (FR-S2); the service unloads a
+// loaded one first.
+function canRemove(row) {
+  return !!row && row.local === true && typeof row.asin === "string";
 }
 
-// The ASINs "Remove all downloads" removes: every removable book.
-function removableAsins(rows, loadedAsin) {
+// The ASINs "Remove all downloads" removes: every book on the laptop.
+function removableAsins(rows) {
   var out = [];
   if (!Array.isArray(rows)) return out;
   for (var i = 0; i < rows.length; i++) {
-    if (canRemove(rows[i], loadedAsin)) out.push(rows[i].asin);
+    if (canRemove(rows[i])) out.push(rows[i].asin);
   }
   return out;
+}
+
+// Whether a queued user removal may still run: never for the book that is
+// loaded when the job starts (it was picked again after the removal queued).
+function removalAllowed(asin, loadedAsin) {
+  return typeof asin === "string" && asin.length > 0 && asin !== loadedAsin;
+}
+
+// Whether a finished download should play: only when it is still the last
+// book the user picked, so it never replaces a book picked since.
+function autoplayAllowed(asin, latestPick) {
+  return typeof asin === "string" && asin.length > 0 && asin === latestPick;
+}
+
+// The failure line under a failed row (SCOPE 6), else "".
+function errorText(row) {
+  if (!row || row.state !== "error") return "";
+  return typeof row.error === "string" && row.error.trim().length > 0 ? row.error.trim() : "Download failed";
 }
 
 // The confirm question for "Remove all downloads", or "" when there is
