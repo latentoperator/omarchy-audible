@@ -222,11 +222,13 @@ Item {
 
   function onBookSwitched() {
     var asin = Playback.asinFromPath(player.path)
+    var previous = snapAsin
     if (snapAsin.length > 0 && snapAsin !== asin) savePosition(snapAsin, snapMs, true)
     snapAsin = asin
-    // The new book's position arrives with its own time-pos; do not carry the
-    // old book's number over.
-    snapMs = 0
+    // Switching from another book: its position is not this book's, and the
+    // new one arrives with its own time-pos. First load or a reattach: mpv
+    // already reported the position (before the path), so keep it.
+    snapMs = previous.length === 0 && asin.length > 0 && player.derived.hasPosition ? player.positionMs : 0
     snapDirty = false
     snapUnpushed = false
   }

@@ -21,15 +21,23 @@ Item {
   // Changes made before the file was read; replayed on top of what it holds.
   property var pendingOps: []
   property string lastError: ""
+  property var adoptWaiting: null
 
   // `text` is the file's content, or "" when it does not exist.
   function adopt(text) {
     var parsed = Library.parseState(text)
-    // A file that exists but cannot be understood is kept aside before the
-    // first write replaces it.
+    // A file that exists but cannot be understood is copied aside first, and
+    // nothing is written until that copy has succeeded.
     if (text.length > 0 && parsed.recovered === true && root.path.length > 0) {
-      Quickshell.execDetached(["cp", "-f", root.path, root.path + ".corrupt"])
+      root.adoptWaiting = parsed
+      backup.command = ["cp", "-f", root.path, root.path + ".corrupt"]
+      backup.running = true
+      return
     }
+    root.finishAdopt(parsed)
+  }
+
+  function finishAdopt(parsed) {
     root.doc = parsed
     // Replay first, so anyone reacting to `loaded` already sees the changes
     // that were made while the file was being read.
@@ -87,6 +95,16 @@ Item {
   function flush() {
     root.save()
     file.waitForJob()
+  }
+
+  Process {
+    id: backup
+    onExited: function(code, status) {
+      var parsed = root.adoptWaiting
+      root.adoptWaiting = null
+      if (code === 0 && parsed) root.finishAdopt(parsed)
+      else root.lastError = "could not back up the unreadable state.json"
+    }
   }
 
   FileView {
