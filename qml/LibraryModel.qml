@@ -31,6 +31,7 @@ Item {
     Playback.parseJson(remoteText, null),
     stateDoc, localBooks, jobs)
 
+  readonly property bool catalogLoaded: Playback.parseJson(catalogText, null) !== null
   readonly property var rows: Library.searchRows(
     Library.filterRows(Library.sortRows(allRows, sortKey), filterKey), searchText)
   readonly property int count: rows.length

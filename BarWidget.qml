@@ -42,6 +42,23 @@ BarWidget {
     else if (action !== Mini.ACTION_NONE) player.skip(Mini.skipSeconds(action))
   }
 
+  // Library takes keys in its search field; every other view through the
+  // catcher. Also runs the sync-on-open check when the Library shows.
+  function focusView() {
+    if (!opened || !service) return
+    if (service.view === Panel.VIEW_LIBRARY) {
+      Qt.callLater(function() { if (root.opened) libraryView.focusSearch() })
+      service.libraryOpened()
+    } else {
+      Qt.callLater(function() { if (root.opened) keys.forceActiveFocus() })
+    }
+  }
+
+  Connections {
+    target: root.service
+    function onViewChanged() { root.focusView() }
+  }
+
   function press(mouseButton) {
     if (mouseButton === Qt.MiddleButton) {
       if (player && player.loaded) player.toggle()
@@ -85,12 +102,16 @@ BarWidget {
     owner: root
     open: root.opened
     focusTarget: keys
-    contentWidth: fittedContentWidth(Style.space(380))
-    contentHeight: fittedContentHeight(views.implicitHeight, Style.space(560))
+    contentWidth: fittedContentWidth(Style.space(420))
+    // The current view's height, not the tallest view's.
+    contentHeight: fittedContentHeight(views.currentHeight, Style.space(560))
+    onOpenChanged: if (open) root.focusView()
 
     PanelKeyCatcher {
       id: keys
       anchors.fill: parent
+      // While the Library search field has focus it handles its own keys.
+      blocked: libraryView.searchFocused
       onCloseRequested: root.close()
       // The catcher sends Enter as returnRequested then activateRequested,
       // and Space as activateRequested alone.
@@ -105,9 +126,17 @@ BarWidget {
         id: views
         width: parent.width
         currentIndex: Panel.viewIndex(root.service ? root.service.view : "")
+        readonly property real currentHeight: {
+          var item = children[currentIndex]
+          return item ? item.implicitHeight : 0
+        }
 
         OnboardingView { service: root.service }
-        LibraryView { service: root.service }
+        LibraryView {
+          id: libraryView
+          service: root.service
+          onCloseRequested: root.close()
+        }
         MiniView { service: root.service }
         FullView { service: root.service }
       }
