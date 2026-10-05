@@ -70,7 +70,6 @@ Item {
       if (quitPending) {
         // quit() came in during startup; now there is a socket to say it on.
         quitPending = false
-        pendingLoad = null
         quitting = true
         send(["quit"])
         return
@@ -83,8 +82,9 @@ Item {
       if (quitting) {
         quitting = false
         connection = "idle"
-        // A play() that came in while mpv was quitting starts a fresh mpv.
-        if (wanted && pendingLoad) beginRelaunch()
+        // The old scope may outlive the socket. Wait for it to go before any
+        // new mpv, whether or not a play() is already waiting.
+        beginRelaunch()
       } else {
         // Not asked for: surface it, and retry only while a book is wanted.
         lastError = "mpv exited unexpectedly"
@@ -198,6 +198,8 @@ Item {
     }
     wanted = true
     pendingLoad = { "path": path, "startSec": startSec }
+    // A quit that has not been sent yet is overtaken by this play.
+    quitPending = false
     if (connected && !quitting) {
       flushPending()
     } else if (!connected && !launching && !attaching && !relaunchPending) {
@@ -228,8 +230,6 @@ Item {
     wanted = false
     pendingLoad = null
     launching = false
-    relaunchPending = false
-    relaunchTimer.stop()
     cancelSleep()
     if (send(["quit"])) {
       attaching = false
@@ -345,6 +345,14 @@ Item {
         return
       }
       root.relaunchPending = false
+      if (!gone) {
+        // Starting another mpv under the same unit name would be refused.
+        root.wanted = false
+        root.pendingLoad = null
+        root.connection = "failed"
+        root.lastError = "the previous mpv did not exit"
+        return
+      }
       if (root.wanted && root.pendingLoad && !root.connected) root.launchMpv()
     }
   }
