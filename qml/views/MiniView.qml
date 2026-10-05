@@ -81,6 +81,7 @@ ColumnLayout {
 
     Text {
       text: "−" + Format.clock(Mini.remainingMs(root.positionMs, root.durationMs))
+      textFormat: Text.PlainText
       color: Color.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.bodySmall
