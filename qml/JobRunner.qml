@@ -56,6 +56,10 @@ Item {
   }
 
   function pump() {
+    // A busy job waits out its retry delay; a newer job must not jump it.
+    if (retryTimer.running) {
+      return
+    }
     var job = JobQueue.take(root.queue)
     if (!job) {
       return
