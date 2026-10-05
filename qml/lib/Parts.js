@@ -17,29 +17,51 @@ var TONE_MUTED = "muted";
 // carry a path, so it never reaches a file URL.
 var ASIN_PATTERN = /^[A-Z0-9]{10}$/;
 
-// `file://` URL of `<dataDir>/covers/<asin>.jpg` (ARCHITECTURE file table),
-// or "" when the data dir is unknown or the ASIN is not a plain ASIN. The
-// cover may still be missing; the view shows its placeholder then.
-function coverUrl(dataDir, asin) {
-  if (typeof dataDir !== "string" || typeof asin !== "string") return "";
-  var dir = dataDir.replace(/\/+$/, "");
-  if (dir.length === 0 || dir.charAt(0) !== "/") return "";
-  if (!ASIN_PATTERN.test(asin)) return "";
-  return "file://" + dir + "/covers/" + asin + ".jpg";
+// `file://` URL for an absolute path, each segment percent-encoded so a
+// `#`, `?`, `%` or space in a directory name stays part of the path. ""
+// for anything that is not an absolute path.
+function fileUrl(path) {
+  if (typeof path !== "string" || path.length < 2 || path.charAt(0) !== "/") return "";
+  var parts = path.replace(/\/+$/, "").split("/");
+  for (var i = 0; i < parts.length; i++) parts[i] = encodeURIComponent(parts[i]);
+  var joined = parts.join("/");
+  return joined.length > 1 ? "file://" + joined : "";
 }
 
-// `{asin: true}` for each `<asin>.jpg` in a list of file names (the covers
-// directory listing). Other names are skipped. Lets a cover skip loading a
-// file that is not there, which Qt would log as a warning.
-function coverSet(fileNames) {
+// `file://` URL of `<dataDir>/covers/<asin>.jpg` (ARCHITECTURE file table),
+// or "" when the data dir is unknown or the ASIN is not a plain ASIN. A
+// positive `version` (the file's modified time in ms) is added as `?v=`, so a
+// cover that `sync` replaces is a new URL and is not served from Qt's image
+// cache. The cover may still be missing; the view shows its placeholder then.
+function coverUrl(dataDir, asin, version) {
+  if (typeof asin !== "string" || !ASIN_PATTERN.test(asin)) return "";
+  var dir = fileUrl(dataDir);
+  if (dir.length === 0) return "";
+  var url = dir + "/covers/" + asin + ".jpg";
+  if (typeof version === "number" && isFinite(version) && version > 0) {
+    url += "?v=" + Math.floor(version);
+  }
+  return url;
+}
+
+// `{asin: version}` for each `<asin>.jpg` in a covers directory listing, a
+// list of `{name, modified}` (`modified` in ms; anything else counts as 1).
+// Other names are skipped. Lets a cover skip loading a file that is not
+// there, which Qt would log as a warning, and reload one that changed.
+function coverSet(entries) {
   var set = {};
-  if (!fileNames || typeof fileNames.length !== "number") return set;
-  for (var i = 0; i < fileNames.length; i++) {
-    var name = fileNames[i];
+  if (!entries || typeof entries !== "object" || typeof entries.length !== "number") return set;
+  for (var i = 0; i < entries.length; i++) {
+    var entry = entries[i];
+    if (!entry || typeof entry !== "object") continue;
+    var name = entry.name;
     if (typeof name !== "string" || name.length !== 14) continue;
     if (name.slice(10) !== ".jpg") continue;
     var asin = name.slice(0, 10);
-    if (ASIN_PATTERN.test(asin)) set[asin] = true;
+    if (!ASIN_PATTERN.test(asin)) continue;
+    var modified = entry.modified;
+    set[asin] = typeof modified === "number" && isFinite(modified) && modified > 0
+      ? Math.floor(modified) : 1;
   }
   return set;
 }

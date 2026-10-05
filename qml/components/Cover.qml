@@ -7,17 +7,19 @@ import "../lib/Panel.js" as Panel
 // A book's cover, always square. Loads `<dataDir>/covers/<asin>.jpg` off the
 // UI thread; until it is ready, or when it is missing or broken, shows the
 // book glyph on a themed tile. Corners follow the theme's rounding.
-// Bind `present` to `service.library.hasCover(asin)`: a file that is not
-// there is never requested, so a missing cover logs nothing.
+// Bind `present` to `service.library.hasCover(asin)`, so a file that is not
+// there is never requested and a missing cover logs nothing, and `version`
+// to `service.library.coverVersion(asin)`, so a replaced file is reloaded.
 Item {
   id: root
 
   property string dataDir: ""
   property string asin: ""
   property bool present: false
+  property real version: 0
   property int size: Style.spacing.controlHeight * 2
 
-  readonly property string source: present ? Parts.coverUrl(dataDir, asin) : ""
+  readonly property string source: present ? Parts.coverUrl(dataDir, asin, version) : ""
   readonly property bool loaded: image.status === Image.Ready
   readonly property int radius: Math.min(Style.cornerRadius, Math.floor(size / 4))
 
@@ -25,6 +27,7 @@ Item {
   implicitHeight: size
   width: size
   height: size
+  clip: true
 
   Rectangle {
     id: tile
@@ -40,7 +43,7 @@ Item {
       text: Panel.GLYPH_BOOK
       color: Color.muted
       font.family: Style.font.family
-      font.pixelSize: Math.max(1, Math.round(root.size * 0.4))
+      font.pixelSize: Style.font.iconLarge
     }
   }
 
@@ -61,6 +64,7 @@ Item {
     asynchronous: true
     cache: true
     fillMode: Image.PreserveAspectCrop
+    clip: true
     sourceSize.width: root.size
     sourceSize.height: root.size
     smooth: true

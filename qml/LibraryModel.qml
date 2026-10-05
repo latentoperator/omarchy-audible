@@ -35,12 +35,19 @@ Item {
     Library.filterRows(Library.sortRows(allRows, sortKey), filterKey), searchText)
   readonly property int count: rows.length
 
-  // `{asin: true}` for each cover file on disk; the listing follows the
-  // directory, so covers that `sync` fetches show up without a reload.
+  // `{asin: modified ms}` for each cover file on disk; the listing follows
+  // the directory, so covers that `sync` fetches or replaces show up without
+  // a reload.
   property var coverAsins: ({})
 
   function hasCover(asin) {
-    return coverAsins[asin] === true
+    return coverAsins[asin] !== undefined
+  }
+
+  // Bind a Cover's `version` to this so a replaced file is reloaded.
+  function coverVersion(asin) {
+    var v = coverAsins[asin]
+    return v === undefined ? 0 : v
   }
 
   function rowFor(asin) {
@@ -52,21 +59,28 @@ Item {
 
   FolderListModel {
     id: covers
-    folder: root.coversDir.length > 0 ? "file://" + root.coversDir : ""
+    folder: Parts.fileUrl(root.coversDir)
     nameFilters: ["*.jpg"]
     showDirs: false
     showDotAndDotDot: false
     showHidden: false
 
     function refresh() {
-      var names = []
-      for (var i = 0; i < count; i++) names.push(String(get(i, "fileName")))
-      root.coverAsins = Parts.coverSet(names)
+      var entries = []
+      for (var i = 0; i < count; i++) {
+        var modified = get(i, "fileModified")
+        entries.push({
+          "name": String(get(i, "fileName")),
+          "modified": modified instanceof Date ? modified.getTime() : 0
+        })
+      }
+      root.coverAsins = Parts.coverSet(entries)
     }
 
     onStatusChanged: if (status === FolderListModel.Ready) refresh()
     onRowsInserted: refresh()
     onRowsRemoved: refresh()
     onModelReset: refresh()
+    onDataChanged: refresh()
   }
 }
