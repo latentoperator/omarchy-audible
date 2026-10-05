@@ -95,6 +95,9 @@ Item {
   // A negative start resumes from the library's merged position.
   function playBook(asin, startSec) {
     if (booksDir.length === 0) return "error: status not read yet"
+    // Resuming needs the saved positions, and a position saved before they
+    // were read would replace them.
+    if (!store.loaded) return "error: state not loaded yet"
     if (!/^[A-Za-z0-9]+$/.test(asin)) return "error: bad asin"
     var row = library.rowFor(asin)
     var start = startSec >= 0 ? startSec : (row ? row.positionMs / 1000 : 0)
