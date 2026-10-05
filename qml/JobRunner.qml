@@ -19,6 +19,7 @@ Item {
 
   property var queue: JobQueue.create({ "busyDelayMs": root.busyDelayMs })
   property var activeJob: null
+  property bool retrying: false
   property int bypassCount: 0
   property int queued: 0
   readonly property bool running: activeJob !== null || bypassCount > 0
@@ -56,6 +57,10 @@ Item {
   }
 
   function pump() {
+    // A busy job waits out its retry delay; a newer job must not jump it.
+    if (root.retrying) {
+      return
+    }
     var job = JobQueue.take(root.queue)
     if (!job) {
       return
@@ -98,6 +103,7 @@ Item {
     var step = JobQueue.complete(root.queue, outcome)
     root.sync()
     if (step.action === JobQueue.ACTION_RETRY) {
+      root.retrying = true
       retryTimer.interval = step.delayMs
       retryTimer.restart()
       return
@@ -127,6 +133,9 @@ Item {
   Timer {
     id: retryTimer
     repeat: false
-    onTriggered: root.pump()
+    onTriggered: {
+      root.retrying = false
+      root.pump()
+    }
   }
 }

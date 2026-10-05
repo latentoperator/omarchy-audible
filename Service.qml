@@ -60,6 +60,11 @@ Item {
       logEvent(command, "refused: dev flag not read yet")
       return
     }
+    // TEMPORARY dev guard (removed for G2).
+    if (!fake && DebugCatalog.realModeBlocked(command)) {
+      logEvent(command, "refused: not allowed in real mode during development")
+      return
+    }
     runner.run(command, args)
   }
 

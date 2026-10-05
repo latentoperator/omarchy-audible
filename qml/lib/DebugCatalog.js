@@ -35,3 +35,13 @@ function summarize(record, maxLength) {
   }
   return text;
 }
+
+// TEMPORARY dev guard (removed for G2): commands the service must never run
+// against the real account while it is being developed. `login-*` is matched
+// by prefix.
+var REAL_MODE_BLOCKED = ["position-push", "logout", "remove", "get"];
+
+function realModeBlocked(command) {
+  var name = String(command);
+  return REAL_MODE_BLOCKED.indexOf(name) !== -1 || name.indexOf("login-") === 0;
+}
