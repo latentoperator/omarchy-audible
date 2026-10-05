@@ -66,6 +66,10 @@ Item {
   // is there a new listening position to record or push; a paused book that is
   // merely switched away from must keep its old listening time.
   property bool snapDirty: false
+  // The same, for the push queue: the book advanced since its position was
+  // last queued for write-back. Kept apart from `snapDirty` because the 10 s
+  // save clears that one without queuing a push.
+  property bool snapUnpushed: false
   readonly property int saveIntervalMs: 10000
   readonly property int pushIntervalMs: 60000
 
@@ -129,7 +133,10 @@ Item {
   function playBook(asin, startSec) {
     if (booksDir.length === 0) return "error: status not read yet"
     if (!/^[A-Za-z0-9]+$/.test(asin)) return "error: bad asin"
-    if (startSec >= 0) return playNow(asin, startSec)
+    if (startSec >= 0) {
+      pendingResume = ""
+      return playNow(asin, startSec)
+    }
     pendingResume = asin
     if (!run("position-get", [asin], "resume")) {
       pendingResume = ""
@@ -201,22 +208,30 @@ Item {
   // Saves the position of the loaded book. `book` and `ms` are explicit so a
   // switch can save the book that just ended.
   function savePosition(asin, ms, push) {
-    if (asin.length === 0 || !snapDirty) return
-    snapDirty = false
-    store.record(asin, ms)
-    store.save()
-    checkFinished(asin)
-    if (push) sync.notePlayed(asin)
+    if (asin.length === 0) return
+    if (snapDirty) {
+      snapDirty = false
+      store.record(asin, ms)
+      store.save()
+      checkFinished(asin)
+    }
+    if (push && snapUnpushed) {
+      snapUnpushed = false
+      sync.notePlayed(asin)
+    }
   }
 
   function onBookSwitched() {
     var asin = Playback.asinFromPath(player.path)
+    var previous = snapAsin
     if (snapAsin.length > 0 && snapAsin !== asin) savePosition(snapAsin, snapMs, true)
     snapAsin = asin
-    // The new book's position arrives with its own time-pos; do not carry the
-    // old book's number over.
-    snapMs = 0
+    // Switching from another book: its position is not this book's, and the
+    // new one arrives with its own time-pos. First load or a reattach: mpv
+    // already reported the position (before the path), so keep it.
+    snapMs = previous.length === 0 && asin.length > 0 && player.derived.hasPosition ? player.positionMs : 0
     snapDirty = false
+    snapUnpushed = false
   }
 
   function refreshLocal() {
@@ -279,7 +294,10 @@ Item {
       // A null time-pos (a file being swapped) is not a position.
       if (!player.derived.hasPosition || Playback.asinFromPath(player.path) !== root.snapAsin) return
       root.snapMs = player.positionMs
-      if (player.playing) root.snapDirty = true
+      if (player.playing) {
+        root.snapDirty = true
+        root.snapUnpushed = true
+      }
     }
 
     // Pause, stop or a crash: save where the book stopped.
@@ -307,7 +325,7 @@ Item {
     interval: root.pushIntervalMs
     repeat: true
     running: player.playing
-    onTriggered: sync.notePlayed(root.snapAsin)
+    onTriggered: root.savePosition(root.snapAsin, root.snapMs, true)
   }
 
   // Shell IPC target (ARCHITECTURE 6). Every argument and return value is a
@@ -458,8 +476,8 @@ Item {
 
   // Shutdown: save where the book is, and wait for the write.
   Component.onDestruction: {
-    if (snapDirty && snapAsin.length > 0) {
-      store.record(snapAsin, snapMs)
+    if (snapAsin.length > 0 && (snapDirty || snapUnpushed)) {
+      if (snapDirty) store.record(snapAsin, snapMs)
       sync.queuePush(snapAsin)
     }
     store.flush()

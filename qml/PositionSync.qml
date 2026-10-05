@@ -23,6 +23,7 @@ Item {
   property bool flushing: false
   property string lastResult: ""
 
+  property var deferred: []
   property var requested: []
   property var plan: []
   property var current: null
@@ -39,6 +40,12 @@ Item {
   // saved queue is flushed by the next run). True when something was queued.
   function queuePush(asin) {
     if (!store || !asin || asin.length === 0) return false
+    if (!store.loaded) {
+      // The position is still waiting in the store's pending changes; queue
+      // the push once they have been replayed.
+      if (deferred.indexOf(asin) === -1) deferred = deferred.concat([asin])
+      return false
+    }
     var book = store.doc.books ? store.doc.books[asin] : null
     if (!book) return false
     var candidate = {
@@ -111,7 +118,13 @@ Item {
   // Entries saved by an earlier run are flushed once state.json is read.
   Connections {
     target: root.store
-    function onLoadedChanged() { if (root.store.loaded) root.flush() }
+    function onLoadedChanged() {
+      if (!root.store.loaded) return
+      var asins = root.deferred
+      root.deferred = []
+      for (var i = 0; i < asins.length; i++) root.queuePush(asins[i])
+      root.flush()
+    }
   }
 
   Timer {
