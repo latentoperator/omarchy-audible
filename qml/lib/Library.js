@@ -97,42 +97,74 @@ _p.bareWord = function (word) {
   return word.replace(/[.,]+$/, "");
 };
 
+// The words of a name part, folded, with empty words dropped.
+_p.nameWords = function (text) {
+  return text.trim().split(/\s+/).filter(function (word) {
+    return word.length > 0;
+  });
+};
+
+_p.isSuffix = function (word) {
+  return _p.NAME_SUFFIXES.indexOf(_p.bareWord(word)) !== -1;
+};
+
+_p.isPrefix = function (word) {
+  return _p.NAME_PREFIXES.indexOf(_p.bareWord(word)) !== -1;
+};
+
+// Words without leading honorifics and trailing suffixes, keeping at least
+// one word.
+_p.trimTitles = function (words) {
+  var start = 0;
+  var end = words.length;
+  while (end - start > 1 && _p.isSuffix(words[end - 1])) {
+    end--;
+  }
+  while (end - start > 1 && _p.isPrefix(words[start])) {
+    start++;
+  }
+  return words.slice(start, end);
+};
+
 // A comparable sort key for an author name: surname first, then the given
 // names, folded. Honorifics ("Dr.") and suffixes ("Jr.", "PhD") are skipped,
-// a particle after the given name stays with the surname, and a name already written
-// "Surname, Given" is kept in that order. Unlike `titleKey`, a leading
-// "A"/"An"/"The" is part of the name.
+// a particle after the given name stays with the surname, and a name already
+// written "Surname, Given" keeps that order (its surname is never treated as
+// an honorific). Unlike `titleKey`, a leading "A"/"An"/"The" is part of the
+// name.
 _p.authorKey = function (value) {
   if (typeof value !== "string") {
     return "";
   }
-  var words = _p.foldText(value).trim().split(/\s+/).filter(function (word) {
-    return word.length > 0;
+  // Comma-separated parts; a trailing part made only of suffixes ("King,
+  // Jr.") is dropped rather than read as a given name.
+  var parts = _p.foldText(value).split(",").map(_p.nameWords).filter(function (words) {
+    return words.length > 0;
   });
-  var start = 0;
-  var end = words.length;
-  while (end - start > 1 && _p.NAME_SUFFIXES.indexOf(_p.bareWord(words[end - 1])) !== -1) {
-    end--;
+  while (parts.length > 1 && parts[parts.length - 1].every(_p.isSuffix)) {
+    parts.pop();
   }
-  while (end - start > 1 && _p.NAME_PREFIXES.indexOf(_p.bareWord(words[start])) !== -1) {
-    start++;
-  }
-  if (end - start === 0) {
+  if (parts.length === 0) {
     return "";
   }
-  // "Reyes, Tamsin": already surname first.
-  for (var index = start; index < end - 1; index++) {
-    if (/,$/.test(words[index])) {
-      return words.slice(start, end).join(" ").replace(/,/g, "");
+  if (parts.length > 1) {
+    // "Reyes, Tamsin" or "Reyes,Dr. Tamsin": already surname first.
+    var surnameWords = parts[0];
+    var givenWords = [];
+    for (var index = 1; index < parts.length; index++) {
+      givenWords = givenWords.concat(parts[index]);
     }
+    givenWords = givenWords.filter(function (word) {
+      return !_p.isPrefix(word) && !_p.isSuffix(word);
+    });
+    return surnameWords.concat(givenWords).join(" ");
   }
-  var cut = end - 1;
-  while (cut - 1 > start && _p.SURNAME_PARTICLES.indexOf(_p.bareWord(words[cut - 1])) !== -1) {
+  var words = _p.trimTitles(parts[0]);
+  var cut = words.length - 1;
+  while (cut - 1 > 0 && _p.SURNAME_PARTICLES.indexOf(_p.bareWord(words[cut - 1])) !== -1) {
     cut--;
   }
-  var surname = words.slice(cut, end).join(" ").replace(/,+$/, "");
-  var given = words.slice(start, cut).join(" ").replace(/,+$/, "");
-  return given.length > 0 ? surname + " " + given : surname;
+  return words.slice(cut).concat(words.slice(0, cut)).join(" ");
 };
 
 // Parse a timestamp into epoch milliseconds, or null when it is unparseable.

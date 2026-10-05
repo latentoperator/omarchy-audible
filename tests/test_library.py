@@ -484,6 +484,15 @@ def test_sort_title_strips_articles() -> None:
         ("Daphne du Maurier", "du maurier daphne"),
         ("Ludwig van der Berg", "van der berg ludwig"),
         ("Reyes, Tamsin", "reyes tamsin"),
+        ("Reyes,Tamsin", "reyes tamsin"),
+        ("Reyes, Dr. Tamsin", "reyes tamsin"),
+        ("Lord, Tamsin", "lord tamsin"),
+        ("Tamsin Reyes , Jr.", "reyes tamsin"),
+        ("King, Martin Luther, Jr.", "king martin luther"),
+        ("Van Morrison", "morrison van"),
+        ("Del Shannon", "shannon del"),
+        (",", ""),
+        (" , , ", ""),
         ("Zoë Ångström", "angstrom zoe"),
         ("Plato", "plato"),
         ("Dr.", "dr."),
@@ -512,6 +521,9 @@ def test_sort_author_by_surname_with_honorifics_and_suffixes() -> None:
         "June Abernathy",
         "Jane Doe PhD",
         "Daphne du Maurier",
+        "Lord, Tamsin",
+        "Moss, Ian",
+        "Reyes,Zara",
     ]
     rows = [{"title": n, "authors": [n], "dateAdded": None, "recentKey": None} for n in names]
     assert [row["authors"][0] for row in library.call("sortRows", rows, "author")] == [
@@ -520,7 +532,10 @@ def test_sort_author_by_surname_with_honorifics_and_suffixes() -> None:
         "Daphne du Maurier",
         "Martin Luther King Jr.",
         "Ursula K. Le Guin",
+        "Lord, Tamsin",
+        "Moss, Ian",
         "Dr. Tamsin Reyes",
+        "Reyes,Zara",
     ]
 
 
