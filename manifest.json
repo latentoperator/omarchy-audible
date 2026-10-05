@@ -21,6 +21,19 @@
     "defaultSection": "right",
     "defaults": {
       "showTitle": "Off"
-    }
+    },
+    "schema": [
+      {
+        "key": "showTitle",
+        "type": "enum",
+        "label": "Show book title in bar",
+        "options": [
+          "On",
+          "Off"
+        ],
+        "defaultValue": "Off",
+        "description": "When on, the title of the loaded book appears beside the bar icon."
+      }
+    ]
   }
 }
