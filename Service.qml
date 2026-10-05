@@ -56,12 +56,16 @@ Item {
   property var failures: ({})
   property string pendingResume: ""
   property string removeCandidate: ""
-  property var resumeRemote: null
+  property var resumeRemotes: ({})
 
   // The book that is loaded and the last position seen for it. Kept so a
   // switch or a crash can still save where the old book stopped.
   property string snapAsin: ""
   property real snapMs: 0
+  // The loaded book advanced while playing since it was last saved. Only then
+  // is there a new listening position to record or push; a paused book that is
+  // merely switched away from must keep its old listening time.
+  property bool snapDirty: false
   readonly property int saveIntervalMs: 10000
   readonly property int pushIntervalMs: 60000
 
@@ -170,6 +174,13 @@ Item {
     }
   }
 
+  // Checked by the job runner just before a queued job starts. An auto-remove
+  // that waited behind another job must not run if the book is playing again.
+  function jobAllowed(job) {
+    if (job.purpose !== "autoremove") return true
+    return Positions.autoRemoveAllowed(autoRemoveFinished, atEnd(job.args[0]), player.playing)
+  }
+
   function removeIfStillFinished() {
     var asin = removeCandidate
     removeCandidate = ""
@@ -190,7 +201,8 @@ Item {
   // Saves the position of the loaded book. `book` and `ms` are explicit so a
   // switch can save the book that just ended.
   function savePosition(asin, ms, push) {
-    if (asin.length === 0) return
+    if (asin.length === 0 || !snapDirty) return
+    snapDirty = false
     store.record(asin, ms)
     store.save()
     checkFinished(asin)
@@ -202,6 +214,7 @@ Item {
     if (snapAsin.length > 0 && snapAsin !== asin) savePosition(snapAsin, snapMs, true)
     snapAsin = asin
     snapMs = asin.length > 0 ? player.positionMs : 0
+    snapDirty = false
   }
 
   function refreshLocal() {
@@ -261,7 +274,9 @@ Item {
     function onPathChanged() { root.onBookSwitched() }
 
     function onPositionMsChanged() {
-      if (Playback.asinFromPath(player.path) === root.snapAsin) root.snapMs = player.positionMs
+      if (Playback.asinFromPath(player.path) !== root.snapAsin) return
+      root.snapMs = player.positionMs
+      if (player.playing) root.snapDirty = true
     }
 
     // Pause, stop or a crash: save where the book stopped.
@@ -392,6 +407,7 @@ Item {
 
   JobRunner {
     id: runner
+    gate: root.jobAllowed
     launcher: root.devLauncher.length > 0 ? root.devLauncher : root.pluginDir + "/bin/omarchy-audible"
     environment: root.fake ? ({ "OMARCHY_AUDIBLE_FAKE": "1" }) : ({})
 
@@ -402,7 +418,10 @@ Item {
       } else if (record.type === "local") {
         library.localBooks = record.books
       } else if (record.type === "positions" && job.purpose === "resume") {
-        root.resumeRemote = record.items[root.pendingResume] || null
+        var resumed = job.args[0]
+        var remotes = root.resumeRemotes
+        remotes[resumed] = record.items[resumed] || null
+        root.resumeRemotes = remotes
       }
       sync.handleEvent(record, job)
       root.logEvent(job.command, DebugCatalog.summarize(record, 160))
@@ -414,9 +433,10 @@ Item {
       root.failures = Playback.updateFailures(root.failures, job, outcome)
       sync.handleFinished(job, outcome)
       if (job.purpose === "resume") {
-        var remote = outcome.ok ? root.resumeRemote : null
-        root.resumeRemote = null
-        root.finishResume(root.pendingResume, remote)
+        var resumedAsin = job.args[0]
+        var remote = outcome.ok ? (root.resumeRemotes[resumedAsin] || null) : null
+        delete root.resumeRemotes[resumedAsin]
+        root.finishResume(resumedAsin, remote)
       }
       if (job.command === "sync") {
         root.reloadSync()
@@ -435,7 +455,10 @@ Item {
 
   // Shutdown: save where the book is, and wait for the write.
   Component.onDestruction: {
-    if (player.playing) store.record(snapAsin, snapMs)
+    if (snapDirty && snapAsin.length > 0) {
+      store.record(snapAsin, snapMs)
+      sync.queuePush(snapAsin)
+    }
     store.flush()
   }
 }
