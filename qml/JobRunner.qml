@@ -32,8 +32,10 @@ Item {
   signal event(var record, var job)
   signal jobFinished(var job, var outcome)
 
-  function run(command, args) {
-    var job = { "command": String(command), "args": args || [] }
+  // `purpose` is a free tag the caller uses to recognise its own jobs in the
+  // `event` and `jobFinished` signals.
+  function run(command, args, purpose) {
+    var job = { "command": String(command), "args": args || [], "purpose": purpose || "" }
     if (JobQueue.isJobCommand(job.command)) {
       JobQueue.enqueue(root.queue, job)
       root.sync()

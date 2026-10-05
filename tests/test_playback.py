@@ -86,3 +86,27 @@ def test_update_failures(playback):
     assert playback.call("updateFailures", failed, job, None) == {"B0A": "download failed"}
     assert playback.call("updateFailures", failed, {"command": "sync"}, {"ok": False}) == failed
     assert playback.call("updateFailures", None, None, None) == {}
+
+
+def test_mark_finished_keeps_the_position_and_play_flag(playback):
+    state = {"schema": 1, "books": {"B0A": {"ms": 5, "updated_at": NOW, "last_played_at": NOW,
+                                           "played_since_download": True, "finished": False}}}
+    after = playback.call("markFinished", state, "B0A")
+    assert after["books"]["B0A"] == {"ms": 5, "updated_at": NOW, "last_played_at": NOW,
+                                     "played_since_download": True, "finished": True}
+    assert state["books"]["B0A"]["finished"] is False
+
+
+def test_mark_finished_for_an_unplayed_book_stays_unplayed(playback):
+    after = playback.call("markFinished", {"schema": 1, "books": {}}, "B0A")
+    assert after["books"]["B0A"]["finished"] is True
+    assert after["books"]["B0A"]["played_since_download"] is False
+    assert playback.call("markFinished", {"schema": 1}, "") == {"schema": 1}
+
+
+def test_with_queue_replaces_the_queue_only(playback):
+    state = {"schema": 1, "books": {}, "push_queue": [{"asin": "B0A"}], "volume": 3}
+    after = playback.call("withQueue", state, [{"asin": "B0B", "ms": 1, "at": None}])
+    assert after["push_queue"] == [{"asin": "B0B", "ms": 1, "at": None}]
+    assert after["volume"] == 3 and state["push_queue"] == [{"asin": "B0A"}]
+    assert playback.call("withQueue", state, None)["push_queue"] == []

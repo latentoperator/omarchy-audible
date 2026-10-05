@@ -133,11 +133,11 @@ Depends on S5/S6 results and the fake backend.
   Implements ARCHITECTURE §5.1–5.2 including reattach after shell restart, `observe_property` handling, resume via `start=`, chapter list parsing, and the skip/chapter/speed commands. Includes the sleep timer with a 5 s fade.
   Acceptance: with a fake m4b — play, pause, ±skip, chapter jump, speed change, sleep timer; `omarchy-restart-shell` mid-playback and audio continues and state reattaches; mpv crashing is detected and surfaced.
 
-- [ ] **P3 — LibraryModel and persistence** (tier B; needs P1, P3a, B4/B5 in fake mode; laptop)
+- [x] **P3 — LibraryModel and persistence** (tier B; needs P1, P3a, B4/B5 in fake mode; laptop)
   Merges `catalog.json`, `remote.json`, `state.json`, and the local-books scan into one list model with the book state machine (§5.3), sort (recent/added/title/author), filter (all/local/in-progress), and search. The service is the **only** writer of `state.json` (§4.8), with atomic writes; saves position every 10 s while playing and on pause/switch/quit.
   Acceptance: sort/filter/search verified against the fixture catalog; kill -9 the shell mid-playback and the position loss is ≤ 10 s.
 
-- [ ] **P4 — Remote position sync + finished handling** (tier B; needs P2, P4a, B6; laptop)
+- [x] **P4 — Remote position sync + finished handling** (tier B; needs P2, P4a, B6; laptop)
   Push every ~60 s and on pause/stop/switch/quit, following the push rules in ARCHITECTURE §4.6 (local listening only; never stale); failures queued and retried; resume from newest of local/remote; finished detection and optional auto-remove (setting, default Off).
   Acceptance: simulated remote-newer position wins on play; a book that was never played locally is never pushed; offline pushes are queued and flushed later; a queued push that has become stale is dropped; auto-remove only fires when the setting is on and never during playback.
 

@@ -33,6 +33,20 @@ Item {
     root.dirty = true
   }
 
+  function setQueue(queue) {
+    root.doc = Playback.withQueue(root.doc, queue)
+    root.dirty = true
+    root.save()
+  }
+
+  function markFinished(asin) {
+    var next = Playback.markFinished(root.doc, asin)
+    if (next === root.doc) return
+    root.doc = next
+    root.dirty = true
+    root.save()
+  }
+
   // Never writes before the file has been read, so a slow start cannot
   // replace saved positions with an empty state.
   function save() {
