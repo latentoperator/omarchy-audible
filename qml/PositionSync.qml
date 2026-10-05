@@ -113,11 +113,25 @@ Item {
     }
   }
 
+  // Sends the next planned entry that is still exactly what is queued. A
+  // newer listening may have replaced it while an earlier push was running;
+  // that one is left for the next flush instead of sending the old position.
   function sendNext() {
-    if (plan.length === 0) return finish("done")
-    current = plan[0]
-    plan = plan.slice(1)
-    if (!service.run("position-push", Sync.pushArgs(current), "push")) finish("refused")
+    while (plan.length > 0) {
+      var candidate = plan[0]
+      plan = plan.slice(1)
+      var stillQueued = queue.some(function(e) {
+        return e.asin === candidate.asin && e.ms === candidate.ms && e.at === candidate.at
+      })
+      if (!stillQueued) {
+        progressed = true
+        continue
+      }
+      current = candidate
+      if (!service.run("position-push", Sync.pushArgs(current), "push")) finish("refused")
+      return
+    }
+    finish("done")
   }
 
   // Entries saved by an earlier run are flushed once state.json is read.
