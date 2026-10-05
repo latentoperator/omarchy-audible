@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import Quickshell
 import qs.Commons
 import qs.Ui
+import "qml/lib/Mini.js" as Mini
 import "qml/lib/Panel.js" as Panel
 import "qml/views"
 
@@ -20,6 +21,7 @@ BarWidget {
 
   property bool opened: false
   property bool popoutSwitchClosing: false
+  property bool enterPressed: false
 
   function open() {
     if (service) service.viewForOpen()
@@ -32,6 +34,14 @@ BarWidget {
     close()
     Qt.callLater(function() { root.popoutSwitchClosing = false })
   }
+  // Space and ←/→ while Mini (or Full) shows: play/pause and skip.
+  function panelKey(kind, dx) {
+    if (!service || !player) return
+    var action = Mini.keyAction(service.view, player.loaded, kind, dx)
+    if (action === Mini.ACTION_TOGGLE) player.toggle()
+    else if (action !== Mini.ACTION_NONE) player.skip(Mini.skipSeconds(action))
+  }
+
   function press(mouseButton) {
     if (mouseButton === Qt.MiddleButton) {
       if (player && player.loaded) player.toggle()
@@ -82,6 +92,14 @@ BarWidget {
       id: keys
       anchors.fill: parent
       onCloseRequested: root.close()
+      // The catcher sends Enter as returnRequested then activateRequested,
+      // and Space as activateRequested alone.
+      onReturnRequested: root.enterPressed = true
+      onActivateRequested: {
+        root.panelKey(root.enterPressed ? "enter" : "space", 0)
+        root.enterPressed = false
+      }
+      onMoveRequested: function(dx, dy) { if (dy === 0) root.panelKey("move", dx) }
 
       StackLayout {
         id: views
