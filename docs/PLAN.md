@@ -191,7 +191,7 @@ Depends on S5/S6 results and the fake backend.
   Search field (autofocus), sort dropdown, filter chips, storage line, `ListView` of `BookRow` (cover, title, author, runtime, progress bar, `StateBadge`). Enter/click plays; cloud books enqueue a download and show progress, then auto-play; row menu has Remove from laptop; "Remove all downloads"; designed empty/loading/offline/error states; placeholder cover. All decisions come from `LibraryUi.js`.
   Acceptance: J2 and J6 pass with the fake backend; keyboard navigation per ARCHITECTURE §6.
 
-- [ ] **U3 — Onboarding / Setup / Login view** (tier B; needs U1, L3, B9; laptop)
+- [x] **U3 — Onboarding / Setup / Login view** (tier B; needs U1, L3, B9; laptop)
   Shows missing dependencies with copyable install commands; a "Set up" button that runs `setup` with progress; marketplace picker; "Connect Audible" opens the URL with `xdg-open`, shows a paste field plus "Paste from clipboard", then runs `login-finish` and starts the first `sync`; "Use existing audible-cli login" shortcut when detected; clear error messages for bad URL/expired session; the clear-clipboard-history notice when `login-finish` reports it. Reconnect banner when credentials fail later. Disconnect action, showing the account name and marketplace (FR-A3). All decisions come from `Onboarding.js`.
   Acceptance: every step and error state is checked in fake mode, using B9's fake sign-in states and `fake-status.json`; J1 end-to-end against the real account is run at G3 with Chris; no secret ever appears in the UI.
 

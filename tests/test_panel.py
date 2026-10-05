@@ -12,11 +12,6 @@ def panel() -> qjs.JsModule:
     return qjs.load("Panel")
 
 
-@pytest.mark.parametrize("loaded,view", [(True, "mini"), (False, "library"), (None, "library"), ("yes", "library")])
-def test_view_on_open(panel, loaded, view):
-    assert panel.call("viewOnOpen", loaded) == view
-
-
 @pytest.mark.parametrize("view,index", [
     ("onboarding", 0), ("library", 1), ("mini", 2), ("full", 3), ("bogus", 1), (None, 1),
 ])

@@ -15,6 +15,11 @@ Item {
   property var command: []
   property var environment: ({})
   property var job: null
+  // Text for the process's stdin (the pasted sign-in address). Written once
+  // the process starts, then cleared and stdin closed so the backend sees
+  // end of input. Never logged.
+  property string input: ""
+  property bool hasInput: false
 
   property var splitter: Ndjson.createSplitter()
   property int exitCode: -1
@@ -50,6 +55,14 @@ Item {
     id: process
     command: root.command
     environment: root.environment
+    stdinEnabled: root.hasInput
+
+    onStarted: {
+      if (!root.hasInput) return
+      write(root.input)
+      root.input = ""
+      stdinEnabled = false
+    }
 
     stdout: SplitParser {
       splitMarker: ""

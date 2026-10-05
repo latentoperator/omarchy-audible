@@ -22,12 +22,6 @@ var GLYPH_PAUSED = "";
 // Longest title the bar shows before it is cut with an ellipsis.
 var TITLE_MAX = 32;
 
-// The view the panel opens on: Mini when a book is loaded, else Library.
-// TEMPORARY rule until U3, which takes the view from `Onboarding.view`.
-function viewOnOpen(loaded) {
-  return loaded === true ? VIEW_MINI : VIEW_LIBRARY;
-}
-
 // Index of `view` in the stack; an unknown view falls back to Library.
 function viewIndex(view) {
   var index = VIEWS.indexOf(view);

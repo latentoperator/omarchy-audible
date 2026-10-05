@@ -111,7 +111,7 @@ BarWidget {
       id: keys
       anchors.fill: parent
       // While the Library search field has focus it handles its own keys.
-      blocked: libraryView.searchFocused
+      blocked: libraryView.searchFocused || onboardingView.inputFocused
       onCloseRequested: root.close()
       // The catcher sends Enter as returnRequested then activateRequested,
       // and Space as activateRequested alone.
@@ -131,7 +131,11 @@ BarWidget {
           return item ? item.implicitHeight : 0
         }
 
-        OnboardingView { service: root.service }
+        OnboardingView {
+          id: onboardingView
+          service: root.service
+          onCloseRequested: root.close()
+        }
         LibraryView {
           id: libraryView
           service: root.service

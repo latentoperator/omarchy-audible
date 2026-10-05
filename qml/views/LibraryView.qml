@@ -7,7 +7,9 @@ import "../lib/Drawer.js" as Drawer
 import "../lib/Format.js" as Format
 import "../lib/LibraryUi.js" as LibraryUi
 import "../lib/Mini.js" as Mini
+import "../lib/Onboarding.js" as Onboarding
 import "../lib/Panel.js" as Panel
+import "../lib/Signin.js" as Signin
 
 // Library view (U2): search, sort, filters, the book list, the storage line
 // and Remove all downloads. Every decision comes from `LibraryUi.js` and
@@ -27,6 +29,7 @@ ColumnLayout {
   readonly property bool searchFocused: search.activeFocus
   property int selected: -1
   property bool confirmRemoveAll: false
+  property bool confirmDisconnect: false
 
   signal closeRequested()
 
@@ -118,15 +121,52 @@ ColumnLayout {
 
   }
 
-  Text {
+  RowLayout {
     Layout.fillWidth: true
-    visible: text.length > 0
-    text: Drawer.bannerText(root.list.banner)
-    textFormat: Text.PlainText
-    wrapMode: Text.WordWrap
-    color: root.list.banner === LibraryUi.BANNER_RECONNECT ? Color.urgent : Color.muted
-    font.family: Style.font.family
-    font.pixelSize: Style.font.bodySmall
+    visible: banner.text.length > 0
+    spacing: Style.spacing.md
+
+    Text {
+      id: banner
+      Layout.fillWidth: true
+      text: Drawer.bannerText(root.list.banner)
+      textFormat: Text.PlainText
+      wrapMode: Text.WordWrap
+      color: root.list.banner === LibraryUi.BANNER_RECONNECT ? Color.urgent : Color.muted
+      font.family: Style.font.family
+      font.pixelSize: Style.font.bodySmall
+    }
+
+    // FR-A4: credentials failed in some job; sign in again.
+    Button {
+      visible: root.list.banner === LibraryUi.BANNER_RECONNECT
+      text: "Reconnect"
+      onClicked: root.service.reconnect()
+    }
+  }
+
+  // After sign-in: the code may still be in the clipboard history.
+  RowLayout {
+    Layout.fillWidth: true
+    visible: notice.text.length > 0
+    spacing: Style.spacing.md
+
+    Text {
+      id: notice
+      Layout.fillWidth: true
+      text: root.service ? root.service.clipboardNotice : ""
+      textFormat: Text.PlainText
+      wrapMode: Text.WordWrap
+      color: Color.muted
+      font.family: Style.font.family
+      font.pixelSize: Style.font.bodySmall
+    }
+
+    PanelActionButton {
+      iconText: Drawer.GLYPH_DISMISS
+      tooltipText: "Dismiss"
+      onClicked: root.service.clipboardNotice = ""
+    }
   }
 
   // A finished book far from its end: resume or start over (SCOPE 6).
@@ -239,6 +279,45 @@ ColumnLayout {
       visible: root.confirmRemoveAll
       text: "Cancel"
       onClicked: root.confirmRemoveAll = false
+    }
+  }
+
+  // Account row (FR-A3): who is signed in, and Disconnect (asks first).
+  RowLayout {
+    Layout.fillWidth: true
+    spacing: Style.spacing.md
+
+    Text {
+      Layout.fillWidth: true
+      text: root.confirmDisconnect ? Signin.DISCONNECT_QUESTION
+        : Signin.accountLine(root.service && root.service.status ? root.service.status.account : null,
+            Signin.marketplaceLabel(root.service && root.service.status ? root.service.status.marketplace : "",
+              Onboarding.marketplaces()))
+      textFormat: Text.PlainText
+      elide: Text.ElideRight
+      color: Color.muted
+      font.family: Style.font.family
+      font.pixelSize: Style.font.bodySmall
+    }
+
+    Button {
+      visible: !root.confirmDisconnect
+      text: "Disconnect"
+      onClicked: root.confirmDisconnect = true
+    }
+    Button {
+      visible: root.confirmDisconnect
+      text: "Disconnect"
+      foreground: Color.urgent
+      onClicked: {
+        root.confirmDisconnect = false
+        root.service.disconnect()
+      }
+    }
+    Button {
+      visible: root.confirmDisconnect
+      text: "Cancel"
+      onClicked: root.confirmDisconnect = false
     }
   }
 
