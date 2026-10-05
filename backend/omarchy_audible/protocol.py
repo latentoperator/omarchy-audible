@@ -45,6 +45,10 @@ class ErrorCode:
     EXPIRED = "expired"
     NO_AUTH_FILE = "no_auth_file"
 
+    # positions (B6, ARCHITECTURE 4.2, 4.6)
+    STALE = "stale"
+    UNSUPPORTED = "unsupported"
+
 
 def write_event(event: dict[str, Any]) -> None:
     """Write one already-formed event as a single NDJSON line."""

@@ -355,19 +355,47 @@ def test_parse_lastpositions_maps_exists_and_missing():
 
 
 # --- safety ------------------------------------------------------------------
-def test_sync_never_pushes_a_position():
+class _NoPushPositions:
+    """A positions port whose push raises, proving ``sync`` never reaches it."""
+
+    def __init__(self) -> None:
+        self.push_calls = 0
+
+    def fetch_batch(self, asins):
+        return {asin: {"ms": 7, "updated_at": "2026-01-01 00:00:00.0"} for asin in asins}
+
+    def fetch_acr(self, asin):
+        raise AssertionError("sync must not read content metadata")
+
+    def push(self, asin, acr, position_ms):
+        self.push_calls += 1
+        raise AssertionError("sync must not push a position")
+
+
+def test_sync_never_pushes_a_position(paths):
     module_dir = Path(__file__).resolve().parents[1] / "backend" / "omarchy_audible"
-    for name in ("catalog.py", "positions.py"):
-        text = (module_dir / name).read_text(encoding="utf-8")
-        compact = text.replace(" ", "")
-        # No mutating API call: the read side only ever calls ``.get(...)``.
-        assert ".put(" not in compact, name
-        assert ".post(" not in compact, name
-        assert ".patch(" not in compact, name
-        # No reference to the push command or a push helper.
-        assert '"position-push"' not in text, name
-        assert "position_push" not in text, name
-        assert "push_position" not in text, name
+    # The sync module must not reference the push path at all; positions.py owns
+    # the single permitted mutation (ARCHITECTURE 4.4).
+    text = (module_dir / "catalog.py").read_text(encoding="utf-8")
+    compact = text.replace(" ", "")
+    assert ".put(" not in compact
+    assert ".post(" not in compact
+    assert ".patch(" not in compact
+    assert '"position-push"' not in text
+    assert "position_push" not in text
+    assert "push_position" not in text
+
+    # And behaviourally: a port whose ``push`` raises still syncs, untouched.
+    port = _NoPushPositions()
+    catalog.run_sync(
+        paths,
+        fake=True,
+        library=_StaticLibrary([_item("B0NOPUSH01")]),
+        positions_port=port,
+        cover_fetch=None,
+        emit=lambda *args, **kwargs: None,
+    )
+    assert port.push_calls == 0
 
 
 def test_sync_is_a_job_command():
