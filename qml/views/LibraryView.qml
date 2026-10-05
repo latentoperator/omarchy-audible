@@ -137,7 +137,7 @@ ColumnLayout {
 
     Text {
       Layout.fillWidth: true
-      text: root.askRow ? root.askRow.title : ""
+      text: Drawer.askText(root.askRow)
       textFormat: Text.PlainText
       elide: Text.ElideRight
       color: Color.popups.text
@@ -151,6 +151,11 @@ ColumnLayout {
     Button {
       text: "Start over"
       onClicked: root.service.answerAsk(false)
+    }
+    PanelActionButton {
+      iconText: Drawer.GLYPH_DISMISS
+      tooltipText: "Dismiss"
+      onClicked: root.service.dismissAsk()
     }
   }
 
@@ -193,6 +198,8 @@ ColumnLayout {
         coverPresent: root.library ? root.library.hasCover(modelData.asin) : false
         coverVersion: root.library ? root.library.coverVersion(modelData.asin) : 0
         removable: Drawer.canRemove(modelData)
+        removing: root.service ? Drawer.removing(modelData.asin, root.service.removeAfterUnload,
+          root.service.runner.pendingJobs, root.service.runner.activeJob) : false
         onPicked: root.pickAt(index)
         onRemoveRequested: root.service.removeBook(modelData.asin)
       }

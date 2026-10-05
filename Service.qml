@@ -317,6 +317,10 @@ Item {
     return startPicked(asin, choice === LibraryUi.CHOICE_START_OVER ? 0 : -1, hidePanel)
   }
 
+  function dismissAsk() {
+    askAsin = ""
+  }
+
   function answerAsk(resume) {
     var asin = askAsin
     askAsin = ""

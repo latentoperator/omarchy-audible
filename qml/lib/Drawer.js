@@ -47,6 +47,7 @@ var KEY_TYPE = "type";
 // Remove-from-laptop glyph (Font Awesome trash) and refresh glyph.
 var GLYPH_REMOVE = "";
 var GLYPH_REFRESH = "";
+var GLYPH_DISMISS = "";
 
 var _p = {};
 
@@ -172,6 +173,26 @@ function removalAllowed(asin, busy) {
 // book the user picked, so it never replaces a book picked since.
 function autoplayAllowed(asin, latestPick) {
   return typeof asin === "string" && asin.length > 0 && asin === latestPick;
+}
+
+// Whether `asin` is being removed: waiting for the player to unload it, or
+// a `remove` job for it is queued or running.
+function removing(asin, waiting, pending, active) {
+  if (typeof asin !== "string" || asin.length === 0) return false;
+  if (Array.isArray(waiting) && waiting.indexOf(asin) >= 0) return true;
+  var jobs = Array.isArray(pending) ? pending.slice() : [];
+  if (active) jobs.push(active);
+  for (var i = 0; i < jobs.length; i++) {
+    var job = jobs[i];
+    if (job && job.command === "remove" && Array.isArray(job.args) && job.args[0] === asin) return true;
+  }
+  return false;
+}
+
+// The Resume / Start over question for a finished book (SCOPE 6).
+function askText(row) {
+  var title = row && typeof row.title === "string" && row.title.trim().length > 0 ? row.title.trim() : "this book";
+  return "You finished " + title + ".";
 }
 
 // The failure line under a failed row (SCOPE 6), else "".

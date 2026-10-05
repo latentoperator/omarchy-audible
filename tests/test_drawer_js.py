@@ -212,3 +212,23 @@ def test_authors(drawer, row, names):
 
 def test_authors_array_like(drawer):
     assert drawer.evaluate('authors({"authors": {"length": 2, "0": "A", "1": "B"}})') == ["A", "B"]
+
+
+def test_removing(drawer):
+    rm = {"command": "remove", "args": ["A"]}
+    assert drawer.call("removing", "A", ["A"], [], None) is True
+    assert drawer.call("removing", "A", [], [rm], None) is True
+    assert drawer.call("removing", "A", [], [], rm) is True
+    assert drawer.call("removing", "B", ["A"], [rm], rm) is False
+    assert drawer.call("removing", "A", [], [{"command": "get", "args": ["A"]}], None) is False
+    assert drawer.call("removing", "A", None, None, None) is False
+    assert drawer.call("removing", "", ["", ""], [], None) is False
+
+
+@pytest.mark.parametrize("row,text", [
+    ({"title": "The Quiet Orchard"}, "You finished The Quiet Orchard."),
+    ({"title": "  "}, "You finished this book."),
+    (None, "You finished this book."),
+])
+def test_ask_text(drawer, row, text):
+    assert drawer.call("askText", row) == text

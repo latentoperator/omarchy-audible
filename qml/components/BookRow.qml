@@ -20,6 +20,7 @@ Rectangle {
   property bool coverPresent: false
   property real coverVersion: 0
   property bool removable: false
+  property bool removing: false
 
   signal picked()
   signal removeRequested()
@@ -89,6 +90,16 @@ Rectangle {
 
       Text {
         Layout.fillWidth: true
+        visible: root.removing
+        text: "Removing\u2026"
+        textFormat: Text.PlainText
+        color: Color.muted
+        font.family: Style.font.family
+        font.pixelSize: Style.font.bodySmall
+      }
+
+      Text {
+        Layout.fillWidth: true
         visible: text.length > 0
         text: Drawer.errorText(root.row)
         textFormat: Text.PlainText
@@ -125,7 +136,7 @@ Rectangle {
     }
 
     PanelActionButton {
-      visible: root.removable
+      visible: root.removable && !root.removing
       iconText: Drawer.GLYPH_REMOVE
       tooltipText: "Remove from laptop"
       hoverColor: Color.urgent
