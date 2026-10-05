@@ -84,6 +84,21 @@ Theming rule: import `qs.Commons` and `qs.Ui` and use `Style`/theme tokens only.
 
 Books are keyed by **ASIN directory**, not by title. That makes removal a single `rm -r` of one directory, avoids filename-encoding problems, and makes "what is local?" a directory scan. The filesystem is the source of truth for "is this book local".
 
+`state.json` (schema v1, written **only** by `Service.qml`, §4.8; parsed and serialized by `qml/lib/Library.js`):
+
+```json
+{ "schema": 1,
+  "books": { "<asin>": { "ms": 0, "updated_at": null, "last_played_at": null,
+                         "played_since_download": false, "finished": false } },
+  "push_queue": [ { "asin": "<asin>", "ms": 0, "at": null } ],
+  "volume": null, "speed": null }
+```
+
+- `ms` is the local position; `updated_at` is when it was written. The newest-wins merge (§4.6) chooses between this entry and `remote.json`.
+- `last_played_at` is the "recently listened" key (§4.6); `played_since_download` gates position write-back; `finished` is the local finished flag.
+- `push_queue` holds pending position write-backs, `at` being the local listening time (§4.6).
+- Unknown keys are kept across a parse/serialize round trip. A missing file, garbage, or a `schema` other than 1 recovers to an empty v1; `parseState` reports that with a `recovered` flag (which is not part of the file) so the service can start over.
+
 The audible-cli profile is created programmatically in a plugin-owned config dir by setting `AUDIBLE_CONFIG_DIR` for every backend subprocess, so it never touches or conflicts with a user's own `~/.audible`.
 
 ## 4. Backend
