@@ -19,6 +19,7 @@ Item {
 
   property var queue: JobQueue.create({ "busyDelayMs": root.busyDelayMs })
   property var activeJob: null
+  property bool retrying: false
   property int bypassCount: 0
   property int queued: 0
   readonly property bool running: activeJob !== null || bypassCount > 0
