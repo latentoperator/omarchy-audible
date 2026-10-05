@@ -19,6 +19,8 @@ Item {
 
   property var queue: JobQueue.create({ "busyDelayMs": root.busyDelayMs })
   property var activeJob: null
+  property var pendingJobs: []
+  property bool retrying: false
   property int bypassCount: 0
   property int queued: 0
   readonly property bool running: activeJob !== null || bypassCount > 0
@@ -30,8 +32,10 @@ Item {
   signal event(var record, var job)
   signal jobFinished(var job, var outcome)
 
-  function run(command, args) {
-    var job = { "command": String(command), "args": args || [] }
+  // `purpose` is a free tag the caller uses to recognise its own jobs in the
+  // `event` and `jobFinished` signals.
+  function run(command, args, purpose) {
+    var job = { "command": String(command), "args": args || [], "purpose": purpose || "" }
     if (JobQueue.isJobCommand(job.command)) {
       JobQueue.enqueue(root.queue, job)
       root.sync()
@@ -52,10 +56,15 @@ Item {
 
   function sync() {
     root.queued = JobQueue.size(root.queue) - (root.queue.active ? 1 : 0)
+    root.pendingJobs = root.queue.pending.slice()
     root.activeJob = root.queue.active
   }
 
   function pump() {
+    // A busy job waits out its retry delay; a newer job must not jump it.
+    if (root.retrying) {
+      return
+    }
     var job = JobQueue.take(root.queue)
     if (!job) {
       return
@@ -98,6 +107,7 @@ Item {
     var step = JobQueue.complete(root.queue, outcome)
     root.sync()
     if (step.action === JobQueue.ACTION_RETRY) {
+      root.retrying = true
       retryTimer.interval = step.delayMs
       retryTimer.restart()
       return
@@ -127,6 +137,9 @@ Item {
   Timer {
     id: retryTimer
     repeat: false
-    onTriggered: root.pump()
+    onTriggered: {
+      root.retrying = false
+      root.pump()
+    }
   }
 }
