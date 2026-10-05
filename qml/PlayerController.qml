@@ -23,6 +23,11 @@ Item {
   property bool wanted: false
   property bool attaching: false
   property bool quitting: false
+  // quit() was called while mpv was still starting: quit it once it connects.
+  property bool quitPending: false
+  // The old mpv is gone but its scope may not be: wait before relaunching.
+  property bool relaunchPending: false
+  property int scopeChecks: 0
   property bool launching: false
   property int attempt: 0
   property bool useScope: true
@@ -62,6 +67,14 @@ Item {
       connection = "connected"
       lastError = ""
       quitting = false
+      if (quitPending) {
+        // quit() came in during startup; now there is a socket to say it on.
+        quitPending = false
+        pendingLoad = null
+        quitting = true
+        send(["quit"])
+        return
+      }
       subscribe()
       flushPending()
     } else if (connection === "connected") {
@@ -71,7 +84,7 @@ Item {
         quitting = false
         connection = "idle"
         // A play() that came in while mpv was quitting starts a fresh mpv.
-        if (wanted && pendingLoad) relaunchTimer.restart()
+        if (wanted && pendingLoad) beginRelaunch()
       } else {
         // Not asked for: surface it, and retry only while a book is wanted.
         lastError = "mpv exited unexpectedly"
@@ -119,6 +132,7 @@ Item {
 
   function giveUp() {
     retryTimer.stop()
+    quitPending = false
     // The startup attach found only a stale socket, but a play was waiting.
     if (attaching && pendingLoad) {
       attaching = false
@@ -186,7 +200,7 @@ Item {
     pendingLoad = { "path": path, "startSec": startSec }
     if (connected && !quitting) {
       flushPending()
-    } else if (!connected && !launching && !attaching) {
+    } else if (!connected && !launching && !attaching && !relaunchPending) {
       launchMpv()
     }
     return true
@@ -210,19 +224,37 @@ Item {
 
   // Stops playback and ends the mpv process.
   function quit() {
+    var starting = launching
     wanted = false
     pendingLoad = null
-    attaching = false
     launching = false
+    relaunchPending = false
+    relaunchTimer.stop()
     cancelSleep()
     if (send(["quit"])) {
+      attaching = false
       quitting = true
       return
     }
-    // Not connected: nothing to quit, and nothing left to retry.
+    if (starting || attaching) {
+      // mpv is on its way up (or being reattached): keep the bounded connect
+      // going and quit it as soon as it answers.
+      quitPending = true
+      attaching = true
+      return
+    }
+    // Not connected and nothing starting: nothing to quit or retry.
     retryTimer.stop()
     socketLoader.active = false
     connection = "idle"
+  }
+
+  // The scope has one fixed name, so a new mpv can start only after the old
+  // scope has gone; check it before launching.
+  function beginRelaunch() {
+    relaunchPending = true
+    scopeChecks = 0
+    relaunchTimer.restart()
   }
 
   // ---- sleep timer ----
@@ -297,9 +329,24 @@ Item {
 
   Timer {
     id: relaunchTimer
-    interval: 400
+    interval: 300
     repeat: false
-    onTriggered: if (root.wanted && root.pendingLoad && !root.connected) root.launchMpv()
+    onTriggered: scopeActive.running = true
+  }
+
+  Process {
+    id: scopeActive
+    command: ["systemctl", "--user", "is-active", "--quiet", "omarchy-audible-mpv.scope"]
+    onExited: function(code, status) {
+      var gone = code !== 0
+      root.scopeChecks += 1
+      if (!gone && root.scopeChecks < 10) {
+        relaunchTimer.restart()
+        return
+      }
+      root.relaunchPending = false
+      if (root.wanted && root.pendingLoad && !root.connected) root.launchMpv()
+    }
   }
 
   Timer {
