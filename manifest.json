@@ -18,6 +18,22 @@
     "description": "Your Audible library in the Omarchy bar.",
     "category": "Media",
     "allowMultiple": false,
-    "defaultSection": "right"
+    "defaultSection": "right",
+    "defaults": {
+      "showTitleInBar": "Off"
+    },
+    "schema": [
+      {
+        "key": "showTitleInBar",
+        "type": "enum",
+        "label": "Show book title in bar",
+        "options": [
+          "On",
+          "Off"
+        ],
+        "defaultValue": "Off",
+        "description": "When on, the title of the loaded book appears beside the bar icon."
+      }
+    ]
   }
 }
