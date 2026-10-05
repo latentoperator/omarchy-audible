@@ -18,6 +18,9 @@
     "description": "Your Audible library in the Omarchy bar.",
     "category": "Media",
     "allowMultiple": false,
-    "defaultSection": "right"
+    "defaultSection": "right",
+    "defaults": {
+      "showTitle": "Off"
+    }
   }
 }

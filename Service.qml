@@ -2,8 +2,10 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "qml"
-import "qml/lib/DebugCatalog.js" as DebugCatalog
+import "qml/lib/EventLog.js" as EventLog
+import "qml/lib/Format.js" as Format
 import "qml/lib/Ipc.js" as Ipc
+import "qml/lib/Panel.js" as Panel
 import "qml/lib/Playback.js" as Playback
 import "qml/lib/Positions.js" as Positions
 
@@ -40,6 +42,19 @@ Item {
   property var surfaces: []
   property var recentEvents: []
   readonly property int maxEvents: 40
+
+  // The panel's current view, shared by every monitor's widget.
+  property string view: Panel.VIEW_LIBRARY
+  readonly property string loadedAsin: player.loaded ? Playback.asinFromPath(player.path) : ""
+  readonly property var loadedRow: loadedAsin.length > 0 ? library.rowFor(loadedAsin) : null
+  readonly property string barGlyph: Panel.glyph(player.loaded, player.playing)
+  readonly property string tooltipText: {
+    if (!player.loaded) return "Omarchy Audible"
+    var row = loadedRow
+    var text = Format.tooltip(row ? row.title : "", row ? Format.names(row.authors) : "",
+      Format.left(player.positionMs, player.durationMs))
+    return text.length > 0 ? text : "Omarchy Audible"
+  }
 
   readonly property alias runner: runner
   readonly property alias player: player
@@ -98,9 +113,13 @@ Item {
     run("status", [])
   }
 
-  // TEMPORARY (removed in U1)
-  function firstCatalogAsin() {
-    return DebugCatalog.firstAsin(catalogFile.text())
+  // Called by a widget just before its panel opens.
+  function viewForOpen() {
+    view = Panel.viewOnOpen(player.loaded)
+  }
+
+  function showView(name) {
+    if (Panel.VIEWS.indexOf(name) !== -1) view = name
   }
 
   // The book file for an ASIN, under the books dir from the `status` event.
@@ -179,7 +198,7 @@ Item {
     return local && typeof local.ms === "number" ? local.ms / 1000 : 0
   }
 
-  // TEMPORARY (removed in U1): one line per visible row, for IPC checks.
+  // One line per visible row, for IPC checks (a test method, see below).
   function libraryQuery(sort, filter, search) {
     library.sortKey = sort
     library.filterKey = filter
@@ -328,6 +347,7 @@ Item {
       var surface = root.primarySurface()
       if (!surface) return "error: no surface"
       surface.open()
+      root.showView(Panel.VIEW_LIBRARY)
       return "ok"
     }
 
@@ -357,7 +377,8 @@ Item {
       return "ok"
     }
 
-    // TEMPORARY dev methods (removed in U1), kept while the debug panel exists.
+    // Test methods so agents can drive the service without input. They stay
+    // through M3; R6 documents or removes them.
     function play(asin: string): string { return root.playBook(asin, -1) }
     function playAt(asin: string, startSec: string): string { return root.playBook(asin, Number(startSec) || 0) }
     function pause(): string { player.pause(); return "ok" }
@@ -374,6 +395,13 @@ Item {
     function flushState(): string { store.flush(); return "ok" }
     function autoRemove(value: string): string { root.autoRemoveFinished = value === "on"; return "ok" }
     function pushState(): string { return JSON.stringify({ "queue": sync.queue, "flushing": sync.flushing, "last": sync.lastResult }) }
+    function panelState(): string {
+      var open = root.surfaces.some(function(s) { return s.opened === true })
+      return JSON.stringify({ "open": open, "view": root.view, "glyph": root.barGlyph, "tooltip": root.tooltipText })
+    }
+    function events(): string {
+      return root.recentEvents.map(function(e) { return e.label + "  " + e.text }).join("\n")
+    }
   }
 
   FileView {
@@ -420,7 +448,7 @@ Item {
         root.resumeRemotes = remotes
       }
       sync.handleEvent(record, job)
-      root.logEvent(job.command, DebugCatalog.summarize(record, 160))
+      root.logEvent(job.command, EventLog.summarize(record, 160))
     }
 
     onJobFinished: function(job, outcome) {
