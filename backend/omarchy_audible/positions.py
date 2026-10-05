@@ -174,29 +174,73 @@ class PositionsPort(Protocol):
 
 
 class PushPort(Protocol):
-    """What a push needs: re-read the remote position, resolve ``acr``, write."""
+    """What a push needs: re-read the remote position, resolve ``acr``, write.
+
+    ``updated_at`` is the local listening time (``--at``). Real mode ignores it
+    because the account timestamps the write itself; the fake store (B10) keeps
+    it so a later stale check can compare against it.
+    """
 
     def fetch_batch(self, asins: Sequence[str]) -> dict[str, dict[str, Any]]: ...
 
     def fetch_acr(self, asin: str) -> str | None: ...
 
-    def push(self, asin: str, acr: str, position_ms: int) -> Any: ...
+    def push(
+        self,
+        asin: str,
+        acr: str,
+        position_ms: int,
+        *,
+        updated_at: str | None = None,
+    ) -> Any: ...
 
 
 class FakePositions:
-    """Fake mode has no account: reads are empty and a push is a local no-op."""
+    """Fake mode's position store (B10).
 
-    def __init__(self) -> None:
+    Without a ``path`` the store lives in memory, which keeps the port usable
+    for unit tests that do not care about persistence. Fake mode passes the
+    fake tree's ``fake-account-positions.json``, so a push survives into the
+    next command and ``position-get --fake`` / ``sync --fake`` read it back.
+    The file is never created in real mode.
+    """
+
+    def __init__(self, path: Path | None = None) -> None:
+        self._path = path
+        self._memory: dict[str, dict[str, Any]] = {}
         self.pushed: list[tuple[str, int]] = []
 
+    def _stored(self) -> dict[str, dict[str, Any]]:
+        if self._path is None:
+            return {asin: dict(entry) for asin, entry in self._memory.items()}
+        return load_remote(self._path)
+
     def fetch_batch(self, asins: Sequence[str]) -> dict[str, dict[str, Any]]:
-        return {asin: empty_entry() for asin in asins}
+        stored = self._stored()
+        return {asin: stored.get(asin, empty_entry()) for asin in asins}
 
     def fetch_acr(self, asin: str) -> str | None:
         return FAKE_ACR
 
-    def push(self, asin: str, acr: str, position_ms: int) -> None:
+    def push(
+        self,
+        asin: str,
+        acr: str,
+        position_ms: int,
+        *,
+        updated_at: str | None = None,
+    ) -> None:
+        entry = {
+            "ms": max(0, int(position_ms)),
+            "updated_at": updated_at or iso_now(),
+        }
         self.pushed.append((asin, position_ms))
+        if self._path is None:
+            self._memory[asin] = entry
+            return
+        stored = load_remote(self._path)
+        stored[asin] = entry
+        write_remote(self._path, stored)
 
 
 def _payload_acr(payload: Any) -> str | None:
@@ -230,7 +274,18 @@ class RealPositions:
             ) from exc
         return _payload_acr(payload)
 
-    def push(self, asin: str, acr: str, position_ms: int) -> Any:
+    def push(
+        self,
+        asin: str,
+        acr: str,
+        position_ms: int,
+        *,
+        updated_at: str | None = None,
+    ) -> Any:
+        """Write one position; the account sets its own ``last_updated``.
+
+        ``updated_at`` is accepted for the ``PushPort`` shape but unused here.
+        """
         body = {"acr": acr, "asin": asin, "position_ms": position_ms}
         try:
             # The only mutating Audible call in the backend (ARCHITECTURE 4.4).
@@ -306,7 +361,8 @@ def push_position(
     write is ``unsupported``.
     """
     remote = port.fetch_batch([asin]).get(asin, empty_entry())
-    if is_remote_newer(remote, local_updated_at or iso_now()):
+    listening_at = local_updated_at or iso_now()
+    if is_remote_newer(remote, listening_at):
         raise PipelineError(
             protocol.ErrorCode.STALE,
             f"the remote position for {asin} is newer than this listening",
@@ -319,7 +375,7 @@ def push_position(
             f"no acr for {asin}; the position cannot be written",
             hint="download the book first, or retry when the network is up",
         )
-    port.push(asin, acr, position_ms)
+    port.push(asin, acr, position_ms, updated_at=listening_at)
 
 
 def write_remote(path: Path, items: dict[str, dict[str, Any]]) -> None:
