@@ -131,6 +131,9 @@ Item {
   // when that read fails.
   function playBook(asin, startSec) {
     if (booksDir.length === 0) return "error: status not read yet"
+    // Resuming needs the saved positions, and a position saved before they
+    // were read would replace them.
+    if (!store.loaded) return "error: state not loaded yet"
     if (!/^[A-Za-z0-9]+$/.test(asin)) return "error: bad asin"
     if (startSec >= 0) {
       pendingResume = ""
