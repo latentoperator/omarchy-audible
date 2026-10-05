@@ -1,0 +1,6 @@
+# Pinned runtime dependencies for the plugin virtualenv (ARCHITECTURE 4.1).
+# `setup` installs exactly these; the versions were verified in spikes S1-S4
+# (see docs/SPIKE-RESULTS.md). `audible-cli` pulls `audible` in as well, but the
+# explicit pin keeps the extra (cryptography) and the exact version in one place.
+audible-cli==0.6.0
+audible[cryptography]==0.12.0

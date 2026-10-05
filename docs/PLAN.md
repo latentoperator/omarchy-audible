@@ -73,7 +73,7 @@ All commands follow the protocol in ARCHITECTURE §4.2. Build the **fake mode fi
   `bin/omarchy-audible` (stdlib only) dispatches subcommands; shared `emit()` NDJSON writer; error codes; secret-scrubbing logger; the **job lock** from ARCHITECTURE §4.8 (non-blocking `flock` on `job.lock` for job commands only, `error(code=busy)` when held; `job.json` helper); `--fake` / `OMARCHY_AUDIBLE_FAKE=1` switch; `status` and `doctor` working (checks for `mpv`, `ffmpeg`, `ffprobe`, `python`, `wl-paste`, `xdg-open`, `systemd-run`, venv, auth).
   Acceptance: `status` and `doctor` output validates against `tests/schemas/*.json`; works with no venv; unknown command exits nonzero with an `error` event; a second job command while one holds the lock gets `busy`; a non-job command (`status`) succeeds while the lock is held.
 
-- [ ] **B2 — Setup/venv bootstrap** (tier B; needs B1)
+- [x] **B2 — Setup/venv bootstrap** (tier B; needs B1)
   `setup` creates the venv, installs the pinned `audible-cli` and `audible[cryptography]` **and this repo's `backend/` package** (so `venv/bin/python -m omarchy_audible` works), streams progress events, is idempotent, and cleans up on failure. Pins live in one place (`backend/requirements.lock`; S1–S4 used audible-cli 0.6.0 / audible 0.12.0).
   Acceptance: from a clean `~/.local/share/omarchy-audible`, `setup` yields a venv where `python -c "import audible, omarchy_audible"` works and the launcher dispatches into it; second run is a no-op; killing it midway then re-running recovers.
 

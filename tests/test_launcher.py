@@ -170,3 +170,44 @@ def test_run_backend_reports_internal_when_exec_fails(monkeypatch, capsys, env):
     assert event["type"] == "error"
     assert event["code"] == "internal"
     assert "could not start the backend" in event["message"]
+
+
+def _fake_venv(env: dict[str, str]) -> Path:
+    venv_dir = Path(env["XDG_DATA_HOME"]) / "omarchy-audible" / "venv"
+    (venv_dir / "bin").mkdir(parents=True)
+    (venv_dir / "bin" / "python").write_text("#!/bin/sh\n", encoding="utf-8")
+    return venv_dir
+
+
+def test_launcher_requires_the_ready_marker(monkeypatch, capsys, env):
+    """A venv without the marker is a killed `setup`; do not dispatch into it."""
+    _fake_venv(env)  # interpreter present, marker absent
+    monkeypatch.setenv("XDG_DATA_HOME", env["XDG_DATA_HOME"])
+    launcher = _load_launcher()
+    assert launcher.main(["sync"]) == 1
+    event = json.loads(capsys.readouterr().out.strip())
+    assert event["type"] == "error"
+    assert event["code"] == "no_venv"
+
+
+def test_launcher_dispatches_into_a_ready_venv(monkeypatch, env):
+    venv_dir = _fake_venv(env)
+    (venv_dir / "omarchy-audible.setup.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("XDG_DATA_HOME", env["XDG_DATA_HOME"])
+    launcher = _load_launcher()
+    captured: list[str] = []
+
+    def _fake_execve(path, argv, child_env):
+        captured.extend([str(path), *[str(token) for token in argv]])
+
+    monkeypatch.setattr(launcher.os, "execve", _fake_execve)
+    assert launcher.main(["sync"]) == 1  # unreachable after a real execve
+    assert captured[0] == str(venv_dir / "bin" / "python")
+    assert captured[2:4] == ["-m", "omarchy_audible"]
+
+
+def test_launcher_marker_name_matches_the_backend():
+    from omarchy_audible import bootstrap
+
+    assert _load_launcher().VENV_MARKER == bootstrap.MARKER_NAME
+
