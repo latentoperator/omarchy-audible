@@ -26,6 +26,18 @@ class ErrorCode:
     BUSY = "busy"
     INTERNAL = "internal"
 
+    # get / cancel / remove (B5, ARCHITECTURE 4.3, 4.4, 4.8)
+    DISK_SPACE = "disk_space"
+    NETWORK = "network"
+    DECRYPT = "decrypt"
+    CONVERT = "convert"
+    NO_VOUCHER = "no_voucher"
+    CANCELLED = "cancelled"
+    NOT_RUNNING = "not_running"
+    NOT_LOCAL = "not_local"
+    UNSAFE_PATH = "unsafe_path"
+    AUTH_FAILED = "auth_failed"
+
 
 def write_event(event: dict[str, Any]) -> None:
     """Write one already-formed event as a single NDJSON line."""

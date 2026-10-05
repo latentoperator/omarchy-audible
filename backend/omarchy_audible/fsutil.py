@@ -32,3 +32,12 @@ def atomic_write_text(path: Path, text: str) -> None:
 def atomic_write_json(path: Path, data: Any) -> None:
     """Serialise ``data`` as compact JSON and write it atomically."""
     atomic_write_text(path, json.dumps(data, separators=(",", ":"), ensure_ascii=False) + "\n")
+
+
+def atomic_replace(src: Path, dst: Path) -> None:
+    """Move ``src`` onto ``dst`` in one step (ARCHITECTURE 4.3 step 5).
+
+    ``os.replace`` is atomic within a filesystem, so ``dst`` never exists in a
+    half-written state; callers write to a sibling ``*.tmp`` first.
+    """
+    os.replace(src, dst)
