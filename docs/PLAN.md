@@ -125,7 +125,7 @@ Depends on S5/S6 results and the fake backend.
   `qml/lib/Positions.js`: `parseUpdatedAt` and `merge` ported from `backend/omarchy_audible/positions.py`. A shared vector file `tests/fixtures/position-vectors.json` (at least 20 cases, including the Audible no-timezone format, `Z`, offsets, null, equal timestamps and garbage) is asserted against **both** the Python and the JS implementation. Also `resumeMs(local, remote)`; `shouldPush(book)`, which is true only when `played_since_download` is set and the position changed since the last push; `enqueue(queue, push)`, which keeps the newest per asin; `flushPlan(queue, remoteNow)`, which splits the queue into send and drop, where drop means the remote is newer than the queued `at` (§4.6); `isFinished(posMs, durMs, eofReached)`, meaning EOF or within 30 s of the end; and `autoRemoveAllowed(setting, finished, isPlaying)`.
   Acceptance: the vector file passes on both sides. Tests cover: a book never played locally is never pushed; a newer remote wins on resume; a stale queued push is dropped; offline pushes accumulate one per asin; auto-remove never fires while playing or with the setting off.
 
-- [ ] **P1 — Service skeleton and JobRunner** (tier B; needs A0, B1, P1a; laptop)
+- [x] **P1 — Service skeleton and JobRunner** (tier B; needs A0, B1, P1a; laptop)
   `Service.qml` as `keepLoaded` singleton. `JobRunner.qml` spawns backend commands, parses NDJSON from stdout, exposes `running`, `progress`, `lastError`, and emits per-event signals. Handles process exit and non-JSON lines defensively.
   Acceptance: a debug panel (temporary) runs `status` and `sync` in fake mode and shows events.
 
