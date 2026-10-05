@@ -43,6 +43,7 @@ def test_cover_url_version_not_finite(parts, version):
     ("", "B0FAKE0001"),
     ("/", "B0FAKE0001"),
     ("//", "B0FAKE0001"),
+    ("///", "B0FAKE0001"),
     ("relative/dir", "B0FAKE0001"),
     (None, "B0FAKE0001"),
     (42, "B0FAKE0001"),
@@ -64,9 +65,19 @@ def test_cover_url_refused(parts, data_dir, asin):
     ("/tmp/x%2Fy", "file:///tmp/x%252Fy"),
     ("/home/u/My Books", "file:///home/u/My%20Books"),
     ("/home/u/Bücher/", "file:///home/u/B%C3%BCcher"),
+    ("//tmp/data", "file:///tmp/data"),
+    ("///tmp//data///covers", "file:///tmp/data/covers"),
 ])
 def test_file_url_encodes_segments(parts, path, url):
     assert parts.call("fileUrl", path) == url
+
+
+def test_file_url_never_has_a_host(parts):
+    from PySide6.QtCore import QUrl
+    for path in ["//tmp/invented-data", "///tmp/x", "//home/u/.local/share/omarchy-audible"]:
+        url = QUrl(parts.call("fileUrl", path))
+        assert url.host() == ""
+        assert url.toLocalFile() == "/" + path.lstrip("/")
 
 
 def test_file_url_round_trips_through_qurl(parts):
@@ -87,6 +98,7 @@ def test_file_url_refused(parts, path):
     ("/home/u/.local/share/omarchy-audible/covers", True),
     ("/home/u/My Books/covers", True),
     ("/home/u/Bücher/covers", True),
+    ("//tmp/invented-data/covers", True),
     ("/tmp/cache#test/covers", False),
     ("/tmp/a?b/covers", False),
     ("/tmp/x%2Fy/covers", False),

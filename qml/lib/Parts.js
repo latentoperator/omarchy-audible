@@ -18,11 +18,12 @@ var TONE_MUTED = "muted";
 var ASIN_PATTERN = /^[A-Z0-9]{10}$/;
 
 // `file://` URL for an absolute path, each segment percent-encoded so a
-// `#`, `?`, `%` or space in a directory name stays part of the path. ""
-// for anything that is not an absolute path.
+// `#`, `?`, `%` or space in a directory name stays part of the path. Runs of
+// `/` collapse to one (the same path on Linux), so a leading `//` can never
+// read as a URL host. "" for anything that is not an absolute path.
 function fileUrl(path) {
   if (typeof path !== "string" || path.length < 2 || path.charAt(0) !== "/") return "";
-  var parts = path.replace(/\/+$/, "").split("/");
+  var parts = path.replace(/\/{2,}/g, "/").replace(/\/+$/, "").split("/");
   for (var i = 0; i < parts.length; i++) parts[i] = encodeURIComponent(parts[i]);
   var joined = parts.join("/");
   return joined.length > 1 ? "file://" + joined : "";
@@ -31,7 +32,8 @@ function fileUrl(path) {
 // Whether `FolderListModel` can list this directory. It decodes its folder URL
 // and parses the path again, so a literal `#`, `?` or `%` in the path lists
 // the wrong place. Such a directory is not listed; covers then load without
-// the presence check (`LibraryModel.hasCover` answers true).
+// the presence check (`LibraryModel.hasCover` answers true) and without live
+// refresh: a cover fetched or replaced later shows after a shell restart.
 function listable(path) {
   return fileUrl(path).length > 0 && !/[#?%]/.test(path);
 }
