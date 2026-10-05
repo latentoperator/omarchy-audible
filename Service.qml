@@ -99,9 +99,17 @@ Item {
     // were read would replace them.
     if (!store.loaded) return "error: state not loaded yet"
     if (!/^[A-Za-z0-9]+$/.test(asin)) return "error: bad asin"
-    var row = library.rowFor(asin)
-    var start = startSec >= 0 ? startSec : (row ? row.positionMs / 1000 : 0)
+    var start = startSec >= 0 ? startSec : cachedStartSec(asin)
     return player.play(booksDir + "/" + asin + "/book.m4b", start) ? "ok" : "error: " + player.lastError
+  }
+
+  // The saved position for a book: the library's merged one, else the local
+  // entry in state.json (the catalog may not have loaded, or lack the book).
+  function cachedStartSec(asin) {
+    var row = library.rowFor(asin)
+    if (row) return row.positionMs / 1000
+    var local = store.doc.books ? store.doc.books[asin] : null
+    return local && typeof local.ms === "number" ? local.ms / 1000 : 0
   }
 
   // TEMPORARY (removed in U1): one line per visible row, for IPC checks.

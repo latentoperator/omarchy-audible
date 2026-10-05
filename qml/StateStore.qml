@@ -94,6 +94,14 @@ Item {
     }
   }
 
+  // A read that failed for another reason (permissions, I/O) is tried again.
+  Timer {
+    id: readRetry
+    interval: 30000
+    repeat: false
+    onTriggered: file.reload()
+  }
+
   Timer {
     id: backupRetry
     interval: 30000
@@ -111,8 +119,12 @@ Item {
     // failure (permissions, I/O) leaves the store unloaded, so nothing is
     // ever written over a file that could not be read.
     onLoadFailed: function(error) {
-      if (error === FileViewError.FileNotFound) root.adopt("")
-      else root.lastError = "could not read state.json"
+      if (error === FileViewError.FileNotFound) {
+        root.adopt("")
+      } else {
+        root.lastError = "could not read state.json"
+        readRetry.restart()
+      }
     }
     onSaved: root.lastError = ""
     onSaveFailed: function(error) {
