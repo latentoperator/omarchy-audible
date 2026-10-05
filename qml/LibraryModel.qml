@@ -55,6 +55,18 @@ Item {
     return v === undefined ? 0 : v
   }
 
+  // Call after `sync`. A covers dir that did not exist when the listing
+  // started (a fresh install) is never watched, so its covers would not show
+  // until a restart. An empty listing is pointed at the dir again; a listing
+  // with covers is left alone, so nothing on screen flickers.
+  function rescanCovers() {
+    if (!coversListed || covers.count > 0) return
+    covers.folder = ""
+    covers.folder = Qt.binding(function() {
+      return root.coversListed ? Parts.fileUrl(root.coversDir) : ""
+    })
+  }
+
   function rowFor(asin) {
     for (var i = 0; i < allRows.length; i++) {
       if (allRows[i].asin === asin) return allRows[i]

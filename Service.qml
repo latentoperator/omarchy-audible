@@ -244,6 +244,7 @@ Item {
   function reloadSync() {
     catalogFile.reload()
     remoteFile.reload()
+    library.rescanCovers()
   }
 
   function playerSummary() {
@@ -394,6 +395,7 @@ Item {
     function playerStatus(): string { return root.playerSummary() }
     function libraryQuery(sort: string, filter: string, search: string): string { return root.libraryQuery(sort, filter, search) }
     function flushState(): string { store.flush(); return "ok" }
+    function syncNow(): string { return root.run("sync", [], "ipc") ? "ok" : "refused" }
     function autoRemove(value: string): string { root.autoRemoveFinished = value === "on"; return "ok" }
     function pushState(): string { return JSON.stringify({ "queue": sync.queue, "flushing": sync.flushing, "last": sync.lastResult }) }
     function panelState(): string {
