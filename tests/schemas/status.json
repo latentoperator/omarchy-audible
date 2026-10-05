@@ -10,7 +10,11 @@
     "authenticated",
     "marketplace",
     "account",
-    "catalog_age_s"
+    "catalog_age_s",
+    "config_dir",
+    "data_dir",
+    "runtime_dir",
+    "books_dir"
   ],
   "properties": {
     "type": { "const": "status" },
@@ -19,7 +23,11 @@
     "authenticated": { "type": "boolean" },
     "marketplace": { "type": ["string", "null"] },
     "account": { "type": ["string", "null"] },
-    "catalog_age_s": { "type": ["integer", "null"], "minimum": 0 }
+    "catalog_age_s": { "type": ["integer", "null"], "minimum": 0 },
+    "config_dir": { "type": "string", "pattern": "^/" },
+    "data_dir": { "type": "string", "pattern": "^/" },
+    "runtime_dir": { "type": "string", "pattern": "^/" },
+    "books_dir": { "type": "string", "pattern": "^/" }
   },
   "additionalProperties": false
 }

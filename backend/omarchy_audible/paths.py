@@ -3,6 +3,10 @@
 Every path derives from ``XDG_CONFIG_HOME``, ``XDG_DATA_HOME`` and
 ``XDG_RUNTIME_DIR`` (standard defaults when unset) and ``OMARCHY_AUDIBLE_BOOKS_DIR``.
 Nothing here touches a user's own ``~/.audible`` or other tools' directories.
+
+Fake mode resolves to separate roots (``omarchy-audible-fake``) so testing with
+``--fake`` never reads or writes the real login, catalog or books, and ignores
+``OMARCHY_AUDIBLE_BOOKS_DIR``.
 """
 
 from __future__ import annotations
@@ -14,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 PLUGIN_DIR_NAME = "omarchy-audible"
+FAKE_DIR_NAME = f"{PLUGIN_DIR_NAME}-fake"
 
 
 def _xdg_dir(env: Mapping[str, str], var: str, default: Path) -> Path:
@@ -40,11 +45,23 @@ class Paths:
     books_dir: Path
 
     @classmethod
-    def from_env(cls, env: Mapping[str, str] | None = None) -> Paths:
+    def from_env(
+        cls, env: Mapping[str, str] | None = None, *, fake: bool = False
+    ) -> Paths:
         env = dict(os.environ) if env is None else env
         home = Path(env.get("HOME") or Path.home())
         config_root = _xdg_dir(env, "XDG_CONFIG_HOME", home / ".config")
         data_root = _xdg_dir(env, "XDG_DATA_HOME", home / ".local" / "share")
+        if fake:
+            # Fake mode owns a parallel tree so it can never clobber the real
+            # plugin folders (ARCHITECTURE 3).
+            data_dir = data_root / FAKE_DIR_NAME
+            return cls(
+                config_dir=config_root / FAKE_DIR_NAME,
+                data_dir=data_dir,
+                runtime_dir=_runtime_dir(env, home) / FAKE_DIR_NAME,
+                books_dir=data_dir / "books",
+            )
         books = env.get("OMARCHY_AUDIBLE_BOOKS_DIR")
         return cls(
             config_dir=config_root / PLUGIN_DIR_NAME,

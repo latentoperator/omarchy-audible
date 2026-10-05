@@ -50,13 +50,13 @@ def test_fake_chapters_json_differs_from_the_raw_file():
 
 
 def test_get_success_builds_the_book_and_cleans_up(
-    run_cli, validate_stream, ffmpeg_bin, paths
+    run_cli, validate_stream, ffmpeg_bin, fake_paths
 ):
     result = run_cli("get", ASIN, fake=True)
     assert result.returncode == 0, result.stderr
     parsed = validate_stream(result, expect_last="done")
 
-    book_dir = paths.books_dir / ASIN
+    book_dir = fake_paths.books_dir / ASIN
     book = book_dir / "book.m4b"
     assert Path(parsed[-1]["path"]) == book
     assert book.is_file()
@@ -69,7 +69,7 @@ def test_get_success_builds_the_book_and_cleans_up(
     assert {"download", "convert"} <= stages
 
     assert _chapter_titles(book) == EXPECTED_TITLES
-    meta = _meta(paths)
+    meta = _meta(fake_paths)
     assert meta["acr"] == dl.FAKE_ACR
     assert meta["chapter_count"] == len(EXPECTED_TITLES)
     assert meta["container"] == "aaxc"
@@ -100,7 +100,7 @@ def test_get_writes_a_tmp_file_then_atomically_renames(
     "mode,code", [("network", "network"), ("decrypt", "decrypt")]
 )
 def test_get_failure_removes_partial_and_never_leaves_a_book(
-    mode, code, run_cli, events, ffmpeg_bin, paths
+    mode, code, run_cli, events, ffmpeg_bin, fake_paths
 ):
     result = run_cli("get", ASIN, "--fake-fail", mode, fake=True)
     assert result.returncode != 0
@@ -108,20 +108,20 @@ def test_get_failure_removes_partial_and_never_leaves_a_book(
     assert last["type"] == "error"
     assert last["code"] == code
 
-    book_dir = paths.books_dir / ASIN
+    book_dir = fake_paths.books_dir / ASIN
     assert not (book_dir / "book.m4b").exists()
     assert not (book_dir / ".partial").exists()
     assert not list(book_dir.glob("*.tmp"))
 
 
 def test_get_disk_failure_refuses_before_writing(
-    run_cli, events, ffmpeg_bin, paths
+    run_cli, events, ffmpeg_bin, fake_paths
 ):
     result = run_cli("get", ASIN, "--fake-fail", "disk", fake=True)
     assert result.returncode != 0
     assert events(result)[-1]["code"] == "disk_space"
-    assert not (paths.books_dir / ASIN / "book.m4b").exists()
-    assert not list(paths.books_dir.glob("*/.partial"))
+    assert not (fake_paths.books_dir / ASIN / "book.m4b").exists()
+    assert not list(fake_paths.books_dir.glob("*/.partial"))
 
 
 def test_free_space_preflight_requires_2_1x():
@@ -132,13 +132,13 @@ def test_free_space_preflight_requires_2_1x():
 
 
 def test_get_novoucher_falls_back_to_aax(
-    run_cli, events, ffmpeg_bin, paths
+    run_cli, events, ffmpeg_bin, fake_paths
 ):
     result = run_cli("get", ASIN, "--fake-fail", "novoucher", fake=True)
     assert result.returncode == 0, result.stderr
     assert events(result)[-1]["type"] == "done"
-    assert _meta(paths)["container"] == "aax"
-    assert _chapter_titles(paths.books_dir / ASIN / "book.m4b") == EXPECTED_TITLES
+    assert _meta(fake_paths)["container"] == "aax"
+    assert _chapter_titles(fake_paths.books_dir / ASIN / "book.m4b") == EXPECTED_TITLES
 
 
 def test_get_rejects_an_unknown_fake_fail_mode(run_cli, events):
@@ -172,10 +172,10 @@ def test_get_refuses_a_path_outside_books_dir(run_cli, validate_stream, paths, t
     assert not (outside / "book.m4b").exists()
 
 
-def test_get_dotdot_never_deletes_the_parent_partial(run_cli, validate_stream, paths):
+def test_get_dotdot_never_deletes_the_parent_partial(run_cli, validate_stream, fake_paths):
     # `get ..` must not rmtree `<booksRoot>/../.partial/`, a directory the
     # command does not own (the review's F1 reproduction).
-    parent_partial = paths.books_dir.parent / ".partial"
+    parent_partial = fake_paths.books_dir.parent / ".partial"
     parent_partial.mkdir()
     (parent_partial / "keep.txt").write_text("keep", encoding="utf-8")
 
@@ -184,7 +184,7 @@ def test_get_dotdot_never_deletes_the_parent_partial(run_cli, validate_stream, p
     parsed = validate_stream(result, expect_last="error")
     assert parsed[-1]["code"] == "bad_asin"
     assert (parent_partial / "keep.txt").is_file()
-    assert not (paths.books_dir.parent / "book.m4b").exists()
+    assert not (fake_paths.books_dir.parent / "book.m4b").exists()
 
 
 def test_get_refuses_an_absolute_path(run_cli, validate_stream, paths, tmp_path):
@@ -196,11 +196,11 @@ def test_get_refuses_an_absolute_path(run_cli, validate_stream, paths, tmp_path)
     assert not absolute.exists()
 
 
-def test_get_refuses_a_symlink_inside_books_dir(run_cli, validate_stream, paths):
-    real = paths.books_dir / "B00FAKE03"
+def test_get_refuses_a_symlink_inside_books_dir(run_cli, validate_stream, fake_paths):
+    real = fake_paths.books_dir / "B00FAKE03"
     real.mkdir()
     (real / "book.m4b").write_bytes(b"x")
-    link = paths.books_dir / "B00FAKE04"
+    link = fake_paths.books_dir / "B00FAKE04"
     link.symlink_to(real)
 
     result = run_cli("get", "B00FAKE04", fake=True)
@@ -211,11 +211,11 @@ def test_get_refuses_a_symlink_inside_books_dir(run_cli, validate_stream, paths)
     assert (real / "book.m4b").is_file()
 
 
-def test_get_refuses_a_symlink_pointing_outside(run_cli, validate_stream, paths, tmp_path):
+def test_get_refuses_a_symlink_pointing_outside(run_cli, validate_stream, fake_paths, tmp_path):
     victim = tmp_path / "victim"
     victim.mkdir()
     (victim / "keep.txt").write_text("keep", encoding="utf-8")
-    link = paths.books_dir / "B00LINK01"
+    link = fake_paths.books_dir / "B00LINK01"
     link.symlink_to(victim)
 
     result = run_cli("get", "B00LINK01", fake=True)

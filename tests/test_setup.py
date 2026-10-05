@@ -201,7 +201,7 @@ def test_setup_is_a_job_command():
 
 
 def test_setup_cli_fake_streams_progress_and_is_idempotent(
-    run_cli, validate_stream, paths: Paths
+    run_cli, validate_stream, fake_paths: Paths
 ):
     first = run_cli("setup", fake=True)
     assert first.returncode == 0, first.stderr
@@ -209,9 +209,9 @@ def test_setup_cli_fake_streams_progress_and_is_idempotent(
     stages = [event["stage"] for event in parsed if event["type"] == "progress"]
     assert stages == list(bootstrap.PROGRESS_STAGES)
 
-    marker = bootstrap.marker_path(paths.venv_dir)
+    marker = bootstrap.marker_path(fake_paths.venv_dir)
     assert marker.is_file()
-    sentinel = paths.venv_dir / "sentinel"
+    sentinel = fake_paths.venv_dir / "sentinel"
     sentinel.write_text("keep me", encoding="utf-8")
 
     second = run_cli("setup", fake=True)
