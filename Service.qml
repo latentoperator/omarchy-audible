@@ -28,16 +28,10 @@ Item {
   // once, when the service starts.
   readonly property string devFlagPath: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchy-audible-dev-fake"
   readonly property bool fake: devFlag.loaded
-  // TEMPORARY dev hook (removed for G2): in fake mode only, a file holding the
-  // path of a stand-in launcher (scripts/dev-fake-positions) replaces the
-  // backend launcher, because the fake backend cannot hold a remote position.
-  readonly property string devLauncherPath: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchy-audible-dev-launcher"
-  readonly property string devLauncher: fake && devLauncherFile.loaded ? String(devLauncherFile.text()).trim() : ""
   property bool autoRemoveFinished: false
   // No backend command runs until the flag has been read: a command that
   // raced ahead of it would go out without OMARCHY_AUDIBLE_FAKE.
   property bool flagKnown: false
-  property bool launcherKnown: false
 
   // The latest `status` event. All paths come from here; never recompute them.
   property var status: null
@@ -90,35 +84,18 @@ Item {
 
   // Returns false when the command was refused and will never report back.
   function run(command, args, purpose) {
-    if (!flagsRead()) {
-      logEvent(command, "refused: dev flags not read yet")
-      return false
-    }
-    // TEMPORARY dev guard (removed for G2).
-    if (!fake && DebugCatalog.realModeBlocked(command)) {
-      logEvent(command, "refused: not allowed in real mode during development")
+    if (!flagKnown) {
+      logEvent(command, "refused: dev flag not read yet")
       return false
     }
     runner.run(command, args, purpose)
     return true
   }
 
-  function flagsRead() { return flagKnown && launcherKnown }
-
   function markFlagKnown() {
     if (flagKnown) return
     flagKnown = true
-    startWhenReady()
-  }
-
-  function markLauncherKnown() {
-    if (launcherKnown) return
-    launcherKnown = true
-    startWhenReady()
-  }
-
-  function startWhenReady() {
-    if (flagsRead()) run("status", [])
+    run("status", [])
   }
 
   // TEMPORARY (removed in U1)
@@ -409,15 +386,6 @@ Item {
   }
 
   FileView {
-    id: devLauncherFile
-    path: root.devLauncherPath
-    blockLoading: true
-    printErrors: false
-    onLoaded: root.markLauncherKnown()
-    onLoadFailed: function(error) { root.markLauncherKnown() }
-  }
-
-  FileView {
     id: catalogFile
     path: root.dataDir.length > 0 ? root.dataDir + "/catalog.json" : ""
     printErrors: false
@@ -436,7 +404,7 @@ Item {
   JobRunner {
     id: runner
     gate: root.jobAllowed
-    launcher: root.devLauncher.length > 0 ? root.devLauncher : root.pluginDir + "/bin/omarchy-audible"
+    launcher: root.pluginDir + "/bin/omarchy-audible"
     environment: root.fake ? ({ "OMARCHY_AUDIBLE_FAKE": "1" }) : ({})
 
     onEvent: function(record, job) {
@@ -478,7 +446,6 @@ Item {
 
   Component.onCompleted: {
     if (devFlag.loaded) markFlagKnown()
-    if (devLauncherFile.loaded) markLauncherKnown()
   }
 
   // Shutdown: save where the book is, and wait for the write.

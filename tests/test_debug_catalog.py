@@ -30,14 +30,3 @@ def test_first_asin_is_empty_for_bad_input(lib, text):
 def test_summarize_truncates(lib):
     out = lib.call("summarize", {"type": "x", "pad": "y" * 500}, 40)
     assert len(out) == 41 and out.endswith("…")
-
-
-@pytest.mark.parametrize(
-    "command,blocked",
-    [("position-push", True), ("logout", True), ("remove", True), ("get", True),
-     ("login-start", True), ("login-finish", True), ("login-import-cli", True),
-     ("status", False), ("doctor", False), ("local", False), ("sync", False),
-     ("position-get", False), ("cancel", False)],
-)
-def test_real_mode_blocked(lib, command, blocked):
-    assert lib.call("realModeBlocked", command) is blocked
