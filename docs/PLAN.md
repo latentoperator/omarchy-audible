@@ -105,23 +105,43 @@ All commands follow the protocol in ARCHITECTURE §4.2. Build the **fake mode fi
 
 Depends on S5/S6 results and the fake backend.
 
-- [ ] **P1 — Service skeleton and JobRunner** (tier B; needs A0, B1)
+**Split (2026-10-04).** Hopebox can't run the Omarchy shell, so M2 is done in two parts.
+- **Tonight, Hopebox Kanban:** B8, then the pure-logic halves P1a → P3a → P4a. Each one is a standalone JavaScript library under `qml/lib/` with no Qt imports. It's tested from pytest through PySide6's `QJSEngine`, which uses the same JS engine as Quickshell.
+- **Next, laptop agent:** the QML wiring and in-shell acceptance for P1, P2, P3, P4 and P5, then G2. The brief is in [briefs/M2-laptop.md](briefs/M2-laptop.md). The laptop parts import the `qml/lib/` libraries rather than re-implementing them.
+
+- [ ] **B8 — Fake mode uses its own folders** (tier B; needs B1–B7)
+  Today `--fake` runs offline, but it reads and writes the **real** plugin folders. `sync --fake` overwrites the real `catalog.json`, `get --fake` writes into the real books folder, and `status --fake` claims a login. The laptop now holds a real login and catalog, so in-shell testing in fake mode would clobber them. In fake mode, `Paths` must resolve to separate roots: `<XDG_CONFIG_HOME>/omarchy-audible-fake`, `<XDG_DATA_HOME>/omarchy-audible-fake`, `<XDG_RUNTIME_DIR>/omarchy-audible-fake`, and books at `<data>/omarchy-audible-fake/books`. In fake mode, `OMARCHY_AUDIBLE_BOOKS_DIR` is **ignored**. Add `config_dir`, `data_dir`, `runtime_dir` and `books_dir` (absolute strings) to the `status` event in both modes, updating the schema first, so the QML never recomputes paths. Fix the README "Backend CLI" fake-mode sentence.
+  Acceptance: a test runs every command in fake mode with HOME and XDG pointing to a tmp tree that already contains a real-mode layout (dummy `auth.json`, `catalog.json`, `remote.json`, a book dir), and asserts that nothing under the real-mode paths changed: same bytes, same mtimes, no new files. `status --fake` reports the fake dirs, and real-mode `status` reports the real dirs. The contract test still covers every command.
+
+- [ ] **P1a — NDJSON + job-queue logic** (tier B; needs B8)
+  `qml/lib/Ndjson.js`: a line splitter that buffers partial chunks; parse each line; classify `done`/`error`/`progress`/other; non-JSON lines become a `{type:"_bad_line"}` record (truncated to 200 chars, never thrown); `finish(exitCode, events)` returns the job outcome. A missing final `done`/`error` is an `internal` error, and exit code 3 (or `error.code=busy`) is `busy`. `qml/lib/JobQueue.js`: a pure state machine. Job commands (the §4.8 list) run one at a time in FIFO order. Non-job commands bypass the queue. A `busy` outcome re-queues once after a delay the caller supplies, then fails. `cancel(asin)` drops a queued `get` or returns "send the cancel command" for the running one.
+  Acceptance: QJSEngine pytest suite covering chunk boundaries (a line split across 3 chunks, several lines per chunk, a trailing line without a newline at exit), bad lines, every `ErrorCode` in `protocol.py`, ordering, bypass, the busy retry, and cancel in both states. Feed recorded fake-mode output from **every** backend command through `Ndjson.js`, and assert that it reproduces the B7 contract outcome.
+
+- [ ] **P3a — Library logic and `state.json`** (tier B; needs P1a)
+  `qml/lib/Library.js`: `buildRows(catalog, remote, state, local, jobs)` returns one row per catalog book with the §5.3 state (`cloud`/`queued`/`downloading`/`converting`/`local`/`error`, where `local` comes from the local scan and the rest from `jobs`), position (newest-wins merge), progress percent, and `recentKey = max(state.last_played_at, remote.updated_at)`. Also `sortRows(rows, "recent"|"added"|"title"|"author")` (stable; title and author ignore a leading "The"/"A"/"An" and case), `filterRows(rows, "all"|"local"|"in-progress")`, and `searchRows(rows, text)` (title, subtitle, authors, narrators, series; case- and accent-insensitive). `state.json` schema v1, documented in ARCHITECTURE §3 (this task may edit §3): `{"schema":1,"books":{asin:{"ms","updated_at","last_played_at","played_since_download","finished"}},"push_queue":[{"asin","ms","at"}],"volume","speed"}`. Add `parseState(text)`, which never throws: garbage, a wrong schema or a missing file returns an empty v1 and a `recovered` flag. Add `serializeState(obj)`, which is deterministic and keeps unknown keys.
+  Acceptance: QJSEngine suite against `fixtures/library-sample.json` run through the backend's own `build_catalog`, so the shapes are real. Cover every sort, filter and search case, including accents and articles, the state derivation for every job state, and the parse/serialize round trip, including recovering from truncated JSON.
+
+- [ ] **P4a — Position and push rules** (tier B; needs P3a)
+  `qml/lib/Positions.js`: `parseUpdatedAt` and `merge` ported from `backend/omarchy_audible/positions.py`. A shared vector file `tests/fixtures/position-vectors.json` (at least 20 cases, including the Audible no-timezone format, `Z`, offsets, null, equal timestamps and garbage) is asserted against **both** the Python and the JS implementation. Also `resumeMs(local, remote)`; `shouldPush(book)`, which is true only when `played_since_download` is set and the position changed since the last push; `enqueue(queue, push)`, which keeps the newest per asin; `flushPlan(queue, remoteNow)`, which splits the queue into send and drop, where drop means the remote is newer than the queued `at` (§4.6); `isFinished(posMs, durMs, eofReached)`, meaning EOF or within 30 s of the end; and `autoRemoveAllowed(setting, finished, isPlaying)`.
+  Acceptance: the vector file passes on both sides. Tests cover: a book never played locally is never pushed; a newer remote wins on resume; a stale queued push is dropped; offline pushes accumulate one per asin; auto-remove never fires while playing or with the setting off.
+
+- [ ] **P1 — Service skeleton and JobRunner** (tier B; needs A0, B1, P1a; laptop)
   `Service.qml` as `keepLoaded` singleton. `JobRunner.qml` spawns backend commands, parses NDJSON from stdout, exposes `running`, `progress`, `lastError`, and emits per-event signals. Handles process exit and non-JSON lines defensively.
   Acceptance: a debug panel (temporary) runs `status` and `sync` in fake mode and shows events.
 
-- [ ] **P2 — PlayerController (mpv)** (tier S/B; needs S5, P1)
+- [ ] **P2 — PlayerController (mpv)** (tier S/B; needs S5, P1; laptop)
   Implements ARCHITECTURE §5.1–5.2 including reattach after shell restart, `observe_property` handling, resume via `start=`, chapter list parsing, and the skip/chapter/speed commands. Includes the sleep timer with a 5 s fade.
   Acceptance: with a fake m4b — play, pause, ±skip, chapter jump, speed change, sleep timer; `omarchy-restart-shell` mid-playback and audio continues and state reattaches; mpv crashing is detected and surfaced.
 
-- [ ] **P3 — LibraryModel and persistence** (tier B; needs P1, B4/B5 in fake mode)
+- [ ] **P3 — LibraryModel and persistence** (tier B; needs P1, P3a, B4/B5 in fake mode; laptop)
   Merges `catalog.json`, `remote.json`, `state.json`, and the local-books scan into one list model with the book state machine (§5.3), sort (recent/added/title/author), filter (all/local/in-progress), and search. The service is the **only** writer of `state.json` (§4.8), with atomic writes; saves position every 10 s while playing and on pause/switch/quit.
   Acceptance: sort/filter/search verified against the fixture catalog; kill -9 the shell mid-playback and the position loss is ≤ 10 s.
 
-- [ ] **P4 — Remote position sync + finished handling** (tier B; needs P2, B6)
+- [ ] **P4 — Remote position sync + finished handling** (tier B; needs P2, P4a, B6; laptop)
   Push every ~60 s and on pause/stop/switch/quit, following the push rules in ARCHITECTURE §4.6 (local listening only; never stale); failures queued and retried; resume from newest of local/remote; finished detection and optional auto-remove (setting, default Off).
   Acceptance: simulated remote-newer position wins on play; a book that was never played locally is never pushed; offline pushes are queued and flushed later; a queued push that has become stale is dropped; auto-remove only fires when the setting is on and never during playback.
 
-- [ ] **P5 — Shell IPC target** (tier A; needs P2, S6)
+- [ ] **P5 — Shell IPC target** (tier A; needs P2, S6; laptop)
   Registers `latentoperator.audible` (in `Service.qml`) with `toggle`, `playPause`, `skip`, `nextChapter`, `prevChapter`, `openLibrary`.
   Acceptance: each method works from a terminal using the call syntax documented in S6; documented in README with a sample Hyprland bind.
 

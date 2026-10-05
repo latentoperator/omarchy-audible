@@ -25,6 +25,10 @@ From G0 on, backend tasks run as Hermes Kanban cards on Hopebox instead of the o
 
 Tasks run one at a time in the order B1 → B7 → B5 → B2 → B3 → B4 → B6, because they share the backend package and the CLI dispatcher. Kanban workers on Hopebox run **fake mode only** and never touch real credentials. Hopebox has no Omarchy shell, so `omarchy plugin validate .` runs on the laptop in the merge card. The hard rules below still apply, except that the Kanban implementer commits and pushes its own branch.
 
+## Laptop lane (M2 QML onward)
+
+QML work needs the real shell, so it runs on HMSP-OMARCHYXPS with Claude Code or Codex: one implements and the other reviews the exact head, both following the task brief in `docs/briefs/`. Dante does the final check and merges. Pure logic still goes into `qml/lib/*.js` with QJSEngine tests, so the Hopebox Kanban lane can keep building it. The first brief is [briefs/M2-laptop.md](briefs/M2-laptop.md).
+
 ## The loop (one task = one branch = one PR)
 
 1. **Branch** from `main`: `git checkout -b <task-id>-<slug>` (e.g. `a0-scaffolding`).
