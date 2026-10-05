@@ -1,10 +1,10 @@
 """Command registry and the implemented backend commands.
 
-``status`` and ``doctor`` (B1), ``get``/``cancel``/``local``/``remove`` (B5) and
-the fake-mode failure switch are real. Every other documented command exists in
-the registry with the correct job/non-job classification and reports
-``error(code=not_implemented)`` until its task lands, so the job lock and
-unknown-command handling stay exercisable.
+``status`` and ``doctor`` (B1), ``get``/``cancel``/``local``/``remove`` (B5),
+the auth commands (B3) and the fake-mode failure switch are real. Every other
+documented command exists in the registry with the correct job/non-job
+classification and reports ``error(code=not_implemented)`` until its task
+lands, so the job lock and unknown-command handling stay exercisable.
 """
 
 from __future__ import annotations
@@ -20,6 +20,14 @@ from pathlib import Path
 from typing import Self
 
 from . import joblock, protocol
+from .auth import (
+    login_finish,
+    login_import_cli,
+    login_start,
+    logout,
+    read_account_record,
+    valid_session_id,
+)
 from .bootstrap import run_setup, venv_ready
 from .download import FAKE_FAIL_MODES, run_get
 from .errors import Cancelled, PipelineError
@@ -85,15 +93,16 @@ def cmd_status(
     missing = _missing_required_tools()
     authenticated = paths.auth_file.is_file()
     ready = authenticated and not missing and venv_ready(paths.venv_dir)
-    # ``marketplace``/``account`` are populated by B3 from the account record;
-    # until then they stay at the documented defaults.
+    record = read_account_record(paths)
+    account = record.get("account")
+    marketplace = record.get("marketplace") or DEFAULT_MARKETPLACE
     protocol.emit(
         "status",
         ready=ready,
         missing=missing,
         authenticated=authenticated,
-        marketplace=DEFAULT_MARKETPLACE,
-        account=None,
+        marketplace=marketplace,
+        account=account if isinstance(account, str) else None,
         catalog_age_s=_catalog_age_s(paths),
     )
     protocol.done()
@@ -337,6 +346,102 @@ def cmd_remove(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -
     return protocol.EXIT_OK
 
 
+def _option(args: Sequence[str], name: str) -> str | None:
+    """The value of ``--name value`` or ``--name=value``, else ``None``."""
+    for index, token in enumerate(args):
+        if token == name:
+            return args[index + 1] if index + 1 < len(args) else None
+        if token.startswith(name + "="):
+            value = token.split("=", 1)[1]
+            return value or None
+    return None
+
+
+def cmd_login_start(
+    args: Sequence[str], *, command: str, fake: bool, paths: Paths
+) -> int:
+    """Build the sign-in URL and a pending session (ARCHITECTURE 4.7)."""
+    marketplace = _option(args, "--marketplace") or DEFAULT_MARKETPLACE
+    try:
+        login_start(paths, marketplace=marketplace, fake=fake)
+    except PipelineError as exc:
+        protocol.error(exc.code, exc.message, exc.hint)
+        return _error_exit(exc)
+    protocol.done()
+    return protocol.EXIT_OK
+
+
+def cmd_login_finish(
+    args: Sequence[str], *, command: str, fake: bool, paths: Paths
+) -> int:
+    """Redeem the pasted redirect URL, read from stdin, never argv (4.7)."""
+    session_id = _option(args, "--session")
+    if not session_id:
+        protocol.error(
+            protocol.ErrorCode.INVALID_ARGS,
+            "login-finish needs --session <id>",
+            hint="use the session id from login-start",
+        )
+        return protocol.EXIT_USAGE
+    if not valid_session_id(session_id):
+        protocol.error(
+            protocol.ErrorCode.INVALID_ARGS,
+            "invalid session id",
+            hint="use the session id from login-start",
+        )
+        return protocol.EXIT_USAGE
+
+    # The URL must never reach argv (/proc/<pid>/cmdline is world-readable),
+    # so it is read from stdin and dropped as soon as it has been used.
+    pasted = sys.stdin.read()
+    try:
+        contains = login_finish(
+            paths, session_id=session_id, pasted_url=pasted, fake=fake
+        )
+    except PipelineError as exc:
+        protocol.error(exc.code, exc.message, exc.hint)
+        return _error_exit(exc)
+    finally:
+        pasted = ""
+    protocol.done(clipboard_history_contains_code=contains)
+    return protocol.EXIT_OK
+
+
+def cmd_login_import_cli(
+    args: Sequence[str], *, command: str, fake: bool, paths: Paths
+) -> int:
+    """Import an existing audible-cli login (ARCHITECTURE 4.7)."""
+    source = _option(args, "--dir")
+    source_dir = Path(source).expanduser() if source else None
+    try:
+        login_import_cli(paths, source_dir=source_dir, fake=fake)
+    except PipelineError as exc:
+        protocol.error(exc.code, exc.message, exc.hint)
+        return _error_exit(exc)
+    protocol.done()
+    return protocol.EXIT_OK
+
+
+def cmd_logout(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> int:
+    """Deregister this device when we created it, then delete the auth files."""
+    try:
+        logout(paths, fake=fake)
+    except PipelineError as exc:
+        protocol.error(exc.code, exc.message, exc.hint)
+        return _error_exit(exc)
+    protocol.done()
+    return protocol.EXIT_OK
+
+
+def _error_exit(exc: PipelineError) -> int:
+    """Usage problems exit 2; every other domain failure exits 1."""
+    return (
+        protocol.EXIT_USAGE
+        if exc.code == protocol.ErrorCode.INVALID_ARGS
+        else protocol.EXIT_ERROR
+    )
+
+
 def _registry() -> dict[str, Command]:
     job = Command(cmd_unimplemented, True)
     plain = Command(cmd_unimplemented, False)
@@ -347,13 +452,13 @@ def _registry() -> dict[str, Command]:
         "sync": job,
         "get": Command(cmd_get, True),
         "remove": Command(cmd_remove, True),
-        "login-finish": job,
-        "login-import-cli": job,
-        "logout": job,
+        "login-finish": Command(cmd_login_finish, True),
+        "login-import-cli": Command(cmd_login_import_cli, True),
+        "logout": Command(cmd_logout, True),
         "local": Command(cmd_local, False),
         "position-get": plain,
         "position-push": plain,
-        "login-start": plain,
+        "login-start": Command(cmd_login_start, False),
         "cancel": Command(cmd_cancel, False),
     }
 

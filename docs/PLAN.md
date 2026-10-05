@@ -77,7 +77,7 @@ All commands follow the protocol in ARCHITECTURE §4.2. Build the **fake mode fi
   `setup` creates the venv, installs the pinned `audible-cli` and `audible[cryptography]` **and this repo's `backend/` package** (so `venv/bin/python -m omarchy_audible` works), streams progress events, is idempotent, and cleans up on failure. Pins live in one place (`backend/requirements.lock`; S1–S4 used audible-cli 0.6.0 / audible 0.12.0).
   Acceptance: from a clean `~/.local/share/omarchy-audible`, `setup` yields a venv where `python -c "import audible, omarchy_audible"` works and the launcher dispatches into it; second run is a no-op; killing it midway then re-running recovers.
 
-- [ ] **B3 — Auth commands** (tier B, S1 result required; needs B2)
+- [x] **B3 — Auth commands** (tier B, S1 result required; needs B2)
   `login-start`, `login-finish`, `login-import-cli`, `logout`, plus `status.authenticated/account/marketplace`. Implements ARCHITECTURE §4.7 exactly; working reference code is `spikes/s1_login.py`. `login-finish` reads the URL from **stdin**. Files created `0600` under umask 077. The clipboard-history check and `logout` deregistering only this device are part of the task.
   Acceptance: unit tests with mocked `audible` calls; file-mode test (including an import from a `0644` source); a test asserting the pasted URL and code never appear in argv, any log line, any event, or any file; expired/bad-URL tests; a test that `deregister_all=True` appears nowhere; a test that `logout` after `login-import-cli` (or with no recorded origin) makes **no** deregister call; manual run against a real account by Dante on the laptop.
 

@@ -40,6 +40,11 @@ class ErrorCode:
     BAD_ASIN = "bad_asin"
     AUTH_FAILED = "auth_failed"
 
+    # auth (B3, ARCHITECTURE 4.7)
+    BAD_URL = "bad_url"
+    EXPIRED = "expired"
+    NO_AUTH_FILE = "no_auth_file"
+
 
 def write_event(event: dict[str, Any]) -> None:
     """Write one already-formed event as a single NDJSON line."""
