@@ -28,6 +28,14 @@ function fileUrl(path) {
   return joined.length > 1 ? "file://" + joined : "";
 }
 
+// Whether `FolderListModel` can list this directory. It decodes its folder URL
+// and parses the path again, so a literal `#`, `?` or `%` in the path lists
+// the wrong place. Such a directory is not listed; covers then load without
+// the presence check (`LibraryModel.hasCover` answers true).
+function listable(path) {
+  return fileUrl(path).length > 0 && !/[#?%]/.test(path);
+}
+
 // `file://` URL of `<dataDir>/covers/<asin>.jpg` (ARCHITECTURE file table),
 // or "" when the data dir is unknown or the ASIN is not a plain ASIN. A
 // positive `version` (the file's modified time in ms) is added as `?v=`, so a

@@ -40,8 +40,13 @@ Item {
   // a reload.
   property var coverAsins: ({})
 
+  // False when the covers dir has a character FolderListModel cannot list
+  // (see `Parts.listable`); every cover is then tried, and a missing one logs
+  // Qt's warning.
+  readonly property bool coversListed: Parts.listable(coversDir)
+
   function hasCover(asin) {
-    return coverAsins[asin] !== undefined
+    return !coversListed || coverAsins[asin] !== undefined
   }
 
   // Bind a Cover's `version` to this so a replaced file is reloaded.
@@ -59,7 +64,7 @@ Item {
 
   FolderListModel {
     id: covers
-    folder: Parts.fileUrl(root.coversDir)
+    folder: root.coversListed ? Parts.fileUrl(root.coversDir) : ""
     nameFilters: ["*.jpg"]
     showDirs: false
     showDotAndDotDot: false

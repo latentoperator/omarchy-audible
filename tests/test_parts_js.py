@@ -83,6 +83,19 @@ def test_file_url_refused(parts, path):
     assert parts.call("fileUrl", path) == ""
 
 
+@pytest.mark.parametrize("path,ok", [
+    ("/home/u/.local/share/omarchy-audible/covers", True),
+    ("/home/u/My Books/covers", True),
+    ("/home/u/Bücher/covers", True),
+    ("/tmp/cache#test/covers", False),
+    ("/tmp/a?b/covers", False),
+    ("/tmp/x%2Fy/covers", False),
+    ("", False), ("/", False), ("rel/covers", False), (None, False),
+])
+def test_listable(parts, path, ok):
+    assert parts.call("listable", path) is ok
+
+
 def test_cover_set(parts):
     entries = [
         {"name": "B0FAKE0001.jpg", "modified": 1759700000123},
