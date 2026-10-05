@@ -29,6 +29,7 @@ from .auth import (
     valid_session_id,
 )
 from .bootstrap import run_setup, venv_ready
+from .catalog import run_sync
 from .download import FAKE_FAIL_MODES, run_get
 from .errors import Cancelled, PipelineError
 from .library import remove_book, scan_local, validate_asin
@@ -167,6 +168,26 @@ def cmd_unimplemented(
         hint="this command lands in a later milestone",
     )
     return protocol.EXIT_ERROR
+
+
+def cmd_sync(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> int:
+    """Page the library and refresh ``catalog.json``/``remote.json`` (4.5, 4.6)."""
+    record = read_account_record(paths)
+    marketplace = record.get("marketplace")
+    if not isinstance(marketplace, str) or not marketplace:
+        marketplace = DEFAULT_MARKETPLACE
+    try:
+        run_sync(
+            paths,
+            fake=fake,
+            full="--full" in args,
+            marketplace=marketplace,
+        )
+    except PipelineError as exc:
+        protocol.error(exc.code, exc.message, exc.hint)
+        return _error_exit(exc)
+    protocol.done()
+    return protocol.EXIT_OK
 
 
 def split_get_args(args: Sequence[str]) -> tuple[str | None, str | None]:
@@ -443,13 +464,12 @@ def _error_exit(exc: PipelineError) -> int:
 
 
 def _registry() -> dict[str, Command]:
-    job = Command(cmd_unimplemented, True)
     plain = Command(cmd_unimplemented, False)
     return {
         "status": Command(cmd_status, False),
         "doctor": Command(cmd_doctor, False),
         "setup": Command(cmd_setup, True),
-        "sync": job,
+        "sync": Command(cmd_sync, True),
         "get": Command(cmd_get, True),
         "remove": Command(cmd_remove, True),
         "login-finish": Command(cmd_login_finish, True),
