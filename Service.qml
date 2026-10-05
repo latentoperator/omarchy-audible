@@ -151,11 +151,6 @@ Item {
     return player.play(booksDir + "/" + asin + "/book.m4b", startSec) ? "ok" : "error: " + player.lastError
   }
 
-  function cachedStartSec(asin) {
-    var row = library.rowFor(asin)
-    return row ? row.positionMs / 1000 : 0
-  }
-
   function finishResume(asin, remoteEntry) {
     if (pendingResume !== asin) return
     pendingResume = ""
@@ -195,6 +190,15 @@ Item {
     removeCandidate = ""
     if (asin.length === 0) return
     if (Positions.autoRemoveAllowed(autoRemoveFinished, atEnd(asin), player.playing)) run("remove", [asin], "autoremove")
+  }
+
+  // The saved position for a book: the library's merged one, else the local
+  // entry in state.json (the catalog may not have loaded, or lack the book).
+  function cachedStartSec(asin) {
+    var row = library.rowFor(asin)
+    if (row) return row.positionMs / 1000
+    var local = store.doc.books ? store.doc.books[asin] : null
+    return local && typeof local.ms === "number" ? local.ms / 1000 : 0
   }
 
   // TEMPORARY (removed in U1): one line per visible row, for IPC checks.
