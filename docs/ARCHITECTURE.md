@@ -189,6 +189,8 @@ Write ✅ S3: `PUT 1.0/lastpositions/{asin}` with `{acr, asin, position_ms}`; `a
 
 Merge rule: take the entry with the newest `updated_at` between local `state.json` and remote. If remote is newer, resume there (the user listened elsewhere).
 
+Fake mode keeps its own positions in its own tree: `position-push --fake` writes `{ms, updated_at}` (`updated_at` is the `--at` value, else now) to `<fake data dir>/fake-account-positions.json`, and `position-get --fake` and `sync --fake` read it back, so the stale check and resume-from-the-account can be exercised with no account; real mode is unchanged and the file never exists in the real tree.
+
 "Recently listened" sort key = `max(local last_played_at, remote last_updated)`. Fetch remote positions for all catalog asins in batches during `sync` and cache them in `state.json`.
 
 ### 4.7 Auth and login ✅ (S1)

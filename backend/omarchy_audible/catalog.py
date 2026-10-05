@@ -415,7 +415,11 @@ def run_sync(
         if library is None:
             library = FakeLibrary() if fake else RealLibrary(client)
         if positions_port is None:
-            positions_port = FakePositions() if fake else RealPositions(client)
+            positions_port = (
+                FakePositions(paths.fake_positions_file)
+                if fake
+                else RealPositions(client)
+            )
         if cover_fetch is None and not fake:
             cover_fetch = http_fetch_cover
 

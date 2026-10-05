@@ -441,7 +441,7 @@ def _positions_port(fake: bool, paths: Paths) -> Iterator[FakePositions | RealPo
     The real client is closed on the way out, like ``sync`` does.
     """
     if fake:
-        yield FakePositions()
+        yield FakePositions(paths.fake_positions_file)
         return
     with open_client(paths) as client:
         yield RealPositions(client)

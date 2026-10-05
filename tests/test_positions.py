@@ -39,6 +39,8 @@ class _RecordingPort:
         self.fetched: list[list[str]] = []
         self.acr_calls: list[str] = []
         self.pushed: list[tuple[str, str, int]] = []
+        # The local listening time ``position-push`` hands the port (B10).
+        self.updated_at: str | None = None
 
     def fetch_batch(self, asins):
         self.fetched.append(list(asins))
@@ -48,8 +50,9 @@ class _RecordingPort:
         self.acr_calls.append(asin)
         return self.acr
 
-    def push(self, asin, acr, position_ms):
+    def push(self, asin, acr, position_ms, *, updated_at=None):
         self.pushed.append((asin, acr, position_ms))
+        self.updated_at = updated_at
 
 
 # --- the pure merge (ARCHITECTURE 4.6) ---------------------------------------
@@ -133,6 +136,8 @@ def test_push_writes_when_the_local_position_is_newer(paths):
         local_updated_at="2026-02-01T00:00:00Z",
     )
     assert port.pushed == [(ASIN, "METAACR", 2000)]
+    # The listening time is forwarded to the port (B10: the fake store keeps it).
+    assert port.updated_at == "2026-02-01T00:00:00Z"
     # acr came from meta.json, so the content metadata was never read.
     assert port.acr_calls == []
 

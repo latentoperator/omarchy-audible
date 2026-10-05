@@ -65,7 +65,7 @@ omarchy-audible position-get <asin> [<asin>…]          # {"type":"positions","
 omarchy-audible position-push <asin> <ms> [--at <iso-8601>]
 ```
 
-`position-push` is the only command that changes anything on your Audible account. It re-reads Audible's position first and refuses (`error` code `stale`) if Audible's is newer than your local listening time, so it can't move your phone backwards. The Audible phone app follows a pushed position on its own, with an undo notice.
+`position-push` is the only command that changes anything on your Audible account. It re-reads Audible's position first and refuses (`error` code `stale`) if Audible's is newer than your local listening time, so it can't move your phone backwards. The Audible phone app follows a pushed position on its own, with an undo notice. With `--fake`, positions are kept in `<fake data dir>/fake-account-positions.json` instead of the account, so a push, a resume and the stale check can all be tried with no account.
 
 ## Hotkeys and IPC
 

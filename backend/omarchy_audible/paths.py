@@ -19,6 +19,8 @@ from pathlib import Path
 
 PLUGIN_DIR_NAME = "omarchy-audible"
 FAKE_DIR_NAME = f"{PLUGIN_DIR_NAME}-fake"
+# Fake mode's kept positions (B10); it exists only under the fake data dir.
+FAKE_POSITIONS_FILE = "fake-account-positions.json"
 
 
 def _xdg_dir(env: Mapping[str, str], var: str, default: Path) -> Path:
@@ -106,6 +108,15 @@ class Paths:
     @property
     def state_file(self) -> Path:
         return self.data_dir / "state.json"
+
+    @property
+    def fake_positions_file(self) -> Path:
+        """Fake mode's kept positions (B10): ``position-push`` writes it.
+
+        ``position-get --fake`` and ``sync --fake`` read it back. It lives only
+        under the fake data dir; real mode never constructs the fake port.
+        """
+        return self.data_dir / FAKE_POSITIONS_FILE
 
     @property
     def covers_dir(self) -> Path:
