@@ -183,7 +183,7 @@ Depends on S5/S6 results and the fake backend.
   `Cover.qml` (async load, placeholder, fixed aspect, rounded per theme tokens) and `StateBadge.qml` (renders `LibraryUi.badge`). Text formatting comes from `Format.js` (L1).
   Acceptance: documented manual checks for a missing cover, a very long title and each badge kind.
 
-- [ ] **U2a — Minimal Mini view** (tier B; needs U1, U4, L1, P2; laptop) — moved into M3 at G0 because the Library view's "reopen on Mini when playback begins" and G3's "use it for a day" both need it.
+- [x] **U2a — Minimal Mini view** (tier B; needs U1, U4, L1, P2; laptop) — moved into M3 at G0 because the Library view's "reopen on Mini when playback begins" and G3's "use it for a day" both need it.
   Title and author, elapsed/remaining text, ⏯, ⏪15/⏩15, and a library button. No scrub bar, chapter popup, or speed (those stay in U5).
   Acceptance: J3's basic controls work with the fake backend; U5 later extends this file rather than replacing it.
 
