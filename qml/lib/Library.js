@@ -75,8 +75,8 @@ _p.foldText = function (value) {
   }
 };
 
-// A comparable sort key for a title or an author name: folded, trimmed, and
-// without a leading "The"/"A"/"An".
+// A comparable sort key for a title: folded, trimmed, and without a leading
+// "The"/"A"/"An".
 _p.titleKey = function (value) {
   var folded = _p.foldText(value).replace(/^\s+/, "");
   var match = /^(the|a|an)\s+/.exec(folded);
@@ -84,6 +84,87 @@ _p.titleKey = function (value) {
     folded = folded.slice(match[0].length);
   }
   return folded;
+};
+
+// Name parts the author sort skips: honorifics before a name, and suffixes
+// after it. Compared folded and without a trailing ".".
+_p.NAME_PREFIXES = ["dr", "mr", "mrs", "ms", "miss", "mx", "prof", "professor", "sir", "dame", "lord", "lady", "rev", "fr", "capt", "col", "gen"];
+_p.NAME_SUFFIXES = ["jr", "sr", "ii", "iii", "iv", "phd", "md", "dds", "esq", "obe", "mbe", "cbe"];
+// Particles kept with the surname ("Le Guin", "du Maurier", "van der Berg").
+_p.SURNAME_PARTICLES = ["de", "da", "di", "du", "del", "della", "der", "den", "van", "von", "le", "la", "st"];
+
+_p.bareWord = function (word) {
+  return word.replace(/[.,]+$/, "");
+};
+
+// The words of a name part, folded, with empty words dropped.
+_p.nameWords = function (text) {
+  return text.trim().split(/\s+/).filter(function (word) {
+    return word.length > 0;
+  });
+};
+
+_p.isSuffix = function (word) {
+  return _p.NAME_SUFFIXES.indexOf(_p.bareWord(word)) !== -1;
+};
+
+_p.isPrefix = function (word) {
+  return _p.NAME_PREFIXES.indexOf(_p.bareWord(word)) !== -1;
+};
+
+// Words without leading honorifics and trailing suffixes, keeping at least
+// one word.
+_p.trimTitles = function (words) {
+  var start = 0;
+  var end = words.length;
+  while (end - start > 1 && _p.isSuffix(words[end - 1])) {
+    end--;
+  }
+  while (end - start > 1 && _p.isPrefix(words[start])) {
+    start++;
+  }
+  return words.slice(start, end);
+};
+
+// A comparable sort key for an author name: surname first, then the given
+// names, folded. Honorifics ("Dr.") and suffixes ("Jr.", "PhD") are skipped,
+// a particle after the given name stays with the surname, and a name already
+// written "Surname, Given" keeps that order (its surname is never treated as
+// an honorific). Unlike `titleKey`, a leading "A"/"An"/"The" is part of the
+// name.
+_p.authorKey = function (value) {
+  if (typeof value !== "string") {
+    return "";
+  }
+  // Comma-separated parts; a trailing part made only of suffixes ("King,
+  // Jr.") is dropped rather than read as a given name.
+  var parts = _p.foldText(value).split(",").map(_p.nameWords).filter(function (words) {
+    return words.length > 0;
+  });
+  while (parts.length > 1 && parts[parts.length - 1].every(_p.isSuffix)) {
+    parts.pop();
+  }
+  if (parts.length === 0) {
+    return "";
+  }
+  if (parts.length > 1) {
+    // "Reyes, Tamsin" or "Reyes,Dr. Tamsin": already surname first.
+    var surnameWords = parts[0];
+    var givenWords = [];
+    for (var index = 1; index < parts.length; index++) {
+      givenWords = givenWords.concat(parts[index]);
+    }
+    givenWords = givenWords.filter(function (word) {
+      return !_p.isPrefix(word) && !_p.isSuffix(word);
+    });
+    return surnameWords.concat(givenWords).join(" ");
+  }
+  var words = _p.trimTitles(parts[0]);
+  var cut = words.length - 1;
+  while (cut - 1 > 0 && _p.SURNAME_PARTICLES.indexOf(_p.bareWord(words[cut - 1])) !== -1) {
+    cut--;
+  }
+  return words.slice(cut).concat(words.slice(0, cut)).join(" ");
 };
 
 // Parse a timestamp into epoch milliseconds, or null when it is unparseable.
@@ -556,8 +637,9 @@ function buildRows(catalog, remote, state, local, jobs) {
   return rows;
 }
 
-// A new, stable-sorted array: "recent"/"added" newest first, "title"/"author"
-// ascending and ignoring case and a leading "The"/"A"/"An".
+// A new, stable-sorted array: "recent"/"added" newest first, "title"
+// ascending and ignoring case and a leading "The"/"A"/"An", "author" by the
+// first author's surname (`authorKey`).
 function sortRows(rows, key) {
   var items = Array.isArray(rows) ? rows : [];
   if (key === SORT_RECENT) {
@@ -577,7 +659,7 @@ function sortRows(rows, key) {
   }
   if (key === SORT_AUTHOR) {
     return _p.stableSort(items, function (left, right) {
-      return _p.compareText(_p.titleKey(_p.firstAuthor(left)), _p.titleKey(_p.firstAuthor(right)));
+      return _p.compareText(_p.authorKey(_p.firstAuthor(left)), _p.authorKey(_p.firstAuthor(right)));
     });
   }
   return items.slice();
