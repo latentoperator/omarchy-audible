@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Io
 import "qml"
 import "qml/lib/DebugCatalog.js" as DebugCatalog
+import "qml/lib/Playback.js" as Playback
 
 // Headless singleton. Owns the backend, mpv and shared state in later tasks.
 // Bar widgets register as surfaces and are views only.
@@ -39,6 +40,17 @@ Item {
 
   readonly property alias runner: runner
   readonly property alias player: player
+  readonly property alias library: library
+  readonly property alias store: store
+
+  // Failed downloads by ASIN, shown as the row's error state until retried.
+  property var failures: ({})
+
+  // The book that is loaded and the last position seen for it. Kept so a
+  // switch or a crash can still save where the old book stopped.
+  property string snapAsin: ""
+  property real snapMs: 0
+  readonly property int saveIntervalMs: 10000
 
   readonly property string runtimeDir: status && status.runtime_dir ? String(status.runtime_dir) : ""
   readonly property string booksDir: status && status.books_dir ? String(status.books_dir) : ""
@@ -75,10 +87,47 @@ Item {
   }
 
   // The book file for an ASIN, under the books dir from the `status` event.
+  // A negative start resumes from the library's merged position.
   function playBook(asin, startSec) {
     if (booksDir.length === 0) return "error: status not read yet"
     if (!/^[A-Za-z0-9]+$/.test(asin)) return "error: bad asin"
-    return player.play(booksDir + "/" + asin + "/book.m4b", startSec) ? "ok" : "error: " + player.lastError
+    var row = library.rowFor(asin)
+    var start = startSec >= 0 ? startSec : (row ? row.positionMs / 1000 : 0)
+    return player.play(booksDir + "/" + asin + "/book.m4b", start) ? "ok" : "error: " + player.lastError
+  }
+
+  // TEMPORARY (removed in U1): one line per visible row, for IPC checks.
+  function libraryQuery(sort, filter, search) {
+    library.sortKey = sort
+    library.filterKey = filter
+    library.searchText = search
+    return library.rows.map(function(row) {
+      return row.asin + "|" + row.title + "|" + row.state + "|" + Math.round(row.percent) + "%|" + row.positionMs
+    }).join("\n")
+  }
+
+  // Saves the position of the loaded book. `book` and `ms` are explicit so a
+  // switch can save the book that just ended.
+  function savePosition(asin, ms) {
+    if (asin.length === 0) return
+    store.record(asin, ms)
+    store.save()
+  }
+
+  function onBookSwitched() {
+    var asin = Playback.asinFromPath(player.path)
+    if (snapAsin.length > 0 && snapAsin !== asin) savePosition(snapAsin, snapMs)
+    snapAsin = asin
+    snapMs = asin.length > 0 ? player.positionMs : 0
+  }
+
+  function refreshLocal() {
+    run("local", [])
+  }
+
+  function reloadSync() {
+    catalogFile.reload()
+    remoteFile.reload()
   }
 
   function playerSummary() {
@@ -106,12 +155,45 @@ Item {
     onSocketPathChanged: if (socketPath.length > 0) attach()
   }
 
+  LibraryModel {
+    id: library
+    stateDoc: store.doc
+    jobs: Playback.jobStates(runner.pendingJobs, runner.activeJob, runner.progress, root.failures)
+  }
+
+  StateStore {
+    id: store
+    path: root.dataDir.length > 0 ? root.dataDir + "/state.json" : ""
+  }
+
+  Connections {
+    target: player
+
+    function onPathChanged() { root.onBookSwitched() }
+
+    function onPositionMsChanged() {
+      if (Playback.asinFromPath(player.path) === root.snapAsin) root.snapMs = player.positionMs
+    }
+
+    // Pause, stop or a crash: save where the book stopped.
+    function onPlayingChanged() {
+      if (!player.playing) root.savePosition(root.snapAsin, root.snapMs)
+    }
+  }
+
+  Timer {
+    interval: root.saveIntervalMs
+    repeat: true
+    running: player.playing
+    onTriggered: root.savePosition(root.snapAsin, root.snapMs)
+  }
+
   // TEMPORARY dev methods; P5 adds the public ones (toggle, openLibrary) and
   // the README section. All arguments and return values are strings.
   IpcHandler {
     target: "latentoperator.audible"
 
-    function play(asin: string): string { return root.playBook(asin, 0) }
+    function play(asin: string): string { return root.playBook(asin, -1) }
     function playAt(asin: string, startSec: string): string { return root.playBook(asin, Number(startSec) || 0) }
     function pause(): string { player.pause(); return "ok" }
     function resume(): string { player.resume(); return "ok" }
@@ -126,6 +208,8 @@ Item {
     function sleepCancel(): string { player.cancelSleep(); return "ok" }
     function quitPlayer(): string { player.quit(); return "ok" }
     function playerStatus(): string { return root.playerSummary() }
+    function libraryQuery(sort: string, filter: string, search: string): string { return root.libraryQuery(sort, filter, search) }
+    function flushState(): string { store.flush(); return "ok" }
   }
 
   FileView {
@@ -141,6 +225,16 @@ Item {
     id: catalogFile
     path: root.dataDir.length > 0 ? root.dataDir + "/catalog.json" : ""
     printErrors: false
+    onLoaded: library.catalogText = catalogFile.text()
+    onLoadFailed: function(error) { library.catalogText = "" }
+  }
+
+  FileView {
+    id: remoteFile
+    path: root.dataDir.length > 0 ? root.dataDir + "/remote.json" : ""
+    printErrors: false
+    onLoaded: library.remoteText = remoteFile.text()
+    onLoadFailed: function(error) { library.remoteText = "" }
   }
 
   JobRunner {
@@ -151,6 +245,9 @@ Item {
     onEvent: function(record, job) {
       if (record.type === "status") {
         root.status = record
+        root.refreshLocal()
+      } else if (record.type === "local") {
+        library.localBooks = record.books
       }
       root.logEvent(job.command, DebugCatalog.summarize(record, 160))
     }
@@ -158,11 +255,22 @@ Item {
     onJobFinished: function(job, outcome) {
       var text = outcome.ok ? "ok" : String(outcome.code) + ": " + String(outcome.message || "")
       root.logEvent(job.command + " exit", text)
+      root.failures = Playback.updateFailures(root.failures, job, outcome)
       if (job.command === "sync") {
-        catalogFile.reload()
+        root.reloadSync()
+      } else if (job.command === "position-get") {
+        remoteFile.reload()
+      } else if (job.command === "get" || job.command === "remove") {
+        root.refreshLocal()
       }
     }
   }
 
   Component.onCompleted: if (devFlag.loaded) markFlagKnown()
+
+  // Shutdown: save where the book is, and wait for the write.
+  Component.onDestruction: {
+    if (player.playing) store.record(snapAsin, snapMs)
+    store.flush()
+  }
 }

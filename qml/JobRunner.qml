@@ -19,6 +19,7 @@ Item {
 
   property var queue: JobQueue.create({ "busyDelayMs": root.busyDelayMs })
   property var activeJob: null
+  property var pendingJobs: []
   property int bypassCount: 0
   property int queued: 0
   readonly property bool running: activeJob !== null || bypassCount > 0
@@ -52,6 +53,7 @@ Item {
 
   function sync() {
     root.queued = JobQueue.size(root.queue) - (root.queue.active ? 1 : 0)
+    root.pendingJobs = root.queue.pending.slice()
     root.activeJob = root.queue.active
   }
 
