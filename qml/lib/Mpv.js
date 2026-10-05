@@ -95,6 +95,7 @@ function derive(state) {
     "loaded": loaded,
     "playing": loaded && state["pause"] === false,
     "path": path,
+    "hasPosition": typeof state["time-pos"] === "number",
     "positionMs": toMs(state["time-pos"]),
     "durationMs": toMs(state["duration"]),
     "chapters": chapters,

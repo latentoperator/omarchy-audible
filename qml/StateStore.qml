@@ -18,19 +18,42 @@ Item {
   property var doc: Library.parseState("")
   property bool loaded: false
   property bool dirty: false
+  // Changes made before the file was read; replayed on top of what it holds.
+  property var pendingOps: []
   property string lastError: ""
 
+  // `text` is the file's content, or "" when it does not exist.
   function adopt(text) {
-    root.doc = Library.parseState(text)
+    var parsed = Library.parseState(text)
+    // A file that exists but cannot be understood is kept aside before the
+    // first write replaces it.
+    if (text.length > 0 && parsed.recovered === true && root.path.length > 0) {
+      Quickshell.execDetached(["cp", "-f", root.path, root.path + ".corrupt"])
+    }
+    root.doc = parsed
     root.loaded = true
+    var ops = root.pendingOps
+    root.pendingOps = []
+    for (var i = 0; i < ops.length; i++) root.apply(ops[i])
     if (root.dirty) root.save()
   }
 
-  function record(asin, ms) {
-    var next = Playback.recordPosition(root.doc, asin, ms, new Date().toISOString())
+  function apply(op) {
+    var next = op.kind === "finished"
+      ? Playback.markFinished(root.doc, op.asin)
+      : Playback.recordPosition(root.doc, op.asin, op.ms, op.at)
     if (next === root.doc) return
     root.doc = next
     root.dirty = true
+  }
+
+  function record(asin, ms) {
+    var op = { "kind": "record", "asin": asin, "ms": ms, "at": new Date().toISOString() }
+    if (!root.loaded) {
+      root.pendingOps = root.pendingOps.concat([op])
+      return
+    }
+    root.apply(op)
   }
 
   // Never writes before the file has been read, so a slow start cannot
@@ -53,7 +76,13 @@ Item {
     atomicWrites: true
     printErrors: false
     onLoaded: root.adopt(file.text())
-    onLoadFailed: function(error) { root.adopt("") }
+    // Only a file that is really absent starts an empty state. Any other
+    // failure (permissions, I/O) leaves the store unloaded, so nothing is
+    // ever written over a file that could not be read.
+    onLoadFailed: function(error) {
+      if (error === FileViewError.FileNotFound) root.adopt("")
+      else root.lastError = "could not read state.json"
+    }
     onSaved: root.lastError = ""
     onSaveFailed: function(error) {
       root.dirty = true
