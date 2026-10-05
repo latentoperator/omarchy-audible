@@ -215,21 +215,26 @@ function chapterEndMs(chapters, chapterIndex, durationMs) {
   return durationMs > 0 ? durationMs : -1;
 }
 
+// An end-of-chapter timer, fixed to where the current chapter ends when it is
+// set, so it does not move on when playback reaches the next chapter. Null
+// when the chapter end is unknown.
+function chapterSleepTimer(chapters, chapterIndex, durationMs) {
+  var end = chapterEndMs(chapters, chapterIndex, durationMs);
+  return end < 0 ? null : { "mode": "chapter", "endMs": end };
+}
+
 // Wall-clock ms until the sleep timer fires. Minutes mode counts real time;
-// chapter mode counts media time left in the chapter at the current speed.
-function sleepRemainingMs(timer, nowMs, positionMs, chapters, chapterIndex, durationMs, speed) {
+// chapter mode counts media time left until the fixed chapter end, at the
+// current speed.
+function sleepRemainingMs(timer, nowMs, positionMs, speed) {
   if (isNull(timer)) {
     return -1;
   }
   if (timer.mode === "minutes") {
     return timer.endsAtMs - nowMs;
   }
-  if (timer.mode === "chapter") {
-    var end = chapterEndMs(chapters, chapterIndex, durationMs);
-    if (end < 0) {
-      return -1;
-    }
-    return (end - positionMs) / (speed > 0 ? speed : 1);
+  if (timer.mode === "chapter" && typeof timer.endMs === "number") {
+    return (timer.endMs - positionMs) / (speed > 0 ? speed : 1);
   }
   return -1;
 }

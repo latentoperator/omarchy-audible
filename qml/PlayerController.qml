@@ -70,6 +70,8 @@ Item {
       if (quitting) {
         quitting = false
         connection = "idle"
+        // A play() that came in while mpv was quitting starts a fresh mpv.
+        if (wanted && pendingLoad) relaunchTimer.restart()
       } else {
         // Not asked for: surface it, and retry only while a book is wanted.
         lastError = "mpv exited unexpectedly"
@@ -182,9 +184,9 @@ Item {
     }
     wanted = true
     pendingLoad = { "path": path, "startSec": startSec }
-    if (connected) {
+    if (connected && !quitting) {
       flushPending()
-    } else if (!launching && !attaching) {
+    } else if (!connected && !launching && !attaching) {
       launchMpv()
     }
     return true
@@ -209,9 +211,18 @@ Item {
   // Stops playback and ends the mpv process.
   function quit() {
     wanted = false
-    quitting = true
-    sleepTimer = null
-    send(["quit"])
+    pendingLoad = null
+    attaching = false
+    launching = false
+    cancelSleep()
+    if (send(["quit"])) {
+      quitting = true
+      return
+    }
+    // Not connected: nothing to quit, and nothing left to retry.
+    retryTimer.stop()
+    socketLoader.active = false
+    connection = "idle"
   }
 
   // ---- sleep timer ----
@@ -223,7 +234,7 @@ Item {
 
   function setSleepEndOfChapter() {
     cancelSleep()
-    sleepTimer = { "mode": "chapter", "endsAtMs": 0 }
+    sleepTimer = Mpv.chapterSleepTimer(chapters, chapterIndex, durationMs)
   }
 
   function cancelSleep() {
@@ -235,9 +246,8 @@ Item {
   }
 
   function sleepTick() {
-    var remaining = Mpv.sleepRemainingMs(sleepTimer, Date.now(), positionMs,
-      chapters, chapterIndex, durationMs, speed)
-    if (remaining < 0 && sleepTimer.mode !== "minutes") return
+    var remaining = Mpv.sleepRemainingMs(sleepTimer, Date.now(), positionMs, speed)
+    if (remaining < 0 && sleepTimer.mode !== "minutes" && sleepTimer.mode !== "chapter") return
     if (remaining <= 0) {
       pause()
       cancelSleep()
@@ -246,6 +256,10 @@ Item {
     if (remaining < Mpv.FADE_MS) {
       if (fadeBaseVolume < 0) fadeBaseVolume = volume
       setVolume(Mpv.fadeVolume(fadeBaseVolume, remaining, Mpv.FADE_MS))
+    } else if (fadeBaseVolume >= 0) {
+      // Seeked back out of the fade window: bring the volume back.
+      setVolume(fadeBaseVolume)
+      fadeBaseVolume = -1
     }
   }
 
@@ -279,6 +293,13 @@ Item {
     id: socketLoader
     active: false
     sourceComponent: socketComponent
+  }
+
+  Timer {
+    id: relaunchTimer
+    interval: 400
+    repeat: false
+    onTriggered: if (root.wanted && root.pendingLoad && !root.connected) root.launchMpv()
   }
 
   Timer {
