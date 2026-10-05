@@ -129,7 +129,7 @@ Depends on S5/S6 results and the fake backend.
   `Service.qml` as `keepLoaded` singleton. `JobRunner.qml` spawns backend commands, parses NDJSON from stdout, exposes `running`, `progress`, `lastError`, and emits per-event signals. Handles process exit and non-JSON lines defensively.
   Acceptance: a debug panel (temporary) runs `status` and `sync` in fake mode and shows events.
 
-- [ ] **P2 — PlayerController (mpv)** (tier S/B; needs S5, P1; laptop)
+- [x] **P2 — PlayerController (mpv)** (tier S/B; needs S5, P1; laptop)
   Implements ARCHITECTURE §5.1–5.2 including reattach after shell restart, `observe_property` handling, resume via `start=`, chapter list parsing, and the skip/chapter/speed commands. Includes the sleep timer with a 5 s fade.
   Acceptance: with a fake m4b — play, pause, ±skip, chapter jump, speed change, sleep timer; `omarchy-restart-shell` mid-playback and audio continues and state reattaches; mpv crashing is detected and surfaced.
 
