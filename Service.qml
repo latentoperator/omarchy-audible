@@ -274,6 +274,7 @@ Item {
   LibraryModel {
     id: library
     stateDoc: store.doc
+    coversDir: root.dataDir.length > 0 ? root.dataDir + "/covers" : ""
     jobs: Playback.jobStates(runner.pendingJobs, runner.activeJob, runner.progress, root.failures)
   }
 
