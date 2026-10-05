@@ -321,6 +321,9 @@ Item {
     var asin = askAsin
     askAsin = ""
     if (asin.length === 0) return "error: nothing asked"
+    // Removed since the question was asked: pick it again (download).
+    var row = library.rowFor(asin)
+    if (!row || row.local !== true) return pick(asin)
     return startPicked(asin, resume ? -1 : 0, true)
   }
 
@@ -376,6 +379,8 @@ Item {
   // (the player saves its position) and removed once it is gone.
   function removeBook(asin) {
     if (!Drawer.canRemove(library.rowFor(asin))) return "error: not removable"
+    // A question about a book being removed no longer has a file to play.
+    if (askAsin === asin) askAsin = ""
     if (asin === loadedAsin) {
       if (removeAfterUnload.indexOf(asin) < 0) removeAfterUnload = removeAfterUnload.concat([asin])
       unloadTimer.restart()
