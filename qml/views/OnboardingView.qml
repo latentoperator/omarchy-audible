@@ -25,13 +25,13 @@ ColumnLayout {
   spacing: Style.spacing.panelGap
 
   function send() {
-    if (!service) return
-    if (service.finishLogin(paste.text) === "ok") paste.text = ""
+    if (service) service.finishLogin(paste.text)
   }
 
   Connections {
     target: root.service
-    function onClipboardRead(chunk) { paste.text += chunk }
+    function onClipboardRead(target, chunk) { if (target === root) paste.text += chunk }
+    function onClearPaste() { paste.text = "" }
   }
 
   Text {
@@ -194,8 +194,11 @@ ColumnLayout {
         password: true
         placeholderText: "Page address"
         Keys.onPressed: function(event) {
-          if (event.key === Qt.Key_Escape) { root.closeRequested(); event.accepted = true }
-          else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) { root.send(); event.accepted = true }
+          var action = Signin.pasteKey(event.key)
+          if (action === "close") root.closeRequested()
+          else if (action === "send") root.send()
+          else return
+          event.accepted = true
         }
       }
 
@@ -216,7 +219,7 @@ ColumnLayout {
           text: "Paste from clipboard"
           onClicked: {
             paste.text = ""
-            root.service.readClipboard()
+            root.service.readClipboard(root)
           }
         }
         Button {
@@ -225,10 +228,7 @@ ColumnLayout {
         }
         Button {
           text: "Start over"
-          onClicked: {
-            paste.text = ""
-            root.service.cancelLogin()
-          }
+          onClicked: root.service.cancelLogin()
         }
       }
     }

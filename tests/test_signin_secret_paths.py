@@ -38,13 +38,19 @@ def test_view_uses_the_field_text_only_to_send_or_clear():
     uses = re.findall(r"paste\.text[^\n]*", view)
     allowed = {
         'paste.text = ""',
+        'paste.text = "" }',
         "paste.text += chunk }",
-        'paste.text) === "ok") paste.text = ""',
+        "paste.text)",
     }
     assert uses, "the paste field is gone?"
     for use in uses:
         assert use.strip() in allowed, f"unexpected use of the pasted text: {use!r}"
     assert "password: true" in view
+    # Clipboard chunks fill only the view that asked (another monitor's field
+    # never holds the text), and every view clears on clearPaste.
+    assert "function onClipboardRead(target, chunk) { if (target === root) paste.text += chunk }" in view
+    assert 'function onClearPaste() { paste.text = "" }' in view
+    assert "root.service.readClipboard(root)" in view
 
 
 def test_service_passes_the_paste_only_to_the_check_and_stdin():
@@ -56,6 +62,9 @@ def test_service_passes_the_paste_only_to_the_check_and_stdin():
     assert "Onboarding.looksLikeRedirect(pasted)" in body
     assert 'runner.runWithInput("login-finish", ["--session", loginSession], "login", pasted)' in body
     assert "logEvent" not in body
+    # Sending clears every view's field at once.
+    assert "clearPaste()" in body
+    assert "clearPaste()" in function_body(service, "cancelLogin")
     # The paste never becomes a property of the service.
     assert not re.search(r"property \w+ pasted", service)
 
@@ -65,8 +74,8 @@ def test_clipboard_text_is_streamed_not_stored():
     paster = service[service.index("id: paster"):]
     paster = paster[:paster.index("\n  }\n")]
     assert "SplitParser" in paster and "StdioCollector" not in paster
-    assert "root.clipboardRead(chunk)" in paster
-    assert re.search(r"signal clipboardRead\(string text\)", service)
+    assert "root.clipboardRead(root.clipboardTarget, chunk)" in paster
+    assert re.search(r"signal clipboardRead\(var target, string text\)", service)
 
 
 def test_no_log_line_mentions_the_input():
@@ -86,6 +95,11 @@ def test_runner_keeps_input_out_of_job_objects():
     runner = read("qml/JobRunner.qml")
     uses = re.findall(r"inputs\[[^\n]*", runner)
     assert len(uses) == 4, uses  # store, presence check, read on spawn, delete
+    spawn = function_body(runner, "spawn")
+    # The runner's copy is dropped as soon as the process has its own.
+    assert spawn.index('"input": hasInput') < spawn.index("root.dropInput(job)")
+    # A busy retry whose input is gone fails instead of sending nothing.
+    assert "Signin.inputLost(job, root.inputs)" in function_body(runner, "pump")
     body = function_body(runner, "runWithInput")
     assert "queued.inputId = root.nextInputId++" in body
     assert "queued.input " not in body and "job.input " not in runner

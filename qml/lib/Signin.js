@@ -150,3 +150,32 @@ function phaseText(phase) {
   if (phase === PHASE_FINISHING) return "Connecting…";
   return "";
 }
+
+// Qt key codes the paste field reacts to.
+var KEY_ESCAPE = 0x01000000;
+var KEY_RETURN = 0x01000004;
+var KEY_ENTER = 0x01000005;
+
+// What a key in the paste field does: Esc closes, Enter sends, anything else
+// is typed.
+function pasteKey(key) {
+  if (key === KEY_ESCAPE) return "close";
+  if (key === KEY_RETURN || key === KEY_ENTER) return "send";
+  return "type";
+}
+
+// The view to request when the onboarding step changes: the Library while a
+// clipboard notice waits to be seen (it shows only there), else the current
+// view, or a bar-click default (null) when leaving onboarding.
+function requestAfterStep(currentView, notice) {
+  if (typeof notice === "string" && notice.length > 0) return "library";
+  if (currentView === "onboarding" || typeof currentView !== "string" || currentView.length === 0) return null;
+  return currentView;
+}
+
+// Whether a queued job that should carry stdin input has lost it (it is
+// dropped once handed to a process, so a busy retry has nothing to send).
+function inputLost(job, inputs) {
+  if (!job || !job.inputId) return false;
+  return !inputs || inputs[job.inputId] === undefined;
+}

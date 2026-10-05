@@ -134,3 +134,28 @@ def test_setup_line(signin):
 @pytest.mark.parametrize("phase,blank", [("starting", False), ("finishing", False), ("pick", True), ("paste", True)])
 def test_phase_text(signin, phase, blank):
     assert (signin.call("phaseText", phase) == "") is blank
+
+
+@pytest.mark.parametrize("key,action", [
+    (0x01000000, "close"), (0x01000004, "send"), (0x01000005, "send"),
+    (0x41, "type"), (0x20, "type"), (None, "type"),
+])
+def test_paste_key(signin, key, action):
+    assert signin.call("pasteKey", key) == action
+
+
+@pytest.mark.parametrize("view,notice,wanted", [
+    ("onboarding", "", None), ("onboarding", "Clear it", "library"),
+    ("mini", "", "mini"), ("mini", "Clear it", "library"),
+    ("library", "", "library"), ("", "", None), (None, None, None),
+])
+def test_request_after_step(signin, view, notice, wanted):
+    assert signin.call("requestAfterStep", view, notice) == wanted
+
+
+def test_input_lost(signin):
+    assert signin.call("inputLost", {"inputId": 3}, {"3": "x"}) is False
+    assert signin.call("inputLost", {"inputId": 3}, {}) is True
+    assert signin.call("inputLost", {"inputId": 3}, None) is True
+    assert signin.call("inputLost", {"command": "sync"}, {}) is False
+    assert signin.call("inputLost", None, {}) is False

@@ -135,7 +135,7 @@ Item {
   readonly property bool settingUp: Signin.jobPending("setup", runner.pendingJobs, runner.activeJob)
 
   onOnboardingStepChanged: view = Onboarding.view(onboardingStep, player.loaded,
-    view === Panel.VIEW_ONBOARDING ? null : view)
+    Signin.requestAfterStep(view, clipboardNotice))
 
   readonly property string runtimeDir: status && status.runtime_dir ? String(status.runtime_dir) : ""
   readonly property string booksDir: status && status.books_dir ? String(status.books_dir) : ""
@@ -210,10 +210,13 @@ Item {
     }
     pasteRejected = false
     onboardingError = null
-    return runner.runWithInput("login-finish", ["--session", loginSession], "login", pasted) ? "ok" : "error: refused"
+    var sent = runner.runWithInput("login-finish", ["--session", loginSession], "login", pasted)
+    clearPaste()
+    return sent ? "ok" : "error: refused"
   }
 
   function cancelLogin() {
+    clearPaste()
     loginSession = ""
     pasteRejected = false
     onboardingError = null
@@ -243,14 +246,19 @@ Item {
   // the clipboard for "Paste from clipboard" (the text goes back to the view
   // through `clipboardRead` in chunks, never into a property). The view
   // clears its field before calling `readClipboard` and appends each chunk.
-  signal clipboardRead(string text)
+  // `target` is the view that asked, so another monitor's field never fills.
+  signal clipboardRead(var target, string text)
+  // Every view clears its paste field: the text was sent, or sign-in ended.
+  signal clearPaste()
+  property var clipboardTarget: null
 
   function copyText(text) {
     copier.text = String(text)
     copier.running = true
   }
 
-  function readClipboard() {
+  function readClipboard(target) {
+    clipboardTarget = target
     paster.running = true
   }
 
@@ -645,7 +653,7 @@ Item {
     // Chunks go straight to the view's field; nothing here keeps them.
     stdout: SplitParser {
       splitMarker: ""
-      onRead: function(chunk) { root.clipboardRead(chunk) }
+      onRead: function(chunk) { root.clipboardRead(root.clipboardTarget, chunk) }
     }
   }
 
@@ -756,7 +764,8 @@ Item {
         "reconnecting": root.reconnecting, "authFailed": root.authFailed, "error": root.onboardingError,
         "pasteRejected": root.pasteRejected, "notice": root.clipboardNotice.length > 0,
         "authenticated": st.authenticated === true, "venvReady": st.venv_ready, "missing": st.missing || [],
-        "account": st.account || null, "marketplace": st.marketplace || null, "view": root.view })
+        "account": st.account || null, "marketplace": st.marketplace || null, "view": root.view,
+        "heldInputs": Object.keys(runner.inputs).length })
     }
     // Onboarding actions for tests: fake mode only, so IPC can never sign in,
     // sign out or set up the real account.
