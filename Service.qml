@@ -2,9 +2,11 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "qml"
+import "qml/lib/Drawer.js" as Drawer
 import "qml/lib/EventLog.js" as EventLog
 import "qml/lib/Format.js" as Format
 import "qml/lib/Ipc.js" as Ipc
+import "qml/lib/LibraryUi.js" as LibraryUi
 import "qml/lib/Panel.js" as Panel
 import "qml/lib/Playback.js" as Playback
 import "qml/lib/Positions.js" as Positions
@@ -81,6 +83,37 @@ Item {
   property bool snapUnpushed: false
   readonly property int saveIntervalMs: 10000
   readonly property int pushIntervalMs: 60000
+
+  // Library view state (U2). `statusAtMs` is when the `status` event
+  // arrived, `lastSyncAtMs` when a sync last succeeded this session, and
+  // `lastSyncCode` the last sync's error code ("" after a success).
+  property real statusAtMs: 0
+  property real lastSyncAtMs: 0
+  property string lastSyncCode: ""
+  readonly property bool syncing: Drawer.syncing(runner.pendingJobs, runner.activeJob)
+  readonly property var syncFailure: Drawer.syncFailure(lastSyncCode)
+  readonly property var listState: LibraryUi.listState({
+    "catalogLoaded": library.catalogLoaded, "syncing": syncing,
+    "total": library.allRows.length, "shown": library.count,
+    "offline": syncFailure.offline, "errorCode": syncFailure.errorCode
+  })
+  // A downloaded book plays when its `get` finishes; a finished book far
+  // from its end asks first (`askAsin`); a book picked from the drawer
+  // reopens the panel on Mini once it is playing (`reopenAsin`).
+  property string askAsin: ""
+  property string reopenAsin: ""
+  // The last book the user chose to play; a finished download plays only
+  // if it is still this one.
+  property string latestPick: ""
+  // Books to remove once the player has unloaded them.
+  property var removeAfterUnload: []
+  property real lastSyncAttemptAtMs: 0
+
+  // mpv may report playing before the new path, so check on both.
+  onLoadedAsinChanged: {
+    reopenOnMini()
+    flushRemovals()
+  }
 
   readonly property string runtimeDir: status && status.runtime_dir ? String(status.runtime_dir) : ""
   readonly property string booksDir: status && status.books_dir ? String(status.books_dir) : ""
@@ -178,6 +211,8 @@ Item {
   // Checked by the job runner just before a queued job starts. An auto-remove
   // that waited behind another job must not run if the book is playing again.
   function jobAllowed(job) {
+    // A removal queued before the book was played again must not delete it.
+    if (job.command === "remove" && job.purpose === "user") return Drawer.removalAllowed(job.args[0], busyAsins())
     if (job.purpose !== "autoremove") return true
     return Positions.autoRemoveAllowed(autoRemoveFinished, atEnd(job.args[0]), player.playing)
   }
@@ -236,6 +271,149 @@ Item {
     snapDirty = false
     snapUnpushed = false
   }
+
+  // Picking a Library row (FR-L6, ARCHITECTURE 6). `LibraryUi` decides what
+  // the pick means; a local book resumes, starts over or asks.
+  // A new choice of book to play wins over every older one: an open
+  // question, a resume still reading its position, a pending removal of
+  // this book, and the download-then-play check (`latestPick`).
+  function noteIntent(asin) {
+    latestPick = asin
+    askAsin = ""
+    if (pendingResume !== asin) pendingResume = ""
+    removeAfterUnload = removeAfterUnload.filter(function(a) { return a !== asin })
+    if (removeAfterUnload.length === 0) unloadTimer.stop()
+  }
+
+  // Books a removal must not touch: loaded, resuming, or about to load.
+  function busyAsins() {
+    var load = player.pendingLoad ? Playback.asinFromPath(player.pendingLoad.path) : ""
+    return [loadedAsin, pendingResume, load]
+  }
+
+  function pick(asin) {
+    var row = library.rowFor(asin)
+    if (!row) return "error: unknown book"
+    noteIntent(asin)
+    var action = LibraryUi.primaryAction(row, syncFailure.offline)
+    if (action === LibraryUi.ACTION_PLAY) return playPicked(asin, true)
+    if (action === LibraryUi.ACTION_DOWNLOAD || action === LibraryUi.ACTION_RETRY) {
+      return run("get", [asin], "autoplay") ? "ok" : "error: refused"
+    }
+    return "error: nothing to do"
+  }
+
+  // `hidePanel`: the user picked the book in the open drawer, so the panel
+  // hides and reopens on Mini when playback starts. After a download the
+  // panel is only switched to Mini if it is still open.
+  function playPicked(asin, hidePanel) {
+    var row = library.rowFor(asin)
+    var choice = LibraryUi.resumeChoice(row, 0)
+    if (choice === LibraryUi.CHOICE_ASK) {
+      askAsin = asin
+      if (anySurfaceOpen()) showView(Panel.VIEW_LIBRARY)
+      return "ask"
+    }
+    return startPicked(asin, choice === LibraryUi.CHOICE_START_OVER ? 0 : -1, hidePanel)
+  }
+
+  function dismissAsk() {
+    askAsin = ""
+  }
+
+  function answerAsk(resume) {
+    var asin = askAsin
+    askAsin = ""
+    if (asin.length === 0) return "error: nothing asked"
+    // Removed since the question was asked: pick it again (download).
+    var row = library.rowFor(asin)
+    if (!row || row.local !== true) return pick(asin)
+    return startPicked(asin, resume ? -1 : 0, true)
+  }
+
+  function startPicked(asin, startSec, hidePanel) {
+    noteIntent(asin)
+    var open = anySurfaceOpen()
+    if (hidePanel) closeSurfaces()
+    reopenAsin = hidePanel || open ? asin : ""
+    reopenTimer.restart()
+    return playBook(asin, startSec)
+  }
+
+  function anySurfaceOpen() {
+    return surfaces.some(function(s) { return s.opened === true })
+  }
+
+  function closeSurfaces() {
+    surfaces.forEach(function(s) { if (s.opened) s.close() })
+  }
+
+  // Playback of the picked book began: show it on Mini.
+  function reopenOnMini() {
+    if (reopenAsin.length === 0 || !player.playing || loadedAsin !== reopenAsin) return
+    reopenAsin = ""
+    reopenTimer.stop()
+    if (anySurfaceOpen()) {
+      showView(Panel.VIEW_MINI)
+    } else {
+      var surface = primarySurface()
+      if (surface) surface.open()
+    }
+  }
+
+  // Opening the drawer on Library syncs when the catalog is old (FR-L2).
+  function libraryOpened() {
+    var now = Date.now()
+    if (syncing || Drawer.autoSyncBlocked(lastSyncAttemptAtMs, now)) return
+    var age = Drawer.catalogAgeS(status ? status.catalog_age_s : null, statusAtMs, lastSyncAtMs, now)
+    if (LibraryUi.syncDue(age, Drawer.SYNC_HOURS)) startSync("auto")
+  }
+
+  function refreshLibrary() {
+    if (syncing) return "busy"
+    return startSync("manual") ? "ok" : "error: refused"
+  }
+
+  function startSync(purpose) {
+    lastSyncAttemptAtMs = Date.now()
+    return run("sync", [], purpose)
+  }
+
+  // Any local book can be removed (FR-S2). The loaded one is unloaded first
+  // (the player saves its position) and removed once it is gone.
+  function removeBook(asin) {
+    if (!Drawer.canRemove(library.rowFor(asin))) return "error: not removable"
+    // A question about a book being removed no longer has a file to play.
+    if (askAsin === asin) askAsin = ""
+    if (asin === loadedAsin) {
+      if (removeAfterUnload.indexOf(asin) < 0) removeAfterUnload = removeAfterUnload.concat([asin])
+      unloadTimer.restart()
+      player.quit()
+      return "unloading"
+    }
+    return run("remove", [asin], "user") ? "ok" : "error: refused"
+  }
+
+  function flushRemovals() {
+    var busy = busyAsins()
+    var ready = removeAfterUnload.filter(function(asin) { return Drawer.removalAllowed(asin, busy) })
+    removeAfterUnload = removeAfterUnload.filter(function(asin) { return ready.indexOf(asin) < 0 })
+    if (removeAfterUnload.length === 0) unloadTimer.stop()
+    ready.forEach(function(asin) { run("remove", [asin], "user") })
+  }
+
+  // The player never let go of a book it was asked to unload: give up.
+  function abandonRemovals() {
+    removeAfterUnload.forEach(function(asin) { logEvent("remove", "skipped " + asin + ": the player did not unload it") })
+    removeAfterUnload = []
+  }
+
+  function removeAll() {
+    var asins = Drawer.removableAsins(library.allRows)
+    asins.forEach(function(asin) { removeBook(asin) })
+    return String(asins.length)
+  }
+
 
   function refreshLocal() {
     run("local", [])
@@ -308,6 +486,7 @@ Item {
     // Pause, stop or a crash: save where the book stopped.
     function onPlayingChanged() {
       if (!player.playing) root.savePosition(root.snapAsin, root.snapMs, true)
+      else root.reopenOnMini()
     }
   }
 
@@ -316,6 +495,21 @@ Item {
     repeat: true
     running: player.playing
     onTriggered: root.savePosition(root.snapAsin, root.snapMs, false)
+  }
+
+  Timer {
+    id: unloadTimer
+    interval: 10000
+    repeat: false
+    onTriggered: root.abandonRemovals()
+  }
+
+  // A pick whose playback never starts stops waiting to reopen the panel.
+  Timer {
+    id: reopenTimer
+    interval: 15000
+    repeat: false
+    onTriggered: root.reopenAsin = ""
   }
 
   Timer {
@@ -381,8 +575,8 @@ Item {
 
     // Test methods so agents can drive the service without input. They stay
     // through M3; R6 documents or removes them.
-    function play(asin: string): string { return root.playBook(asin, -1) }
-    function playAt(asin: string, startSec: string): string { return root.playBook(asin, Number(startSec) || 0) }
+    function play(asin: string): string { root.noteIntent(asin); return root.playBook(asin, -1) }
+    function playAt(asin: string, startSec: string): string { root.noteIntent(asin); return root.playBook(asin, Number(startSec) || 0) }
     function pause(): string { player.pause(); return "ok" }
     function resume(): string { player.resume(); return "ok" }
     function chapter(index: string): string { player.setChapter(Number(index) || 0); return "ok" }
@@ -396,6 +590,19 @@ Item {
     function libraryQuery(sort: string, filter: string, search: string): string { return root.libraryQuery(sort, filter, search) }
     function flushState(): string { store.flush(); return "ok" }
     function syncNow(): string { return root.run("sync", [], "ipc") ? "ok" : "refused" }
+    function pick(asin: string): string { return root.pick(asin) }
+    function answer(choice: string): string { return root.answerAsk(choice === "resume") }
+    function removeBook(asin: string): string { return root.removeBook(asin) }
+    function libraryState(): string {
+      return JSON.stringify({ "list": root.listState, "ask": root.askAsin, "reopen": root.reopenAsin,
+        "syncing": root.syncing, "lastSyncCode": root.lastSyncCode, "count": library.count,
+        "total": library.allRows.length, "storage": LibraryUi.storage(library.localBooks) })
+    }
+    // Fake mode only: a download that fails with a `--fake-fail` mode.
+    function fakeFailGet(asin: string, mode: string): string {
+      if (!root.fake) return "error: fake mode only"
+      return root.run("get", [asin, "--fake-fail", mode], "autoplay") ? "ok" : "refused"
+    }
     function autoRemove(value: string): string { root.autoRemoveFinished = value === "on"; return "ok" }
     function pushState(): string { return JSON.stringify({ "queue": sync.queue, "flushing": sync.flushing, "last": sync.lastResult }) }
     function panelState(): string {
@@ -441,6 +648,7 @@ Item {
     onEvent: function(record, job) {
       if (record.type === "status") {
         root.status = record
+        root.statusAtMs = Date.now()
         root.refreshLocal()
       } else if (record.type === "local") {
         library.localBooks = record.books
@@ -466,11 +674,17 @@ Item {
         root.finishResume(resumedAsin, remote)
       }
       if (job.command === "sync") {
+        root.lastSyncCode = outcome.ok ? "" : String(outcome.code || "internal")
+        if (outcome.ok) root.lastSyncAtMs = Date.now()
         root.reloadSync()
       } else if (job.command === "position-get") {
         remoteFile.reload()
       } else if (job.command === "get" || job.command === "remove") {
         root.refreshLocal()
+      }
+      if (job.command === "get" && job.purpose === "autoplay" && outcome.ok
+          && Drawer.autoplayAllowed(job.args[0], root.latestPick)) {
+        root.playPicked(job.args[0], false)
       }
     }
   }

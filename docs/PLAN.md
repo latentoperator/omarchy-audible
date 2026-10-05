@@ -187,7 +187,7 @@ Depends on S5/S6 results and the fake backend.
   Title and author, elapsed/remaining text, ⏯, ⏪15/⏩15, and a library button. No scrub bar, chapter popup, or speed (those stay in U5).
   Acceptance: J3's basic controls work with the fake backend; U5 later extends this file rather than replacing it.
 
-- [ ] **U2 — Library view (drawer)** (tier B; needs U1, U4, L2, P3; laptop)
+- [x] **U2 — Library view (drawer)** (tier B; needs U1, U4, L2, P3; laptop)
   Search field (autofocus), sort dropdown, filter chips, storage line, `ListView` of `BookRow` (cover, title, author, runtime, progress bar, `StateBadge`). Enter/click plays; cloud books enqueue a download and show progress, then auto-play; row menu has Remove from laptop; "Remove all downloads"; designed empty/loading/offline/error states; placeholder cover. All decisions come from `LibraryUi.js`.
   Acceptance: J2 and J6 pass with the fake backend; keyboard navigation per ARCHITECTURE §6.
 
