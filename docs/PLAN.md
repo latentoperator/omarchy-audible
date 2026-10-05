@@ -163,7 +163,7 @@ Depends on S5/S6 results and the fake backend.
   Fake mode's position store is stateless today: `position-push --fake` is a no-op and `position-get --fake` always returns 0 (finding from P4, #22). Make it hold state in the fake tree: a push writes `{ms, updated_at}` (`updated_at` is the `--at` value, else now) to `<fake data dir>/fake-account-positions.json`, and `position-get --fake` and `sync --fake` read it back, so the stale check and resume-from-the-account can be tested end to end in fake mode. Real mode is unchanged. The file exists only in the fake tree.
   Acceptance: push then get returns the pushed position; a push older than the stored one is refused with `error(code=stale)`; `sync --fake` writes the stored positions into the fake `remote.json`; the B8 test (real tree untouched) still passes; no real-mode code path changes (test with the real port mocked).
 
-- [ ] **L1 — `Format.js`** (tier A; needs nothing)
+- [x] **L1 — `Format.js`** (tier A; needs nothing)
   `qml/lib/Format.js`, pure: `duration(ms)` ("3h 12m", "45m", "<1m", "0m"; bad input gives ""), `left(positionMs, durationMs)` ("3h 12m left", "" at or past the end), `clock(ms)` ("0:00", "2:05", "1:02:33", "123:04:05"), `bytes(n)` (1024-based, "B"/"KB"/"MB"/"GB", one decimal under 10), `storageLine(count, totalBytes)` ("No books on this laptop", "1 book · 12 MB", "3 books · 780 MB"), `ago(iso, nowMs)` ("just now", "5 min ago", "3 h ago", "2 days ago", "never" for null), `names(list)` ("A", "A and B", "A, B and 2 more"), and `tooltip(title, author, leftText)` for FR-U1 ("Title — Author · 3h 12m left", leaving out missing parts).
   Acceptance: QJSEngine tests for 0, under a minute, over 100 hours, negative, NaN, null, missing title or author, and singular versus plural.
 
