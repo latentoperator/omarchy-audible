@@ -1,0 +1,455 @@
+{
+  "schema": 1,
+  "note": "Shared position vectors. Asserted against the Python implementation (backend/omarchy_audible/positions.py) and the JS port (qml/lib/Positions.js). Do not edit one side without the other.",
+  "parse_updated_at": [
+    {
+      "name": "audible_space_fraction",
+      "kind": "audible-no-timezone",
+      "value": "2026-10-04 12:00:00.5",
+      "epoch_ms": 1791115200500
+    },
+    {
+      "name": "audible_space_zero_fraction",
+      "kind": "audible-no-timezone",
+      "value": "2026-10-04 12:00:00.0",
+      "epoch_ms": 1791115200000
+    },
+    {
+      "name": "audible_space_no_fraction",
+      "kind": "audible-no-timezone",
+      "value": "2026-10-04 12:00:00",
+      "epoch_ms": 1791115200000
+    },
+    {
+      "name": "audible_space_micro",
+      "kind": "audible-no-timezone",
+      "value": "2026-10-04 12:00:00.123456",
+      "epoch_ms": 1791115200123
+    },
+    {
+      "name": "z_upper",
+      "kind": "utc-z",
+      "value": "2026-10-04T12:00:00Z",
+      "epoch_ms": 1791115200000
+    },
+    {
+      "name": "z_lower",
+      "kind": "utc-z",
+      "value": "2026-10-04T12:00:00z",
+      "epoch_ms": 1791115200000
+    },
+    {
+      "name": "z_micro",
+      "kind": "utc-z",
+      "value": "2026-10-04T12:00:00.500000Z",
+      "epoch_ms": 1791115200500
+    },
+    {
+      "name": "z_nanoseconds",
+      "kind": "utc-z",
+      "value": "2026-10-04T12:00:00.123456789Z",
+      "epoch_ms": 1791115200123
+    },
+    {
+      "name": "offset_zero",
+      "kind": "offset",
+      "value": "2026-10-04T12:00:00+00:00",
+      "epoch_ms": 1791115200000
+    },
+    {
+      "name": "offset_negative",
+      "kind": "offset",
+      "value": "2026-10-04T12:00:00-05:00",
+      "epoch_ms": 1791133200000
+    },
+    {
+      "name": "offset_half_hour",
+      "kind": "offset",
+      "value": "2026-10-04T12:00:00+05:30",
+      "epoch_ms": 1791095400000
+    },
+    {
+      "name": "offset_with_fraction",
+      "kind": "offset",
+      "value": "2026-10-04T12:00:00.123+02:00",
+      "epoch_ms": 1791108000123
+    },
+    {
+      "name": "offset_no_colon_positive",
+      "kind": "offset",
+      "value": "2026-10-04T12:00:00+0000",
+      "epoch_ms": 1791115200000
+    },
+    {
+      "name": "offset_no_colon_negative",
+      "kind": "offset",
+      "value": "2026-10-04T12:00:00-0500",
+      "epoch_ms": 1791133200000
+    },
+    {
+      "name": "offset_quarter_hour",
+      "kind": "offset",
+      "value": "2026-10-04T12:00:00.1+05:45",
+      "epoch_ms": 1791094500100
+    },
+    {
+      "name": "naive_iso_fraction",
+      "kind": "audible-no-timezone",
+      "value": "2026-10-04T12:00:00.5",
+      "epoch_ms": 1791115200500
+    },
+    {
+      "name": "minute_precision",
+      "kind": "audible-no-timezone",
+      "value": "2026-10-04T12:00",
+      "epoch_ms": 1791115200000
+    },
+    {
+      "name": "whitespace_padded",
+      "kind": "audible-no-timezone",
+      "value": "  2026-10-04 12:00:00.5  ",
+      "epoch_ms": 1791115200500
+    },
+    {
+      "name": "date_only",
+      "kind": "audible-no-timezone",
+      "value": "2026-10-04",
+      "epoch_ms": 1791072000000
+    },
+    {
+      "name": "old_epoch",
+      "kind": "audible-no-timezone",
+      "value": "0001-01-01 00:00:00.0",
+      "epoch_ms": -62135596800000
+    },
+    {
+      "name": "null_value",
+      "kind": "null",
+      "value": null,
+      "epoch_ms": null
+    },
+    {
+      "name": "empty_string",
+      "kind": "null",
+      "value": "",
+      "epoch_ms": null
+    },
+    {
+      "name": "whitespace_only",
+      "kind": "null",
+      "value": "   ",
+      "epoch_ms": null
+    },
+    {
+      "name": "non_string_number",
+      "kind": "null",
+      "value": 12345,
+      "epoch_ms": null
+    },
+    {
+      "name": "non_string_bool",
+      "kind": "null",
+      "value": true,
+      "epoch_ms": null
+    },
+    {
+      "name": "garbage_text",
+      "kind": "garbage",
+      "value": "nonsense",
+      "epoch_ms": null
+    },
+    {
+      "name": "garbage_bad_month",
+      "kind": "garbage",
+      "value": "2026-13-01 00:00:00",
+      "epoch_ms": null
+    },
+    {
+      "name": "garbage_bad_day",
+      "kind": "garbage",
+      "value": "2026-02-30 00:00:00",
+      "epoch_ms": null
+    },
+    {
+      "name": "garbage_bad_minute",
+      "kind": "garbage",
+      "value": "2026-10-04T12:60:00Z",
+      "epoch_ms": null
+    },
+    {
+      "name": "garbage_bad_second",
+      "kind": "garbage",
+      "value": "2026-10-04T12:00:60Z",
+      "epoch_ms": null
+    },
+    {
+      "name": "garbage_bad_fraction",
+      "kind": "garbage",
+      "value": "2026-10-04T12:00:00.abcdefZ",
+      "epoch_ms": null
+    },
+    {
+      "name": "garbage_empty_fraction",
+      "kind": "garbage",
+      "value": "2026-10-04T12:00:00.Z",
+      "epoch_ms": null
+    },
+    {
+      "name": "garbage_offset_hour",
+      "kind": "garbage",
+      "value": "2026-10-04T12:00:00+24:00",
+      "epoch_ms": null
+    },
+    {
+      "name": "garbage_double_space",
+      "kind": "garbage",
+      "value": "2026-10-04  12:00:00",
+      "epoch_ms": null
+    },
+    {
+      "name": "garbage_leading_plus",
+      "kind": "garbage",
+      "value": "+2026-10-04T12:00:00Z",
+      "epoch_ms": null
+    }
+  ],
+  "merge": [
+    {
+      "name": "remote_newer_wins",
+      "local": {
+        "ms": 1000,
+        "updated_at": "2026-01-01 00:00:00.0"
+      },
+      "remote": {
+        "ms": 4000,
+        "updated_at": "2026-02-02 00:00:00.0"
+      },
+      "expected": {
+        "ms": 4000,
+        "updated_at": "2026-02-02 00:00:00.0"
+      }
+    },
+    {
+      "name": "local_newer_wins",
+      "local": {
+        "ms": 2000,
+        "updated_at": "2026-02-01 00:00:00.0"
+      },
+      "remote": {
+        "ms": 500,
+        "updated_at": "2026-01-01 00:00:00.0"
+      },
+      "expected": {
+        "ms": 2000,
+        "updated_at": "2026-02-01 00:00:00.0"
+      }
+    },
+    {
+      "name": "equal_timestamp_local_wins",
+      "local": {
+        "ms": 2000,
+        "updated_at": "2026-02-01 00:00:00.0"
+      },
+      "remote": {
+        "ms": 2000,
+        "updated_at": "2026-02-01 00:00:00.0"
+      },
+      "expected": {
+        "ms": 2000,
+        "updated_at": "2026-02-01 00:00:00.0"
+      }
+    },
+    {
+      "name": "equal_instant_different_format_local_wins",
+      "local": {
+        "ms": 1500,
+        "updated_at": "2026-01-01T00:00:00Z"
+      },
+      "remote": {
+        "ms": 1500,
+        "updated_at": "2026-01-01 00:00:00.0"
+      },
+      "expected": {
+        "ms": 1500,
+        "updated_at": "2026-01-01T00:00:00Z"
+      }
+    },
+    {
+      "name": "remote_missing",
+      "local": {
+        "ms": 2000,
+        "updated_at": "2026-02-01 00:00:00.0"
+      },
+      "remote": null,
+      "expected": {
+        "ms": 2000,
+        "updated_at": "2026-02-01 00:00:00.0"
+      }
+    },
+    {
+      "name": "local_missing",
+      "local": null,
+      "remote": {
+        "ms": 4000,
+        "updated_at": "2026-02-02 00:00:00.0"
+      },
+      "expected": {
+        "ms": 4000,
+        "updated_at": "2026-02-02 00:00:00.0"
+      }
+    },
+    {
+      "name": "both_missing",
+      "local": null,
+      "remote": null,
+      "expected": {
+        "ms": 0,
+        "updated_at": null
+      }
+    },
+    {
+      "name": "remote_timestamp_missing",
+      "local": {
+        "ms": 2000,
+        "updated_at": "2026-02-01 00:00:00.0"
+      },
+      "remote": {
+        "ms": 8888,
+        "updated_at": null
+      },
+      "expected": {
+        "ms": 2000,
+        "updated_at": "2026-02-01 00:00:00.0"
+      }
+    },
+    {
+      "name": "local_timestamp_missing",
+      "local": {
+        "ms": 9999,
+        "updated_at": null
+      },
+      "remote": {
+        "ms": 4000,
+        "updated_at": "2026-02-02 00:00:00.0"
+      },
+      "expected": {
+        "ms": 4000,
+        "updated_at": "2026-02-02 00:00:00.0"
+      }
+    },
+    {
+      "name": "remote_timestamp_garbage",
+      "local": {
+        "ms": 2000,
+        "updated_at": "2026-02-01 00:00:00.0"
+      },
+      "remote": {
+        "ms": 80,
+        "updated_at": "also-not-a-date"
+      },
+      "expected": {
+        "ms": 2000,
+        "updated_at": "2026-02-01 00:00:00.0"
+      }
+    },
+    {
+      "name": "local_timestamp_garbage",
+      "local": {
+        "ms": 70,
+        "updated_at": "not-a-date"
+      },
+      "remote": {
+        "ms": 4000,
+        "updated_at": "2026-02-02 00:00:00.0"
+      },
+      "expected": {
+        "ms": 4000,
+        "updated_at": "2026-02-02 00:00:00.0"
+      }
+    },
+    {
+      "name": "both_timestamps_garbage_local_wins",
+      "local": {
+        "ms": 70,
+        "updated_at": "not-a-date"
+      },
+      "remote": {
+        "ms": 80,
+        "updated_at": "also-not-a-date"
+      },
+      "expected": {
+        "ms": 70,
+        "updated_at": "not-a-date"
+      }
+    },
+    {
+      "name": "remote_not_an_entry",
+      "local": {
+        "ms": 2000,
+        "updated_at": "2026-02-01 00:00:00.0"
+      },
+      "remote": "not-an-object",
+      "expected": {
+        "ms": 2000,
+        "updated_at": "2026-02-01 00:00:00.0"
+      }
+    },
+    {
+      "name": "local_not_an_entry",
+      "local": "not-an-object",
+      "remote": {
+        "ms": 4000,
+        "updated_at": "2026-02-02 00:00:00.0"
+      },
+      "expected": {
+        "ms": 4000,
+        "updated_at": "2026-02-02 00:00:00.0"
+      }
+    },
+    {
+      "name": "float_and_negative_ms_are_cleaned",
+      "local": {
+        "ms": 0,
+        "updated_at": "2026-01-01T00:00:00Z"
+      },
+      "remote": {
+        "ms": 100,
+        "updated_at": "2026-01-02T00:00:00Z"
+      },
+      "expected": {
+        "ms": 100,
+        "updated_at": "2026-01-02T00:00:00Z"
+      }
+    },
+    {
+      "name": "bool_ms_is_zeroed",
+      "local": {
+        "ms": 0,
+        "updated_at": "2026-01-01T00:00:00Z"
+      },
+      "remote": {
+        "ms": 0,
+        "updated_at": "2026-01-02T00:00:00Z"
+      },
+      "expected": {
+        "ms": 0,
+        "updated_at": "2026-01-02T00:00:00Z"
+      }
+    },
+    {
+      "name": "remote_newer_timestamp_wins_over_larger_local_position",
+      "local": {
+        "ms": 9000,
+        "updated_at": "2026-01-01 00:00:00.0"
+      },
+      "remote": {
+        "ms": 100,
+        "updated_at": "2026-02-02 00:00:00.0"
+      },
+      "expected": {
+        "ms": 100,
+        "updated_at": "2026-02-02 00:00:00.0"
+      }
+    }
+  ]
+}
