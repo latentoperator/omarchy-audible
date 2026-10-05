@@ -20,11 +20,11 @@
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
-      "showTitle": "Off"
+      "showTitleInBar": "Off"
     },
     "schema": [
       {
-        "key": "showTitle",
+        "key": "showTitleInBar",
         "type": "enum",
         "label": "Show book title in bar",
         "options": [

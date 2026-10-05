@@ -15,7 +15,7 @@ BarWidget {
   readonly property var service: bar && bar.shell
     ? bar.shell.serviceFor("latentoperator.audible") : null
   readonly property var player: service ? service.player : null
-  readonly property string barTitle: Panel.barTitle(String(setting("showTitle", "Off")), vertical,
+  readonly property string barTitle: Panel.barTitle(String(setting("showTitleInBar", "Off")), vertical,
     player ? player.loaded : false, service && service.loadedRow ? service.loadedRow.title : "")
 
   property bool opened: false
@@ -57,7 +57,7 @@ BarWidget {
     onPressed: function(b) { root.press(b) }
   }
 
-  // The same button with the title beside the glyph (setting `showTitle`).
+  // The same button with the title beside the glyph (setting `showTitleInBar`).
   WidgetButton {
     id: titled
     anchors.fill: parent
