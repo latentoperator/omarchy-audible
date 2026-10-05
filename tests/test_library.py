@@ -445,12 +445,13 @@ def test_sort_title_ignores_articles_and_case(library: qjs.JsModule, catalog: di
     assert asins(library.call("sortRows", rows, "title")) == [A3, A2, A1, A5, A4]
 
 
-def test_sort_author_ignores_articles_and_case(library: qjs.JsModule, catalog: dict) -> None:
+def test_sort_author_uses_surname(library: qjs.JsModule, catalog: dict) -> None:
+    # Abernathy, Fairweather, Quill, Reyes (after "Dr."), Varga.
     rows = build(library, catalog)
-    assert asins(library.call("sortRows", rows, "author")) == [A4, A3, A2, A5, A1]
+    assert asins(library.call("sortRows", rows, "author")) == [A5, A3, A1, A4, A2]
 
 
-def test_sort_title_and_author_strip_articles() -> None:
+def test_sort_title_strips_articles() -> None:
     library = qjs.load("Library")
     rows = [
         {"title": "The Beta", "authors": ["The Zenith"], "dateAdded": None, "recentKey": None},
@@ -462,10 +463,64 @@ def test_sort_title_and_author_strip_articles() -> None:
         "The Beta",
         "An Epsilon",
     ]
+    # Author names keep a leading "A"/"An"/"The"; they sort by surname.
     assert [row["authors"][0] for row in library.call("sortRows", rows, "author")] == [
         "An Aardvark",
         "A Young",
         "The Zenith",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("name", "key"),
+    [
+        ("Dr. Tamsin Reyes", "reyes tamsin"),
+        ("Tamsin Reyes", "reyes tamsin"),
+        ("Martin Luther King Jr.", "king martin luther"),
+        ("Martin Luther King, Jr.", "king martin luther"),
+        ("Jane Doe PhD", "doe jane"),
+        ("Prof. Sir Ian Moss III", "moss ian"),
+        ("Ursula K. Le Guin", "le guin ursula k."),
+        ("Daphne du Maurier", "du maurier daphne"),
+        ("Ludwig van der Berg", "van der berg ludwig"),
+        ("Reyes, Tamsin", "reyes tamsin"),
+        ("Zoë Ångström", "angstrom zoe"),
+        ("Plato", "plato"),
+        ("Dr.", "dr."),
+        ("Jr.", "jr."),
+        ("A Young", "young a"),
+        ("The Zenith", "zenith the"),
+        ("  Mara   Quill  ", "quill mara"),
+        ("", ""),
+    ],
+)
+def test_author_key(library: qjs.JsModule, name: str, key: str) -> None:
+    assert library.evaluate(f"_p.authorKey({json.dumps(name)})") == key
+
+
+def test_author_key_tolerates_bad_input(library: qjs.JsModule) -> None:
+    for expression in ("null", "undefined", "7", "{}", "[]"):
+        assert library.evaluate(f"_p.authorKey({expression})") == ""
+
+
+def test_sort_author_by_surname_with_honorifics_and_suffixes() -> None:
+    library = qjs.load("Library")
+    names = [
+        "Dr. Tamsin Reyes",
+        "Martin Luther King Jr.",
+        "Ursula K. Le Guin",
+        "June Abernathy",
+        "Jane Doe PhD",
+        "Daphne du Maurier",
+    ]
+    rows = [{"title": n, "authors": [n], "dateAdded": None, "recentKey": None} for n in names]
+    assert [row["authors"][0] for row in library.call("sortRows", rows, "author")] == [
+        "June Abernathy",
+        "Jane Doe PhD",
+        "Daphne du Maurier",
+        "Martin Luther King Jr.",
+        "Ursula K. Le Guin",
+        "Dr. Tamsin Reyes",
     ]
 
 

@@ -75,8 +75,8 @@ _p.foldText = function (value) {
   }
 };
 
-// A comparable sort key for a title or an author name: folded, trimmed, and
-// without a leading "The"/"A"/"An".
+// A comparable sort key for a title: folded, trimmed, and without a leading
+// "The"/"A"/"An".
 _p.titleKey = function (value) {
   var folded = _p.foldText(value).replace(/^\s+/, "");
   var match = /^(the|a|an)\s+/.exec(folded);
@@ -84,6 +84,55 @@ _p.titleKey = function (value) {
     folded = folded.slice(match[0].length);
   }
   return folded;
+};
+
+// Name parts the author sort skips: honorifics before a name, and suffixes
+// after it. Compared folded and without a trailing ".".
+_p.NAME_PREFIXES = ["dr", "mr", "mrs", "ms", "miss", "mx", "prof", "professor", "sir", "dame", "lord", "lady", "rev", "fr", "capt", "col", "gen"];
+_p.NAME_SUFFIXES = ["jr", "sr", "ii", "iii", "iv", "phd", "md", "dds", "esq", "obe", "mbe", "cbe"];
+// Particles kept with the surname ("Le Guin", "du Maurier", "van der Berg").
+_p.SURNAME_PARTICLES = ["de", "da", "di", "du", "del", "della", "der", "den", "van", "von", "le", "la", "st"];
+
+_p.bareWord = function (word) {
+  return word.replace(/[.,]+$/, "");
+};
+
+// A comparable sort key for an author name: surname first, then the given
+// names, folded. Honorifics ("Dr.") and suffixes ("Jr.", "PhD") are skipped,
+// a particle after the given name stays with the surname, and a name already written
+// "Surname, Given" is kept in that order. Unlike `titleKey`, a leading
+// "A"/"An"/"The" is part of the name.
+_p.authorKey = function (value) {
+  if (typeof value !== "string") {
+    return "";
+  }
+  var words = _p.foldText(value).trim().split(/\s+/).filter(function (word) {
+    return word.length > 0;
+  });
+  var start = 0;
+  var end = words.length;
+  while (end - start > 1 && _p.NAME_SUFFIXES.indexOf(_p.bareWord(words[end - 1])) !== -1) {
+    end--;
+  }
+  while (end - start > 1 && _p.NAME_PREFIXES.indexOf(_p.bareWord(words[start])) !== -1) {
+    start++;
+  }
+  if (end - start === 0) {
+    return "";
+  }
+  // "Reyes, Tamsin": already surname first.
+  for (var index = start; index < end - 1; index++) {
+    if (/,$/.test(words[index])) {
+      return words.slice(start, end).join(" ").replace(/,/g, "");
+    }
+  }
+  var cut = end - 1;
+  while (cut - 1 > start && _p.SURNAME_PARTICLES.indexOf(_p.bareWord(words[cut - 1])) !== -1) {
+    cut--;
+  }
+  var surname = words.slice(cut, end).join(" ").replace(/,+$/, "");
+  var given = words.slice(start, cut).join(" ").replace(/,+$/, "");
+  return given.length > 0 ? surname + " " + given : surname;
 };
 
 // Parse a timestamp into epoch milliseconds, or null when it is unparseable.
@@ -556,8 +605,9 @@ function buildRows(catalog, remote, state, local, jobs) {
   return rows;
 }
 
-// A new, stable-sorted array: "recent"/"added" newest first, "title"/"author"
-// ascending and ignoring case and a leading "The"/"A"/"An".
+// A new, stable-sorted array: "recent"/"added" newest first, "title"
+// ascending and ignoring case and a leading "The"/"A"/"An", "author" by the
+// first author's surname (`authorKey`).
 function sortRows(rows, key) {
   var items = Array.isArray(rows) ? rows : [];
   if (key === SORT_RECENT) {
@@ -577,7 +627,7 @@ function sortRows(rows, key) {
   }
   if (key === SORT_AUTHOR) {
     return _p.stableSort(items, function (left, right) {
-      return _p.compareText(_p.titleKey(_p.firstAuthor(left)), _p.titleKey(_p.firstAuthor(right)));
+      return _p.compareText(_p.authorKey(_p.firstAuthor(left)), _p.authorKey(_p.firstAuthor(right)));
     });
   }
   return items.slice();
