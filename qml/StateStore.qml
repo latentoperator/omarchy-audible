@@ -101,10 +101,23 @@ Item {
     id: backup
     onExited: function(code, status) {
       var parsed = root.adoptWaiting
-      root.adoptWaiting = null
-      if (code === 0 && parsed) root.finishAdopt(parsed)
-      else root.lastError = "could not back up the unreadable state.json"
+      if (code === 0 && parsed) {
+        root.adoptWaiting = null
+        root.finishAdopt(parsed)
+        return
+      }
+      // Still nothing is written; try the copy again later (a full disk may
+      // have been cleared). Positions keep queueing in the meantime.
+      root.lastError = "could not back up the unreadable state.json"
+      backupRetry.restart()
     }
+  }
+
+  Timer {
+    id: backupRetry
+    interval: 30000
+    repeat: false
+    onTriggered: if (root.adoptWaiting) backup.running = true
   }
 
   FileView {
