@@ -53,7 +53,12 @@ Item {
       "ms": book.ms,
       "last_pushed_ms": lastPushed[asin] === undefined ? null : lastPushed[asin]
     }
-    if (!Positions.shouldPush(candidate)) return false
+    // A queued entry that no longer matches the book's position must be
+    // replaced even when the position equals the last one pushed (the user
+    // listened back to it), or the stale queued one would be sent later.
+    var queued = queue.filter(function(e) { return e.asin === asin })
+    var outdated = queued.length > 0 && queued[0].ms !== book.ms
+    if (!Positions.shouldPush(candidate) && !outdated) return false
     var next = Positions.enqueue(queue.slice(), { "asin": asin, "ms": book.ms, "at": book.last_played_at })
     store.setQueue(next)
     return true
@@ -86,7 +91,7 @@ Item {
       progressed = true
     }
     if (split.drop.length > 0) store.setQueue(next)
-    plan = Sync.sendable(split.send, requested)
+    plan = Sync.atOwnWrites(Sync.sendable(split.send, requested), record.items, lastPushed)
   }
 
   function handleFinished(job, outcome) {
