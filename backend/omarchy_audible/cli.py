@@ -13,7 +13,7 @@ import sys
 from collections.abc import Mapping, Sequence
 
 from . import protocol
-from .commands import REGISTRY
+from .commands import REGISTRY, job_asin
 from .joblock import JobBusy, job_lock
 from .log import log
 from .paths import Paths
@@ -59,7 +59,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if spec.is_job:
             try:
-                with job_lock(paths, write_record=command == "get", command=command):
+                with job_lock(
+                    paths,
+                    write_record=command == "get",
+                    pid=os.getpid(),
+                    command=command,
+                    asin=job_asin(command, args),
+                ):
                     return spec.handler(args, command=command, fake=fake, paths=paths)
             except JobBusy:
                 protocol.error(

@@ -131,7 +131,7 @@ Pipeline for `get <asin>`:
 1. Pre-flight: content metadata gives `content_size_in_bytes` before download; require ≥ 2.1× that in free space (S2 measured a 2.0× peak).
 2. Create `<booksDir>/<asin>/.partial/`.
 3. Download via `audible-cli` with `--aaxc --chapter -q best`, no progress bars. **Prefer aaxc; if no voucher is offered, retry with `--aax`** (G0 decision). Note that audible-cli's own `--aax-fallback` goes the other way (aax first), so don't use it. Report progress by polling the partial file size.
-4. Decrypt: `.aaxc` uses the voucher `content_license.license_response.key`/`.iv` (`-audible_key`, `-audible_iv`); `.aax` uses `-activation_bytes` ✅ S2 proved both paths.
+4. Decrypt: `.aaxc` uses the voucher `content_license.license_response.key`/`.iv` (`-audible_key`, `-audible_iv`); `.aax` uses `-activation_bytes` ✅ S2 proved both paths. ffmpeg offers no other input for the aaxc key/iv, so they are passed as argv and are visible to same-user processes in `/proc/<pid>/cmdline` for the few seconds the conversion runs; that is accepted.
 5. **Chapters come from Audible's list, not the file** (G0 decision; one book had 20 embedded chapters vs 46 in the API). Build an ffmetadata chapter file from `<ASIN>-chapters.json` (flat) and apply it in the same `-c copy` pass (`-i chapters.txt -map_metadata 1 -map_chapters 1`). Fall back to the embedded chapters if the JSON is missing. Write to `book.m4b.tmp`, then `ffprobe` sanity check (duration within 1% of catalog runtime; chapter count equals the flat list), then atomic rename to `book.m4b`.
 6. Write `meta.json`, delete `.partial/` and the raw `.aax`/`.aaxc` (**the raw file is never kept**).
 7. On failure or cancel at any step, delete `.partial/` and emit `error`.

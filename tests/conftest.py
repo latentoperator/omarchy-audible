@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -18,6 +19,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER = REPO_ROOT / "bin" / "omarchy-audible"
 BACKEND_DIR = REPO_ROOT / "backend"
 SCHEMAS_DIR = Path(__file__).resolve().parent / "schemas"
+
+# Where ffmpeg/ffprobe live on the Hopebox when they are not on PATH.
+FFMPEG_FALLBACK_DIR = Path("/home/hopewell/.hermes/tools/ffmpeg-9.0.1-linux-x64/bin")
 
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
@@ -79,6 +83,31 @@ def run_cli(env: dict[str, str]):
         )
 
     return _run
+
+
+def _ensure_tool(env: dict[str, str], name: str) -> bool:
+    """Put the fallback dir ahead on ``env["PATH"]`` when ``name`` is missing."""
+    if shutil.which(name, path=env.get("PATH")):
+        return True
+    if (FFMPEG_FALLBACK_DIR / name).is_file():
+        env["PATH"] = os.pathsep.join([str(FFMPEG_FALLBACK_DIR), env.get("PATH", "")])
+        return True
+    return False
+
+
+@pytest.fixture
+def ffmpeg_bin(env: dict[str, str], monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
+    """Make ``ffmpeg``/``ffprobe`` reachable, or skip a test that needs them.
+
+    Prepends the Hopebox fallback directory to the shared ``env`` fixture (so
+    ``run_cli`` subprocesses see it) **and** to ``os.environ`` (so in-process
+    ``run_get()`` calls resolve ffmpeg via ``shutil.which``); pytest restores
+    both. Skips cleanly on a machine without ffmpeg (ARCHITECTURE 8).
+    """
+    if not (_ensure_tool(env, "ffmpeg") and _ensure_tool(env, "ffprobe")):
+        pytest.skip("ffmpeg and ffprobe are required for the conversion pipeline")
+    monkeypatch.setenv("PATH", env["PATH"])
+    return env
 
 
 @pytest.fixture
