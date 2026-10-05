@@ -65,6 +65,33 @@ omarchy-audible position-push <asin> <ms> [--at <iso-8601>]
 
 `position-push` is the only command that changes anything on your Audible account. It re-reads Audible's position first and refuses (`error` code `stale`) if Audible's is newer than your local listening time, so it can't move your phone backwards. The Audible phone app follows a pushed position on its own, with an undo notice.
 
+## Hotkeys and IPC
+
+The shell exposes one IPC target you can drive from a terminal or bind to a key:
+
+```sh
+omarchy-shell latentoperator.audible <method> [args]
+```
+
+| Method | Meaning |
+|---|---|
+| `toggle` | Toggle the drawer on the primary bar widget |
+| `openLibrary` | Open the drawer on the primary bar widget |
+| `playPause` | Toggle play/pause for the loaded book |
+| `skip <seconds>` | Seek by a signed number of seconds, e.g. `skip -15` |
+| `nextChapter` | Jump to the next chapter |
+| `prevChapter` | Jump to the previous chapter |
+
+Every method returns a short string: `ok` on success, or an error such as `error: nothing loaded`.
+
+**The plugin does not add any keybinding.** To add your own, put this in your Hyprland config — that file is yours, this project never edits it:
+
+```ini
+bind = SUPER, A, exec, omarchy-shell latentoperator.audible toggle
+```
+
+`qs ipc show` lists the target's methods.
+
 ## Documents
 
 | | |

@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Io
 import "qml"
 import "qml/lib/DebugCatalog.js" as DebugCatalog
+import "qml/lib/Ipc.js" as Ipc
 import "qml/lib/Playback.js" as Playback
 import "qml/lib/Positions.js" as Positions
 
@@ -334,18 +335,56 @@ Item {
     onTriggered: root.savePosition(root.snapAsin, root.snapMs, true)
   }
 
-  // TEMPORARY dev methods; P5 adds the public ones (toggle, openLibrary) and
-  // the README section. All arguments and return values are strings.
+  // Shell IPC target (ARCHITECTURE 6). Every argument and return value is a
+  // string: "ok", or a short error string. Nothing here throws.
   IpcHandler {
     target: "latentoperator.audible"
 
+    function toggle(): string {
+      var surface = root.primarySurface()
+      if (!surface) return "error: no surface"
+      surface.toggle()
+      return "ok"
+    }
+
+    function openLibrary(): string {
+      var surface = root.primarySurface()
+      if (!surface) return "error: no surface"
+      surface.open()
+      return "ok"
+    }
+
+    function playPause(): string {
+      if (!player.loaded) return "error: nothing loaded"
+      player.toggle()
+      return "ok"
+    }
+
+    function skip(seconds: string): string {
+      var value = Ipc.parseSeconds(seconds)
+      if (value === null) return "error: bad seconds"
+      if (!player.loaded) return "error: nothing loaded"
+      player.skip(value)
+      return "ok"
+    }
+
+    function nextChapter(): string {
+      if (!player.loaded) return "error: nothing loaded"
+      player.nextChapter()
+      return "ok"
+    }
+
+    function prevChapter(): string {
+      if (!player.loaded) return "error: nothing loaded"
+      player.prevChapter()
+      return "ok"
+    }
+
+    // TEMPORARY dev methods (removed in U1), kept while the debug panel exists.
     function play(asin: string): string { return root.playBook(asin, -1) }
     function playAt(asin: string, startSec: string): string { return root.playBook(asin, Number(startSec) || 0) }
     function pause(): string { player.pause(); return "ok" }
     function resume(): string { player.resume(); return "ok" }
-    function skip(seconds: string): string { player.skip(Number(seconds) || 0); return "ok" }
-    function nextChapter(): string { player.nextChapter(); return "ok" }
-    function prevChapter(): string { player.prevChapter(); return "ok" }
     function chapter(index: string): string { player.setChapter(Number(index) || 0); return "ok" }
     function speed(value: string): string { player.setSpeed(Number(value)); return "ok" }
     function volume(value: string): string { player.setVolume(Number(value)); return "ok" }
