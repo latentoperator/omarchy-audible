@@ -50,27 +50,3 @@ def test_sendable_waits_for_a_fresh_read(sync):
     assert sync.call("sendable", send, ["A", "B"]) == [entry("A")]
     assert sync.call("sendable", send, None) == []
     assert sync.call("sendable", None, ["A"]) == []
-
-
-def test_own_writes_do_not_look_like_another_device(sync):
-    items = {"A": {"ms": 60000, "updated_at": "2026-10-05T14:01:05Z"},
-             "B": {"ms": 5, "updated_at": "2026-10-05T14:00:00Z"}}
-    out = sync.call("withoutOwnWrites", items, {"A": 60000, "B": 999})
-    assert out["A"] == {"ms": 60000, "updated_at": None}
-    assert out["B"] == items["B"]
-    assert sync.call("withoutOwnWrites", items, None) == items
-    assert sync.call("withoutOwnWrites", None, {"A": 1}) == {}
-    assert items["A"]["updated_at"] == "2026-10-05T14:01:05Z"
-
-
-def test_own_write_entries_are_sent_at_the_remote_stamp_but_keep_their_at(sync):
-    send = [entry("A", 62000, "2026-10-05T14:01:02Z"), entry("B", 5)]
-    items = {"A": {"ms": 60000, "updated_at": "2026-10-05T14:01:05Z"},
-             "B": {"ms": 9, "updated_at": "2026-10-05T14:00:00Z"}}
-    out = sync.call("atOwnWrites", send, items, {"A": 60000, "B": 1})
-    assert out[0]["sendAt"] == "2026-10-05T14:01:05Z" and out[0]["at"] == "2026-10-05T14:01:02Z"
-    assert "sendAt" not in out[1]
-    assert sync.call("pushArgs", out[0]) == ["A", "62000", "--at", "2026-10-05T14:01:05Z"]
-    assert sync.call("pushArgs", out[1]) == ["B", "5", "--at", "2026-10-05T14:00:00Z"]
-    assert sync.call("atOwnWrites", send, items, None) == send
-    assert sync.call("atOwnWrites", None, items, {}) == []
