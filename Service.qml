@@ -38,6 +38,10 @@ Item {
   readonly property int maxEvents: 40
 
   readonly property alias runner: runner
+  readonly property alias player: player
+
+  readonly property string runtimeDir: status && status.runtime_dir ? String(status.runtime_dir) : ""
+  readonly property string booksDir: status && status.books_dir ? String(status.books_dir) : ""
 
   function registerSurface(surface) {
     if (surface && surfaces.indexOf(surface) < 0) surfaces = surfaces.concat([surface])
@@ -70,9 +74,58 @@ Item {
     return DebugCatalog.firstAsin(catalogFile.text())
   }
 
+  // The book file for an ASIN, under the books dir from the `status` event.
+  function playBook(asin, startSec) {
+    if (booksDir.length === 0) return "error: status not read yet"
+    if (!/^[A-Za-z0-9]+$/.test(asin)) return "error: bad asin"
+    return player.play(booksDir + "/" + asin + "/book.m4b", startSec) ? "ok" : "error: " + player.lastError
+  }
+
+  function playerSummary() {
+    return JSON.stringify({
+      "connection": player.connection, "error": player.lastError,
+      "loaded": player.loaded, "playing": player.playing,
+      "positionMs": player.positionMs, "durationMs": player.durationMs,
+      "chapterIndex": player.chapterIndex, "chapters": player.chapters.length,
+      "speed": player.speed, "volume": player.volume,
+      "sleep": player.sleepTimer ? player.sleepTimer.mode : null
+    })
+  }
+
   function logEvent(label, text) {
     var entry = { "label": label, "text": text }
     recentEvents = recentEvents.concat([entry]).slice(-maxEvents)
+  }
+
+  PlayerController {
+    id: player
+    socketPath: root.runtimeDir.length > 0 ? root.runtimeDir + "/mpv.sock" : ""
+    // Low in fake mode: the fake book is a sine wave.
+    initialVolume: root.fake ? 15 : 100
+    // Reattach once the paths are known.
+    onSocketPathChanged: if (socketPath.length > 0) attach()
+  }
+
+  // TEMPORARY dev methods; P5 adds the public ones (toggle, openLibrary) and
+  // the README section. All arguments and return values are strings.
+  IpcHandler {
+    target: "latentoperator.audible"
+
+    function play(asin: string): string { return root.playBook(asin, 0) }
+    function playAt(asin: string, startSec: string): string { return root.playBook(asin, Number(startSec) || 0) }
+    function pause(): string { player.pause(); return "ok" }
+    function resume(): string { player.resume(); return "ok" }
+    function skip(seconds: string): string { player.skip(Number(seconds) || 0); return "ok" }
+    function nextChapter(): string { player.nextChapter(); return "ok" }
+    function prevChapter(): string { player.prevChapter(); return "ok" }
+    function chapter(index: string): string { player.setChapter(Number(index) || 0); return "ok" }
+    function speed(value: string): string { player.setSpeed(Number(value)); return "ok" }
+    function volume(value: string): string { player.setVolume(Number(value)); return "ok" }
+    function sleepMinutes(minutes: string): string { player.setSleepTimer(Number(minutes) || 0); return "ok" }
+    function sleepChapter(): string { player.setSleepEndOfChapter(); return "ok" }
+    function sleepCancel(): string { player.cancelSleep(); return "ok" }
+    function quitPlayer(): string { player.quit(); return "ok" }
+    function playerStatus(): string { return root.playerSummary() }
   }
 
   FileView {
