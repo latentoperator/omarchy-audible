@@ -43,7 +43,8 @@ ColumnLayout {
 
       Text {
         Layout.fillWidth: true
-        text: root.loaded ? Mini.title(root.row) : "Nothing playing"
+        text: Mini.title(root.loaded, root.row)
+        textFormat: Text.PlainText
         elide: Text.ElideRight
         color: Color.popups.text
         font.family: Style.font.family
@@ -52,8 +53,10 @@ ColumnLayout {
 
       Text {
         Layout.fillWidth: true
-        visible: text.length > 0
-        text: root.loaded && root.row ? Format.names(root.row.authors) : ""
+        readonly property var names: Mini.authors(root.loaded, root.row)
+        visible: names.length > 0
+        text: Format.names(names)
+        textFormat: Text.PlainText
         elide: Text.ElideRight
         color: Color.muted
         font.family: Style.font.family
@@ -68,6 +71,7 @@ ColumnLayout {
 
     Text {
       text: Format.clock(root.positionMs)
+      textFormat: Text.PlainText
       color: Color.popups.text
       font.family: Style.font.family
       font.pixelSize: Style.font.bodySmall

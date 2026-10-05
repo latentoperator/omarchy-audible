@@ -15,6 +15,7 @@ def mini() -> qjs.JsModule:
 @pytest.mark.parametrize("row,text", [
     ({"title": "The Lighthouse Ledger"}, "The Lighthouse Ledger"),
     ({"title": "  Padded  "}, "Padded"),
+    ({"title": "<b>Markup</b>"}, "<b>Markup</b>"),
     ({"title": ""}, "Unknown title"),
     ({"title": "   "}, "Unknown title"),
     ({"title": None}, "Unknown title"),
@@ -22,8 +23,27 @@ def mini() -> qjs.JsModule:
     ({}, "Unknown title"),
     (None, "Unknown title"),
 ])
-def test_title(mini, row, text):
-    assert mini.call("title", row) == text
+def test_title_loaded(mini, row, text):
+    assert mini.call("title", True, row) == text
+
+
+@pytest.mark.parametrize("loaded", [False, None, "yes"])
+def test_title_nothing_loaded(mini, loaded):
+    assert mini.call("title", loaded, {"title": "A Book"}) == "Nothing playing"
+
+
+@pytest.mark.parametrize("loaded,row,names", [
+    (True, {"authors": ["Mara Quill"]}, ["Mara Quill"]),
+    (True, {"authors": [" A ", "", "  ", None, 7, "B"]}, ["A", "B"]),
+    (True, {"authors": []}, []),
+    (True, {"authors": "Mara Quill"}, []),
+    (True, {}, []),
+    (True, None, []),
+    (False, {"authors": ["Mara Quill"]}, []),
+    (None, {"authors": ["Mara Quill"]}, []),
+])
+def test_authors(mini, loaded, row, names):
+    assert mini.call("authors", loaded, row) == names
 
 
 @pytest.mark.parametrize("pos,dur,left", [
@@ -55,19 +75,23 @@ def test_play_glyph(mini, playing, glyph):
 
 
 @pytest.mark.parametrize("view,loaded,kind,dx,action", [
-    ("mini", True, "activate", 0, "toggle"),
+    ("mini", True, "space", 0, "toggle"),
+    ("mini", True, "enter", 0, "none"),
+    ("mini", True, "activate", 0, "none"),
     ("mini", True, "move", -1, "back"),
     ("mini", True, "move", 1, "forward"),
     ("mini", True, "move", 0, "none"),
     ("mini", True, "bogus", 1, "none"),
     ("full", True, "move", 1, "forward"),
-    ("full", True, "activate", 0, "toggle"),
-    ("mini", False, "activate", 0, "none"),
+    ("full", True, "space", 0, "toggle"),
+    ("full", True, "enter", 0, "none"),
+    ("mini", False, "space", 0, "none"),
     ("mini", None, "move", 1, "none"),
-    ("library", True, "activate", 0, "none"),
+    ("library", True, "space", 0, "none"),
+    ("library", True, "enter", 0, "none"),
     ("library", True, "move", -1, "none"),
     ("onboarding", True, "move", 1, "none"),
-    (None, True, "activate", 0, "none"),
+    (None, True, "space", 0, "none"),
 ])
 def test_key_action(mini, view, loaded, kind, dx, action):
     assert mini.call("keyAction", view, loaded, kind, dx) == action

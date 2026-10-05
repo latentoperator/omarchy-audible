@@ -21,6 +21,7 @@ BarWidget {
 
   property bool opened: false
   property bool popoutSwitchClosing: false
+  property bool enterPressed: false
 
   function open() {
     if (service) service.viewForOpen()
@@ -91,7 +92,13 @@ BarWidget {
       id: keys
       anchors.fill: parent
       onCloseRequested: root.close()
-      onActivateRequested: root.panelKey("activate", 0)
+      // The catcher sends Enter as returnRequested then activateRequested,
+      // and Space as activateRequested alone.
+      onReturnRequested: root.enterPressed = true
+      onActivateRequested: {
+        root.panelKey(root.enterPressed ? "enter" : "space", 0)
+        root.enterPressed = false
+      }
       onMoveRequested: function(dx, dy) { if (dy === 0) root.panelKey("move", dx) }
 
       StackLayout {

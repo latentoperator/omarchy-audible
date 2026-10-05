@@ -14,6 +14,9 @@ var SKIP_SECONDS = 15;
 // Shown when the loaded file has no catalog row, or the row has no title.
 var UNKNOWN_TITLE = "Unknown title";
 
+// Shown when nothing is loaded.
+var NOTHING_PLAYING = "Nothing playing";
+
 // Glyphs from the theme's icon font (Font Awesome, as the bar uses).
 var GLYPH_BACK = "";
 var GLYPH_FORWARD = "";
@@ -27,12 +30,27 @@ var ACTION_BACK = "back";
 var ACTION_FORWARD = "forward";
 var ACTION_NONE = "none";
 
-// The title to show for the loaded book's row.
-function title(row) {
+// The title line: "Nothing playing" when nothing is loaded, else the row's
+// title, or "Unknown title" when the file has no catalog row or no title.
+function title(loaded, row) {
+  if (loaded !== true) return NOTHING_PLAYING;
   if (row && typeof row.title === "string" && row.title.trim().length > 0) {
     return row.title.trim();
   }
   return UNKNOWN_TITLE;
+}
+
+// The authors to list under the title (the view formats them with
+// `Format.names`); empty, and the line hidden, when nothing is loaded or the
+// row has no author names.
+function authors(loaded, row) {
+  if (loaded !== true || !row || !Array.isArray(row.authors)) return [];
+  var list = [];
+  for (var i = 0; i < row.authors.length; i++) {
+    var name = row.authors[i];
+    if (typeof name === "string" && name.trim().length > 0) list.push(name.trim());
+  }
+  return list;
 }
 
 // Milliseconds left, never negative; 0 when either value is unusable.
@@ -49,11 +67,12 @@ function playGlyph(playing) {
 
 // What a panel key means in `view` (ARCHITECTURE 6): Space toggles, ←/→
 // skip back/forward, in Mini and Full only and only with a book loaded.
-// `kind` is "activate" (Space or Enter from the key catcher) or "move" with
-// `dx` -1/1; vertical moves and anything else do nothing here.
+// `kind` is "space", "enter" or "move" with `dx` -1/1. Enter does nothing
+// here (in ARCHITECTURE 6 it plays the selected Library row, so it must never
+// pause the book that is playing); vertical moves do nothing either.
 function keyAction(view, loaded, kind, dx) {
   if (loaded !== true || (view !== "mini" && view !== "full")) return ACTION_NONE;
-  if (kind === "activate") return ACTION_TOGGLE;
+  if (kind === "space") return ACTION_TOGGLE;
   if (kind === "move") {
     if (dx === -1) return ACTION_BACK;
     if (dx === 1) return ACTION_FORWARD;
