@@ -212,7 +212,7 @@ Item {
   // that waited behind another job must not run if the book is playing again.
   function jobAllowed(job) {
     // A removal queued before the book was played again must not delete it.
-    if (job.command === "remove" && job.purpose === "user") return Drawer.removalAllowed(job.args[0], loadedAsin)
+    if (job.command === "remove" && job.purpose === "user") return Drawer.removalAllowed(job.args[0], busyAsins())
     if (job.purpose !== "autoremove") return true
     return Positions.autoRemoveAllowed(autoRemoveFinished, atEnd(job.args[0]), player.playing)
   }
@@ -274,11 +274,27 @@ Item {
 
   // Picking a Library row (FR-L6, ARCHITECTURE 6). `LibraryUi` decides what
   // the pick means; a local book resumes, starts over or asks.
+  // A new choice of book to play wins over every older one: an open
+  // question, a resume still reading its position, a pending removal of
+  // this book, and the download-then-play check (`latestPick`).
+  function noteIntent(asin) {
+    latestPick = asin
+    askAsin = ""
+    if (pendingResume !== asin) pendingResume = ""
+    removeAfterUnload = removeAfterUnload.filter(function(a) { return a !== asin })
+    if (removeAfterUnload.length === 0) unloadTimer.stop()
+  }
+
+  // Books a removal must not touch: loaded, resuming, or about to load.
+  function busyAsins() {
+    var load = player.pendingLoad ? Playback.asinFromPath(player.pendingLoad.path) : ""
+    return [loadedAsin, pendingResume, load]
+  }
+
   function pick(asin) {
     var row = library.rowFor(asin)
     if (!row) return "error: unknown book"
-    latestPick = asin
-    askAsin = ""
+    noteIntent(asin)
     var action = LibraryUi.primaryAction(row, syncFailure.offline)
     if (action === LibraryUi.ACTION_PLAY) return playPicked(asin, true)
     if (action === LibraryUi.ACTION_DOWNLOAD || action === LibraryUi.ACTION_RETRY) {
@@ -309,8 +325,7 @@ Item {
   }
 
   function startPicked(asin, startSec, hidePanel) {
-    askAsin = ""
-    latestPick = asin
+    noteIntent(asin)
     var open = anySurfaceOpen()
     if (hidePanel) closeSurfaces()
     reopenAsin = hidePanel || open ? asin : ""
@@ -363,6 +378,7 @@ Item {
     if (!Drawer.canRemove(library.rowFor(asin))) return "error: not removable"
     if (asin === loadedAsin) {
       if (removeAfterUnload.indexOf(asin) < 0) removeAfterUnload = removeAfterUnload.concat([asin])
+      unloadTimer.restart()
       player.quit()
       return "unloading"
     }
@@ -370,10 +386,17 @@ Item {
   }
 
   function flushRemovals() {
-    var waiting = removeAfterUnload.filter(function(asin) { return asin === loadedAsin })
-    var ready = removeAfterUnload.filter(function(asin) { return asin !== loadedAsin })
-    removeAfterUnload = waiting
+    var busy = busyAsins()
+    var ready = removeAfterUnload.filter(function(asin) { return Drawer.removalAllowed(asin, busy) })
+    removeAfterUnload = removeAfterUnload.filter(function(asin) { return ready.indexOf(asin) < 0 })
+    if (removeAfterUnload.length === 0) unloadTimer.stop()
     ready.forEach(function(asin) { run("remove", [asin], "user") })
+  }
+
+  // The player never let go of a book it was asked to unload: give up.
+  function abandonRemovals() {
+    removeAfterUnload.forEach(function(asin) { logEvent("remove", "skipped " + asin + ": the player did not unload it") })
+    removeAfterUnload = []
   }
 
   function removeAll() {
@@ -465,6 +488,13 @@ Item {
     onTriggered: root.savePosition(root.snapAsin, root.snapMs, false)
   }
 
+  Timer {
+    id: unloadTimer
+    interval: 10000
+    repeat: false
+    onTriggered: root.abandonRemovals()
+  }
+
   // A pick whose playback never starts stops waiting to reopen the panel.
   Timer {
     id: reopenTimer
@@ -536,8 +566,8 @@ Item {
 
     // Test methods so agents can drive the service without input. They stay
     // through M3; R6 documents or removes them.
-    function play(asin: string): string { root.latestPick = asin; return root.playBook(asin, -1) }
-    function playAt(asin: string, startSec: string): string { root.latestPick = asin; return root.playBook(asin, Number(startSec) || 0) }
+    function play(asin: string): string { root.noteIntent(asin); return root.playBook(asin, -1) }
+    function playAt(asin: string, startSec: string): string { root.noteIntent(asin); return root.playBook(asin, Number(startSec) || 0) }
     function pause(): string { player.pause(); return "ok" }
     function resume(): string { player.resume(); return "ok" }
     function chapter(index: string): string { player.setChapter(Number(index) || 0); return "ok" }

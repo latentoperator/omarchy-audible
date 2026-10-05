@@ -159,10 +159,13 @@ function removableAsins(rows) {
   return out;
 }
 
-// Whether a queued user removal may still run: never for the book that is
-// loaded when the job starts (it was picked again after the removal queued).
-function removalAllowed(asin, loadedAsin) {
-  return typeof asin === "string" && asin.length > 0 && asin !== loadedAsin;
+// Whether a user removal may run now: never for a book that is loaded,
+// waiting on its resume position, or about to load (`busy` lists those
+// ASINs), because it was picked again after the removal was asked for.
+function removalAllowed(asin, busy) {
+  if (typeof asin !== "string" || asin.length === 0) return false;
+  if (!Array.isArray(busy)) return true;
+  return busy.indexOf(asin) < 0;
 }
 
 // Whether a finished download should play: only when it is still the last

@@ -110,11 +110,13 @@ def test_removable_asins(drawer):
     assert drawer.call("removableAsins", None) == []
 
 
-@pytest.mark.parametrize("asin,loaded,ok", [
-    ("A", "", True), ("A", "B", True), ("A", "A", False), ("", "", False), (None, "", False),
+@pytest.mark.parametrize("asin,busy,ok", [
+    ("A", [], True), ("A", ["", "B", ""], True), ("A", ["A", "", ""], False),
+    ("A", ["", "A", ""], False), ("A", ["", "", "A"], False),
+    ("A", None, True), ("", [], False), (None, [], False),
 ])
-def test_removal_allowed(drawer, asin, loaded, ok):
-    assert drawer.call("removalAllowed", asin, loaded) is ok
+def test_removal_allowed(drawer, asin, busy, ok):
+    assert drawer.call("removalAllowed", asin, busy) is ok
 
 
 @pytest.mark.parametrize("asin,latest,ok", [
