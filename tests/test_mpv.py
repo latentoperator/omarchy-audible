@@ -58,6 +58,14 @@ def test_derive_empty_is_not_loaded(mpv):
     assert derived["positionMs"] == 0 and derived["chapterIndex"] == -1 and derived["speed"] == 1
 
 
+def test_derive_has_position_only_for_a_real_time_pos(mpv):
+    state = mpv.call("emptyState")
+    assert mpv.call("derive", state)["hasPosition"] is False
+    after = mpv.call("applyProperty", state, "time-pos", 0)
+    assert mpv.call("derive", after)["hasPosition"] is True
+    assert mpv.call("derive", mpv.call("applyProperty", after, "time-pos", None))["hasPosition"] is False
+
+
 def test_derive_playing_book(mpv):
     state = mpv.call("emptyState")
     for name, data in {
