@@ -179,7 +179,7 @@ Depends on S5/S6 results and the fake backend.
   Book glyph; play/pause state; optional title; tooltip; left click toggles the drawer (Mini if loaded else Library); middle click toggles play/pause. The widget's `KeyboardPanel` (pattern in `spikes/s6-BarWidget.qml`) hosts a stacked layout with Library/Mini/Full/Onboarding placeholders, closes on Esc/click-away/popout switch, and never affects playback. Widgets are per monitor: keep state in the service. **Removes the temporary debug panel.** The extra IPC methods added for testing (`play`, `pause`, `playerStatus`, `libraryQuery`, and the rest) stay through M3 so agents can test without touching the desktop; R6 either documents or removes them.
   Acceptance: matches the behavior in SCOPE FR-U1/U5 under Chris's current theme; the three-theme check runs at G3.
 
-- [ ] **U4 — Cover + StateBadge** (tier A; needs U1, L1; laptop)
+- [x] **U4 — Cover + StateBadge** (tier A; needs U1, L1; laptop)
   `Cover.qml` (async load, placeholder, fixed aspect, rounded per theme tokens) and `StateBadge.qml` (renders `LibraryUi.badge`). Text formatting comes from `Format.js` (L1).
   Acceptance: documented manual checks for a missing cover, a very long title and each badge kind.
 
