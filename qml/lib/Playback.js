@@ -115,3 +115,40 @@ function isGet(job) {
 function isObject(value) {
   return value !== null && value !== undefined && typeof value === "object" && !Array.isArray(value);
 }
+
+// A copy of `state` with the finished flag set for a book. A book with no
+// entry yet gets one that has never been played, so nothing is pushed for it.
+function markFinished(state, asin) {
+  if (typeof asin !== "string" || asin.length === 0) {
+    return state;
+  }
+  var next = {};
+  for (var key in state) {
+    next[key] = state[key];
+  }
+  var books = {};
+  var current = isObject(state) && isObject(state.books) ? state.books : {};
+  for (var name in current) {
+    books[name] = current[name];
+  }
+  var previous = isObject(books[asin]) ? books[asin] : {};
+  books[asin] = {
+    "ms": typeof previous.ms === "number" ? previous.ms : 0,
+    "updated_at": typeof previous.updated_at === "string" ? previous.updated_at : null,
+    "last_played_at": typeof previous.last_played_at === "string" ? previous.last_played_at : null,
+    "played_since_download": previous.played_since_download === true,
+    "finished": true
+  };
+  next.books = books;
+  return next;
+}
+
+// A copy of `state` with the push queue replaced.
+function withQueue(state, queue) {
+  var next = {};
+  for (var key in state) {
+    next[key] = state[key];
+  }
+  next.push_queue = Array.isArray(queue) ? queue : [];
+  return next;
+}

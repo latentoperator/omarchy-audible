@@ -16,6 +16,9 @@ Item {
   // Extra environment for every backend process (the dev fake flag).
   property var environment: ({})
   property int busyDelayMs: 1500
+  // Optional `function(job)`: return false to skip a queued job just before it
+  // would start (it then reports `code: "skipped"`).
+  property var gate: null
 
   property var queue: JobQueue.create({ "busyDelayMs": root.busyDelayMs })
   property var activeJob: null
@@ -32,10 +35,13 @@ Item {
   signal event(var record, var job)
   signal jobFinished(var job, var outcome)
 
-  function run(command, args) {
-    var job = { "command": String(command), "args": args || [] }
+  // `purpose` is a free tag the caller uses to recognise its own jobs in the
+  // `event` and `jobFinished` signals.
+  function run(command, args, purpose) {
+    var job = { "command": String(command), "args": args || [], "purpose": purpose || "" }
     if (JobQueue.isJobCommand(job.command)) {
-      JobQueue.enqueue(root.queue, job)
+      var queued = JobQueue.enqueue(root.queue, job)
+      if (queued) queued.purpose = job.purpose
       root.sync()
       root.pump()
     } else {
@@ -65,6 +71,14 @@ Item {
     }
     var job = JobQueue.take(root.queue)
     if (!job) {
+      return
+    }
+    if (root.gate && !root.gate(job)) {
+      var outcome = { "ok": false, "busy": false, "code": "skipped", "message": "skipped", "hint": null }
+      JobQueue.complete(root.queue, outcome)
+      root.sync()
+      root.jobFinished(job, outcome)
+      root.pump()
       return
     }
     root.progress = null

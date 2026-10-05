@@ -49,7 +49,9 @@ Item {
   }
 
   function apply(op) {
-    var next = Playback.recordPosition(root.doc, op.asin, op.ms, op.at)
+    var next = op.kind === "finished"
+      ? Playback.markFinished(root.doc, op.asin)
+      : Playback.recordPosition(root.doc, op.asin, op.ms, op.at)
     if (next === root.doc) return
     root.doc = next
     root.dirty = true
@@ -62,6 +64,23 @@ Item {
       return
     }
     root.apply(op)
+  }
+
+  function setQueue(queue) {
+    if (!root.loaded) return
+    root.doc = Playback.withQueue(root.doc, queue)
+    root.dirty = true
+    root.save()
+  }
+
+  function markFinished(asin) {
+    var op = { "kind": "finished", "asin": asin }
+    if (!root.loaded) {
+      root.pendingOps = root.pendingOps.concat([op])
+      return
+    }
+    root.apply(op)
+    root.save()
   }
 
   // Never writes before the file has been read, so a slow start cannot

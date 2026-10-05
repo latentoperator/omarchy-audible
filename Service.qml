@@ -4,6 +4,7 @@ import Quickshell.Io
 import "qml"
 import "qml/lib/DebugCatalog.js" as DebugCatalog
 import "qml/lib/Playback.js" as Playback
+import "qml/lib/Positions.js" as Positions
 
 // Headless singleton. Owns the backend, mpv and shared state in later tasks.
 // Bar widgets register as surfaces and are views only.
@@ -26,9 +27,16 @@ Item {
   // once, when the service starts.
   readonly property string devFlagPath: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchy-audible-dev-fake"
   readonly property bool fake: devFlag.loaded
+  // TEMPORARY dev hook (removed for G2): in fake mode only, a file holding the
+  // path of a stand-in launcher (scripts/dev-fake-positions) replaces the
+  // backend launcher, because the fake backend cannot hold a remote position.
+  readonly property string devLauncherPath: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchy-audible-dev-launcher"
+  readonly property string devLauncher: fake && devLauncherFile.loaded ? String(devLauncherFile.text()).trim() : ""
+  property bool autoRemoveFinished: false
   // No backend command runs until the flag has been read: a command that
   // raced ahead of it would go out without OMARCHY_AUDIBLE_FAKE.
   property bool flagKnown: false
+  property bool launcherKnown: false
 
   // The latest `status` event. All paths come from here; never recompute them.
   property var status: null
@@ -45,12 +53,24 @@ Item {
 
   // Failed downloads by ASIN, shown as the row's error state until retried.
   property var failures: ({})
+  property string pendingResume: ""
+  property string removeCandidate: ""
+  property var resumeRemotes: ({})
 
   // The book that is loaded and the last position seen for it. Kept so a
   // switch or a crash can still save where the old book stopped.
   property string snapAsin: ""
   property real snapMs: 0
+  // The loaded book advanced while playing since it was last saved. Only then
+  // is there a new listening position to record or push; a paused book that is
+  // merely switched away from must keep its old listening time.
+  property bool snapDirty: false
+  // The same, for the push queue: the book advanced since its position was
+  // last queued for write-back. Kept apart from `snapDirty` because the 10 s
+  // save clears that one without queuing a push.
+  property bool snapUnpushed: false
   readonly property int saveIntervalMs: 10000
+  readonly property int pushIntervalMs: 60000
 
   readonly property string runtimeDir: status && status.runtime_dir ? String(status.runtime_dir) : ""
   readonly property string booksDir: status && status.books_dir ? String(status.books_dir) : ""
@@ -67,23 +87,37 @@ Item {
     return surfaces.length > 0 ? surfaces[0] : null
   }
 
-  function run(command, args) {
-    if (!flagKnown) {
-      logEvent(command, "refused: dev flag not read yet")
-      return
+  // Returns false when the command was refused and will never report back.
+  function run(command, args, purpose) {
+    if (!flagsRead()) {
+      logEvent(command, "refused: dev flags not read yet")
+      return false
     }
     // TEMPORARY dev guard (removed for G2).
     if (!fake && DebugCatalog.realModeBlocked(command)) {
       logEvent(command, "refused: not allowed in real mode during development")
-      return
+      return false
     }
-    runner.run(command, args)
+    runner.run(command, args, purpose)
+    return true
   }
+
+  function flagsRead() { return flagKnown && launcherKnown }
 
   function markFlagKnown() {
     if (flagKnown) return
     flagKnown = true
-    run("status", [])
+    startWhenReady()
+  }
+
+  function markLauncherKnown() {
+    if (launcherKnown) return
+    launcherKnown = true
+    startWhenReady()
+  }
+
+  function startWhenReady() {
+    if (flagsRead()) run("status", [])
   }
 
   // TEMPORARY (removed in U1)
@@ -92,15 +126,70 @@ Item {
   }
 
   // The book file for an ASIN, under the books dir from the `status` event.
-  // A negative start resumes from the library's merged position.
+  // A negative start resumes from the newest of the local and remote
+  // positions: the remote one is read again first, and the cached one is used
+  // when that read fails.
   function playBook(asin, startSec) {
     if (booksDir.length === 0) return "error: status not read yet"
     // Resuming needs the saved positions, and a position saved before they
     // were read would replace them.
     if (!store.loaded) return "error: state not loaded yet"
     if (!/^[A-Za-z0-9]+$/.test(asin)) return "error: bad asin"
-    var start = startSec >= 0 ? startSec : cachedStartSec(asin)
-    return player.play(booksDir + "/" + asin + "/book.m4b", start) ? "ok" : "error: " + player.lastError
+    if (startSec >= 0) {
+      pendingResume = ""
+      return playNow(asin, startSec)
+    }
+    pendingResume = asin
+    if (!run("position-get", [asin], "resume")) {
+      pendingResume = ""
+      return playNow(asin, cachedStartSec(asin))
+    }
+    return "ok"
+  }
+
+  function playNow(asin, startSec) {
+    return player.play(booksDir + "/" + asin + "/book.m4b", startSec) ? "ok" : "error: " + player.lastError
+  }
+
+  function finishResume(asin, remoteEntry) {
+    if (pendingResume !== asin) return
+    pendingResume = ""
+    var local = store.doc.books ? store.doc.books[asin] : null
+    var start = remoteEntry ? Positions.resumeMs(local, remoteEntry) / 1000 : cachedStartSec(asin)
+    playNow(asin, start)
+  }
+
+  // True when the loaded book is `asin` and it is at its end right now. Uses
+  // the live player values, not the saved snapshot, and ignores an `eof` flag
+  // that has no duration behind it (a load that failed).
+  function atEnd(asin) {
+    if (asin.length === 0 || !player.loaded || Playback.asinFromPath(player.path) !== asin) return false
+    return Positions.isFinished(player.positionMs, player.durationMs, player.derived.eof && player.durationMs > 0)
+  }
+
+  // Evaluated on pause, stop and every save tick. Auto-remove waits a moment
+  // and checks again, so a transient pause while mpv reloads cannot trigger it.
+  function checkFinished(asin) {
+    if (!atEnd(asin)) return
+    store.markFinished(asin)
+    if (autoRemoveFinished) {
+      removeCandidate = asin
+      autoRemoveTimer.restart()
+    }
+  }
+
+  // Checked by the job runner just before a queued job starts. An auto-remove
+  // that waited behind another job must not run if the book is playing again.
+  function jobAllowed(job) {
+    if (job.purpose !== "autoremove") return true
+    return Positions.autoRemoveAllowed(autoRemoveFinished, atEnd(job.args[0]), player.playing)
+  }
+
+  function removeIfStillFinished() {
+    var asin = removeCandidate
+    removeCandidate = ""
+    if (asin.length === 0) return
+    if (Positions.autoRemoveAllowed(autoRemoveFinished, atEnd(asin), player.playing)) run("remove", [asin], "autoremove")
   }
 
   // The saved position for a book: the library's merged one, else the local
@@ -124,21 +213,31 @@ Item {
 
   // Saves the position of the loaded book. `book` and `ms` are explicit so a
   // switch can save the book that just ended.
-  function savePosition(asin, ms) {
+  function savePosition(asin, ms, push) {
     if (asin.length === 0) return
-    store.record(asin, ms)
-    store.save()
+    if (snapDirty) {
+      snapDirty = false
+      store.record(asin, ms)
+      store.save()
+      checkFinished(asin)
+    }
+    if (push && snapUnpushed) {
+      snapUnpushed = false
+      sync.notePlayed(asin)
+    }
   }
 
   function onBookSwitched() {
     var asin = Playback.asinFromPath(player.path)
     var previous = snapAsin
-    if (snapAsin.length > 0 && snapAsin !== asin) savePosition(snapAsin, snapMs)
+    if (snapAsin.length > 0 && snapAsin !== asin) savePosition(snapAsin, snapMs, true)
     snapAsin = asin
     // Switching from another book: its position is not this book's, and the
     // new one arrives with its own time-pos. First load or a reattach: mpv
     // already reported the position (before the path), so keep it.
     snapMs = previous.length === 0 && asin.length > 0 && player.derived.hasPosition ? player.positionMs : 0
+    snapDirty = false
+    snapUnpushed = false
   }
 
   function refreshLocal() {
@@ -181,6 +280,12 @@ Item {
     jobs: Playback.jobStates(runner.pendingJobs, runner.activeJob, runner.progress, root.failures)
   }
 
+  PositionSync {
+    id: sync
+    store: store
+    service: root
+  }
+
   StateStore {
     id: store
     path: root.dataDir.length > 0 ? root.dataDir + "/state.json" : ""
@@ -193,12 +298,17 @@ Item {
 
     function onPositionMsChanged() {
       // A null time-pos (a file being swapped) is not a position.
-      if (player.derived.hasPosition && Playback.asinFromPath(player.path) === root.snapAsin) root.snapMs = player.positionMs
+      if (!player.derived.hasPosition || Playback.asinFromPath(player.path) !== root.snapAsin) return
+      root.snapMs = player.positionMs
+      if (player.playing) {
+        root.snapDirty = true
+        root.snapUnpushed = true
+      }
     }
 
     // Pause, stop or a crash: save where the book stopped.
     function onPlayingChanged() {
-      if (!player.playing) root.savePosition(root.snapAsin, root.snapMs)
+      if (!player.playing) root.savePosition(root.snapAsin, root.snapMs, true)
     }
   }
 
@@ -206,7 +316,22 @@ Item {
     interval: root.saveIntervalMs
     repeat: true
     running: player.playing
-    onTriggered: root.savePosition(root.snapAsin, root.snapMs)
+    onTriggered: root.savePosition(root.snapAsin, root.snapMs, false)
+  }
+
+  Timer {
+    id: autoRemoveTimer
+    interval: 2000
+    repeat: false
+    onTriggered: root.removeIfStillFinished()
+  }
+
+  // Push about once a minute while playing.
+  Timer {
+    interval: root.pushIntervalMs
+    repeat: true
+    running: player.playing
+    onTriggered: root.savePosition(root.snapAsin, root.snapMs, true)
   }
 
   // TEMPORARY dev methods; P5 adds the public ones (toggle, openLibrary) and
@@ -231,6 +356,8 @@ Item {
     function playerStatus(): string { return root.playerSummary() }
     function libraryQuery(sort: string, filter: string, search: string): string { return root.libraryQuery(sort, filter, search) }
     function flushState(): string { store.flush(); return "ok" }
+    function autoRemove(value: string): string { root.autoRemoveFinished = value === "on"; return "ok" }
+    function pushState(): string { return JSON.stringify({ "queue": sync.queue, "flushing": sync.flushing, "last": sync.lastResult }) }
   }
 
   FileView {
@@ -240,6 +367,15 @@ Item {
     printErrors: false
     onLoaded: root.markFlagKnown()
     onLoadFailed: function(error) { root.markFlagKnown() }
+  }
+
+  FileView {
+    id: devLauncherFile
+    path: root.devLauncherPath
+    blockLoading: true
+    printErrors: false
+    onLoaded: root.markLauncherKnown()
+    onLoadFailed: function(error) { root.markLauncherKnown() }
   }
 
   FileView {
@@ -260,7 +396,8 @@ Item {
 
   JobRunner {
     id: runner
-    launcher: root.pluginDir + "/bin/omarchy-audible"
+    gate: root.jobAllowed
+    launcher: root.devLauncher.length > 0 ? root.devLauncher : root.pluginDir + "/bin/omarchy-audible"
     environment: root.fake ? ({ "OMARCHY_AUDIBLE_FAKE": "1" }) : ({})
 
     onEvent: function(record, job) {
@@ -269,7 +406,13 @@ Item {
         root.refreshLocal()
       } else if (record.type === "local") {
         library.localBooks = record.books
+      } else if (record.type === "positions" && job.purpose === "resume") {
+        var resumed = job.args[0]
+        var remotes = root.resumeRemotes
+        remotes[resumed] = record.items[resumed] || null
+        root.resumeRemotes = remotes
       }
+      sync.handleEvent(record, job)
       root.logEvent(job.command, DebugCatalog.summarize(record, 160))
     }
 
@@ -277,6 +420,13 @@ Item {
       var text = outcome.ok ? "ok" : String(outcome.code) + ": " + String(outcome.message || "")
       root.logEvent(job.command + " exit", text)
       root.failures = Playback.updateFailures(root.failures, job, outcome)
+      sync.handleFinished(job, outcome)
+      if (job.purpose === "resume") {
+        var resumedAsin = job.args[0]
+        var remote = outcome.ok ? (root.resumeRemotes[resumedAsin] || null) : null
+        delete root.resumeRemotes[resumedAsin]
+        root.finishResume(resumedAsin, remote)
+      }
       if (job.command === "sync") {
         root.reloadSync()
       } else if (job.command === "position-get") {
@@ -287,11 +437,17 @@ Item {
     }
   }
 
-  Component.onCompleted: if (devFlag.loaded) markFlagKnown()
+  Component.onCompleted: {
+    if (devFlag.loaded) markFlagKnown()
+    if (devLauncherFile.loaded) markLauncherKnown()
+  }
 
   // Shutdown: save where the book is, and wait for the write.
   Component.onDestruction: {
-    if (player.playing) store.record(snapAsin, snapMs)
+    if (snapAsin.length > 0 && (snapDirty || snapUnpushed)) {
+      if (snapDirty) store.record(snapAsin, snapMs)
+      sync.queuePush(snapAsin)
+    }
     store.flush()
   }
 }
