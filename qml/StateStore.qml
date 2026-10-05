@@ -31,10 +31,12 @@ Item {
       Quickshell.execDetached(["cp", "-f", root.path, root.path + ".corrupt"])
     }
     root.doc = parsed
-    root.loaded = true
+    // Replay first, so anyone reacting to `loaded` already sees the changes
+    // that were made while the file was being read.
     var ops = root.pendingOps
     root.pendingOps = []
     for (var i = 0; i < ops.length; i++) root.apply(ops[i])
+    root.loaded = true
     if (root.dirty) root.save()
   }
 
