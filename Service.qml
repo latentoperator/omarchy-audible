@@ -212,7 +212,9 @@ Item {
     var asin = Playback.asinFromPath(player.path)
     if (snapAsin.length > 0 && snapAsin !== asin) savePosition(snapAsin, snapMs, true)
     snapAsin = asin
-    snapMs = asin.length > 0 ? player.positionMs : 0
+    // The new book's position arrives with its own time-pos; do not carry the
+    // old book's number over.
+    snapMs = 0
     snapDirty = false
   }
 
@@ -273,7 +275,8 @@ Item {
     function onPathChanged() { root.onBookSwitched() }
 
     function onPositionMsChanged() {
-      if (Playback.asinFromPath(player.path) !== root.snapAsin) return
+      // A null time-pos (a file being swapped) is not a position.
+      if (!player.derived.hasPosition || Playback.asinFromPath(player.path) !== root.snapAsin) return
       root.snapMs = player.positionMs
       if (player.playing) root.snapDirty = true
     }
