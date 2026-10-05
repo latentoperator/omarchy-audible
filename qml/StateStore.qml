@@ -39,9 +39,7 @@ Item {
   }
 
   function apply(op) {
-    var next = op.kind === "finished"
-      ? Playback.markFinished(root.doc, op.asin)
-      : Playback.recordPosition(root.doc, op.asin, op.ms, op.at)
+    var next = Playback.recordPosition(root.doc, op.asin, op.ms, op.at)
     if (next === root.doc) return
     root.doc = next
     root.dirty = true
