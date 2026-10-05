@@ -97,7 +97,7 @@ All commands follow the protocol in ARCHITECTURE §4.2. Build the **fake mode fi
   JSON Schema file per event type; a test that runs every command in fake mode and validates every emitted line.
   Acceptance: CI-style `make test` fails if a command emits an unknown or malformed event.
 
-**GATE G1** — a README section "Backend CLI" documents every command with an example. The maintainer runs `sync` and `get` against the real account, and `remove` leaves the Audible account unchanged.
+**GATE G1** ✅ passed 2026-10-04 — a README section "Backend CLI" documents every command with an example. The maintainer runs `sync` and `get` against the real account, and `remove` leaves the Audible account unchanged.
 
 ---
 
