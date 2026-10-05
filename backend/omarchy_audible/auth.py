@@ -40,7 +40,7 @@ from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import parse_qs, urlsplit
 
-from . import protocol
+from . import fakestate, protocol
 from .errors import PipelineError
 from .library import iso_now
 from .log import log
@@ -237,20 +237,38 @@ def mask_account(value: Any) -> str | None:
     return f"{local[0]}***@{domain}"
 
 
-def _masked_account(auth: Any) -> str | None:
-    """The masked address from an authenticator's ``customer_info``, if any.
+def account_from_info(info: Any) -> str | None:
+    """The account label for a ``customer_info`` mapping (ARCHITECTURE 4.7).
 
-    ``login-finish`` registers with ``with_username=False``, so an email is not
-    always present; missing means ``status.account`` is ``null``.
+    A masked email wins when there is one; otherwise the first name, from
+    ``given_name`` then ``name`` (B9). ``user_id`` is never used.
     """
-    info = getattr(auth, "customer_info", None)
     if not isinstance(info, dict):
         return None
-    for key in ("email", "email_address", "user_id"):
+    for key in ("email", "email_address"):
         masked = mask_account(info.get(key))
         if masked:
             return masked
+    for key in ("given_name", "name"):
+        value = info.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip().split()[0]
     return None
+
+
+def account_from_auth_file(path: Path) -> str | None:
+    """The fallback account label read from a saved ``auth.json`` (B9).
+
+    Plain JSON only: no network call and no ``audible`` import. Returns ``None``
+    when the file is missing, unreadable, or has no usable ``customer_info``.
+    """
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    return account_from_info(data.get("customer_info"))
 
 
 def _account_payload(origin: str, marketplace: str, account: str | None) -> dict[str, Any]:
@@ -473,6 +491,7 @@ def login_finish(
 
     if fake:
         _unlink(session_path)
+        fakestate.mark_signed_in(paths)
         return False
 
     port = api or RealAudible()
@@ -508,7 +527,7 @@ def login_finish(
         auth.locale = locale
         auth._update_attrs(with_username=False, **registration)
         activation = auth.get_activation_bytes()
-        account = _masked_account(auth)
+        account = account_from_info(getattr(auth, "customer_info", None))
         _persist_login(paths, auth, activation, str(payload["marketplace"]), account)
     except Exception as exc:
         log(f"saving the login failed: {type(exc).__name__}")
@@ -581,6 +600,7 @@ def login_import_cli(
     (ARCHITECTURE 4.7).
     """
     if fake:
+        fakestate.mark_signed_in(paths)
         return
     src_dir = Path(source_dir).expanduser() if source_dir else _default_audible_dir()
     profile = _read_cli_profile(src_dir)
@@ -602,7 +622,13 @@ def login_import_cli(
             hint="it may be encrypted or not a valid audible-cli login",
         ) from exc
     marketplace = profile.get("country_code") or _locale_code(text) or DEFAULT_MARKETPLACE
-    _persist_import(paths, text, str(marketplace), _masked_account(auth), auth)
+    _persist_import(
+        paths,
+        text,
+        str(marketplace),
+        account_from_info(getattr(auth, "customer_info", None)),
+        auth,
+    )
 
 
 def logout(paths: Paths, *, fake: bool, api: AudiblePort | None = None) -> None:
@@ -614,6 +640,7 @@ def logout(paths: Paths, *, fake: bool, api: AudiblePort | None = None) -> None:
     4.7).
     """
     if fake:
+        fakestate.mark_signed_out(paths)
         return
     record = read_account_record(paths)
     if record.get("origin") == "login" and paths.auth_file.is_file():
