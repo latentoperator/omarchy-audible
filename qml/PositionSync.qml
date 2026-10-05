@@ -32,18 +32,24 @@ Item {
 
   // A position was just recorded for `asin` by listening on this machine.
   function notePlayed(asin) {
-    if (!store || !asin || asin.length === 0) return
+    if (queuePush(asin)) flush()
+  }
+
+  // Queue the push without flushing (shutdown has no time to send it; the
+  // saved queue is flushed by the next run). True when something was queued.
+  function queuePush(asin) {
+    if (!store || !asin || asin.length === 0) return false
     var book = store.doc.books ? store.doc.books[asin] : null
-    if (!book) return
+    if (!book) return false
     var candidate = {
       "played_since_download": book.played_since_download,
       "ms": book.ms,
       "last_pushed_ms": lastPushed[asin] === undefined ? null : lastPushed[asin]
     }
-    if (!Positions.shouldPush(candidate)) return
+    if (!Positions.shouldPush(candidate)) return false
     var next = Positions.enqueue(queue.slice(), { "asin": asin, "ms": book.ms, "at": book.last_played_at })
     store.setQueue(next)
-    flush()
+    return true
   }
 
   function flush() {
