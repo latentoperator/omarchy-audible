@@ -79,7 +79,7 @@ Item {
 
   function handleEvent(record, job) {
     if (job.purpose !== "flush" || record.type !== "positions") return
-    var split = Positions.flushPlan(queue, record.items)
+    var split = Positions.flushPlan(queue, Sync.withoutOwnWrites(record.items, lastPushed))
     var next = queue
     for (var i = 0; i < split.drop.length; i++) {
       next = Sync.removeEntry(next, split.drop[i])

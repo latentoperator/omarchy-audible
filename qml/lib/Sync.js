@@ -54,6 +54,26 @@ function sendable(send, requestedAsins) {
   });
 }
 
+// The `positions` items with our own writes made invisible. Audible stamps a
+// push with the time it arrived, which can be later than the listening time of
+// the next local position. A remote position equal to the one we last pushed
+// is our own write, not another device, so its timestamp must not make a newer
+// local position look stale: those entries get `updated_at: null`.
+function withoutOwnWrites(items, lastPushed) {
+  var out = {};
+  var source = isObject(items) ? items : {};
+  var pushed = isObject(lastPushed) ? lastPushed : {};
+  for (var asin in source) {
+    var entry = source[asin];
+    if (isObject(entry) && typeof pushed[asin] === "number" && entry.ms === pushed[asin]) {
+      out[asin] = { "ms": entry.ms, "updated_at": null };
+    } else {
+      out[asin] = entry;
+    }
+  }
+  return out;
+}
+
 function isObject(value) {
   return value !== null && value !== undefined && typeof value === "object" && !Array.isArray(value);
 }
