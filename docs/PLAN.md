@@ -141,7 +141,7 @@ Depends on S5/S6 results and the fake backend.
   Push every ~60 s and on pause/stop/switch/quit, following the push rules in ARCHITECTURE §4.6 (local listening only; never stale); failures queued and retried; resume from newest of local/remote; finished detection and optional auto-remove (setting, default Off).
   Acceptance: simulated remote-newer position wins on play; a book that was never played locally is never pushed; offline pushes are queued and flushed later; a queued push that has become stale is dropped; auto-remove only fires when the setting is on and never during playback.
 
-- [ ] **P5 — Shell IPC target** (tier A; needs P2, S6; laptop)
+- [x] **P5 — Shell IPC target** (tier A; needs P2, S6; laptop)
   Registers `latentoperator.audible` (in `Service.qml`) with `toggle`, `playPause`, `skip`, `nextChapter`, `prevChapter`, `openLibrary`.
   Acceptance: each method works from a terminal using the call syntax documented in S6; documented in README with a sample Hyprland bind.
 
