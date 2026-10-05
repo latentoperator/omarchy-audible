@@ -36,7 +36,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     env = dict(os.environ)
     argv, flag_fake = strip_fake_flag(argv)
     fake = flag_fake or env_is_fake(env)
-    paths = Paths.from_env(env)
+    paths = Paths.from_env(env, fake=fake)
 
     if not argv:
         protocol.error(

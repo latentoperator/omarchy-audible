@@ -30,12 +30,12 @@ def _make_book(paths, asin: str, *, payload: bytes = b"x" * 100, downloaded_at: 
     return directory
 
 
-def test_local_lists_only_downloaded_books(run_cli, validate_stream, paths):
-    _make_book(paths, "B00FAKE01", payload=b"a" * 100)
-    _make_book(paths, "B00FAKE02", payload=b"b" * 250)
-    (paths.books_dir / "B00EMPTY").mkdir()
-    (paths.books_dir / "B00PARTIAL").mkdir()
-    (paths.books_dir / "B00PARTIAL" / ".partial").mkdir()
+def test_local_lists_only_downloaded_books(run_cli, validate_stream, fake_paths):
+    _make_book(fake_paths, "B00FAKE01", payload=b"a" * 100)
+    _make_book(fake_paths, "B00FAKE02", payload=b"b" * 250)
+    (fake_paths.books_dir / "B00EMPTY").mkdir()
+    (fake_paths.books_dir / "B00PARTIAL").mkdir()
+    (fake_paths.books_dir / "B00PARTIAL" / ".partial").mkdir()
 
     result = run_cli("local", fake=True)
     assert result.returncode == 0, result.stderr
@@ -49,8 +49,8 @@ def test_local_lists_only_downloaded_books(run_cli, validate_stream, paths):
     assert local["books"][1]["size"] >= 250
 
 
-def test_local_falls_back_to_the_file_mtime_without_meta(run_cli, validate_stream, paths):
-    directory = paths.books_dir / "B00FAKE07"
+def test_local_falls_back_to_the_file_mtime_without_meta(run_cli, validate_stream, fake_paths):
+    directory = fake_paths.books_dir / "B00FAKE07"
     directory.mkdir()
     (directory / "book.m4b").write_bytes(b"z" * 10)
 
@@ -61,10 +61,10 @@ def test_local_falls_back_to_the_file_mtime_without_meta(run_cli, validate_strea
 
 
 def test_remove_deletes_one_book_and_reports_freed_bytes(
-    run_cli, validate_stream, paths
+    run_cli, validate_stream, fake_paths
 ):
-    target = _make_book(paths, "B00FAKE01", payload=b"c" * 512)
-    other = _make_book(paths, "B00FAKE02", payload=b"d" * 32)
+    target = _make_book(fake_paths, "B00FAKE01", payload=b"c" * 512)
+    other = _make_book(fake_paths, "B00FAKE02", payload=b"d" * 32)
 
     result = run_cli("remove", "B00FAKE01", fake=True)
     assert result.returncode == 0, result.stderr
@@ -85,9 +85,9 @@ def test_remove_refuses_a_path_outside_books_dir(run_cli, events, paths, tmp_pat
     assert (outside / "keep.txt").is_file()
 
 
-def test_remove_refuses_a_symlink_inside_books_dir(run_cli, events, paths):
-    real = _make_book(paths, "B00FAKE03")
-    link = paths.books_dir / "B00FAKE04"
+def test_remove_refuses_a_symlink_inside_books_dir(run_cli, events, fake_paths):
+    real = _make_book(fake_paths, "B00FAKE03")
+    link = fake_paths.books_dir / "B00FAKE04"
     link.symlink_to(real)
 
     result = run_cli("remove", "B00FAKE04", fake=True)
@@ -97,11 +97,11 @@ def test_remove_refuses_a_symlink_inside_books_dir(run_cli, events, paths):
     assert real.is_dir()
 
 
-def test_remove_refuses_a_symlink_pointing_outside(run_cli, events, paths, tmp_path):
+def test_remove_refuses_a_symlink_pointing_outside(run_cli, events, fake_paths, tmp_path):
     victim = tmp_path / "victim"
     victim.mkdir()
     (victim / "keep.txt").write_text("keep", encoding="utf-8")
-    link = paths.books_dir / "B00LINK01"
+    link = fake_paths.books_dir / "B00LINK01"
     link.symlink_to(victim)
 
     result = run_cli("remove", "B00LINK01", fake=True)
@@ -116,9 +116,9 @@ def test_remove_refuses_a_book_that_is_not_local(run_cli, events, paths):
     assert events(result)[-1]["code"] == "not_local"
 
 
-def test_remove_makes_no_network_call(env, monkeypatch, capsys, paths):
+def test_remove_makes_no_network_call(env, monkeypatch, capsys, fake_paths):
     """Run ``remove`` in-process with every socket entry point blocked."""
-    target = _make_book(paths, ASIN)
+    target = _make_book(fake_paths, ASIN)
 
     def blocked(*_args, **_kwargs):
         raise AssertionError("remove attempted a network call")

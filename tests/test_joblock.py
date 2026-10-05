@@ -16,8 +16,8 @@ def _hold_lock(paths):
     return fd
 
 
-def test_second_job_command_is_busy(run_cli, events, paths):
-    fd = _hold_lock(paths)
+def test_second_job_command_is_busy(run_cli, events, fake_paths):
+    fd = _hold_lock(fake_paths)
     try:
         result = run_cli("sync", fake=True)
     finally:
@@ -28,8 +28,8 @@ def test_second_job_command_is_busy(run_cli, events, paths):
     assert last["code"] == "busy"
 
 
-def test_status_succeeds_while_lock_is_held(run_cli, events, paths):
-    fd = _hold_lock(paths)
+def test_status_succeeds_while_lock_is_held(run_cli, events, fake_paths):
+    fd = _hold_lock(fake_paths)
     try:
         result = run_cli("status", fake=True)
     finally:

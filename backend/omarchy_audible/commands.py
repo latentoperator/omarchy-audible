@@ -81,13 +81,24 @@ def _catalog_age_s(paths: Paths) -> int | None:
     return max(0, int(time.time() - stat.st_mtime))
 
 
+def _status_dirs(paths: Paths) -> dict[str, str]:
+    """The resolved roots reported by ``status`` (B8), so QML never recomputes them."""
+    return {
+        "config_dir": str(paths.config_dir),
+        "data_dir": str(paths.data_dir),
+        "runtime_dir": str(paths.runtime_dir),
+        "books_dir": str(paths.books_dir),
+    }
+
+
 def cmd_status(
     args: Sequence[str], *, command: str, fake: bool, paths: Paths
 ) -> int:
     """Report readiness (ARCHITECTURE 4.2)."""
     if fake:
         # Fake mode pretends the environment is fully ready so the UI can run
-        # with no account, no network and no virtualenv.
+        # with no account, no network and no virtualenv. The dirs are the fake
+        # tree, never the real plugin folders.
         protocol.emit(
             "status",
             ready=True,
@@ -96,6 +107,7 @@ def cmd_status(
             marketplace=DEFAULT_MARKETPLACE,
             account=FAKE_ACCOUNT,
             catalog_age_s=None,
+            **_status_dirs(paths),
         )
         protocol.done()
         return protocol.EXIT_OK
@@ -114,6 +126,7 @@ def cmd_status(
         marketplace=marketplace,
         account=account if isinstance(account, str) else None,
         catalog_age_s=_catalog_age_s(paths),
+        **_status_dirs(paths),
     )
     protocol.done()
     return protocol.EXIT_OK

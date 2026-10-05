@@ -190,7 +190,7 @@ def test_split_push_args_reads_the_local_timestamp():
 
 # --- the CLI in fake mode ----------------------------------------------------
 def test_fake_position_get_writes_remote_and_emits_positions(
-    run_cli, validate_stream, paths
+    run_cli, validate_stream, fake_paths
 ):
     result = run_cli("position-get", "B00FAKE01", "B00FAKE02", fake=True)
     assert result.returncode == 0, result.stderr
@@ -200,18 +200,18 @@ def test_fake_position_get_writes_remote_and_emits_positions(
     assert set(event["items"]) == {"B00FAKE01", "B00FAKE02"}
     assert event["items"]["B00FAKE01"] == {"ms": 0, "updated_at": None}
 
-    remote = json.loads(paths.remote_file.read_text(encoding="utf-8"))
+    remote = json.loads(fake_paths.remote_file.read_text(encoding="utf-8"))
     assert set(remote) == {"B00FAKE01", "B00FAKE02"}
 
 
-def test_position_get_keeps_the_other_cached_books(run_cli, paths):
-    paths.data_dir.mkdir(parents=True, exist_ok=True)
-    paths.remote_file.write_text(
+def test_position_get_keeps_the_other_cached_books(run_cli, fake_paths):
+    fake_paths.data_dir.mkdir(parents=True, exist_ok=True)
+    fake_paths.remote_file.write_text(
         json.dumps({"B0KEEPCACH": {"ms": 42, "updated_at": "2026-01-01 00:00:00.0"}}),
         encoding="utf-8",
     )
     assert run_cli("position-get", "B00FAKE01", fake=True).returncode == 0
-    remote = json.loads(paths.remote_file.read_text(encoding="utf-8"))
+    remote = json.loads(fake_paths.remote_file.read_text(encoding="utf-8"))
     assert remote["B0KEEPCACH"] == {"ms": 42, "updated_at": "2026-01-01 00:00:00.0"}
     assert "B00FAKE01" in remote
 

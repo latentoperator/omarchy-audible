@@ -19,7 +19,7 @@ LAUNCHER = REPO_ROOT / "bin" / "omarchy-audible"
 ASIN = "B00FAKE01"
 
 
-def test_cancel_mid_download_stops_the_job_and_cleans_up(env, ffmpeg_bin, paths):
+def test_cancel_mid_download_stops_the_job_and_cleans_up(env, ffmpeg_bin, fake_paths):
     proc = subprocess.Popen(
         [sys.executable, str(LAUNCHER), "get", ASIN, "--fake"],
         env=env,
@@ -28,7 +28,7 @@ def test_cancel_mid_download_stops_the_job_and_cleans_up(env, ffmpeg_bin, paths)
         text=True,
     )
     try:
-        partial = paths.books_dir / ASIN / ".partial"
+        partial = fake_paths.books_dir / ASIN / ".partial"
         deadline = time.time() + 20
         while time.time() < deadline and not partial.exists():
             time.sleep(0.02)
@@ -56,11 +56,11 @@ def test_cancel_mid_download_stops_the_job_and_cleans_up(env, ffmpeg_bin, paths)
     assert last["type"] == "error"
     assert last["code"] == "cancelled"
 
-    book_dir = paths.books_dir / ASIN
+    book_dir = fake_paths.books_dir / ASIN
     assert not (book_dir / ".partial").exists()
     assert not (book_dir / "book.m4b").exists()
     assert not list(book_dir.glob("*.tmp"))
-    assert joblock.read_job_json(paths.job_json) is None
+    assert joblock.read_job_json(fake_paths.job_json) is None
 
 
 def test_cancel_without_a_running_job(run_cli, events):

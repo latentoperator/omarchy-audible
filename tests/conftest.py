@@ -58,6 +58,20 @@ def paths(env: dict[str, str]) -> Paths:
 
 
 @pytest.fixture
+def fake_paths(env: dict[str, str]) -> Paths:
+    """The separate fake-mode tree (B8), pre-created for tests that write books."""
+    resolved = Paths.from_env(env, fake=True)
+    for directory in (
+        resolved.config_dir,
+        resolved.data_dir,
+        resolved.runtime_dir,
+        resolved.books_dir,
+    ):
+        directory.mkdir(parents=True, exist_ok=True)
+    return resolved
+
+
+@pytest.fixture
 def run_cli(env: dict[str, str]):
     def _run(
         *args: str,

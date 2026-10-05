@@ -155,7 +155,7 @@ def test_build_catalog_keeps_products_and_lectures_only():
 
 
 # --- the CLI in fake mode -----------------------------------------------------
-def test_fake_sync_writes_the_fixture_catalog(run_cli, validate_stream, paths):
+def test_fake_sync_writes_the_fixture_catalog(run_cli, validate_stream, fake_paths):
     result = run_cli("sync", fake=True)
     assert result.returncode == 0, result.stderr
     parsed = validate_stream(result, expect_last="done")
@@ -169,7 +169,7 @@ def test_fake_sync_writes_the_fixture_catalog(run_cli, validate_stream, paths):
     assert library_events[-1]["of"] == len(FIXTURE_ASINS)
     assert library_events[-1]["n"] == len(FIXTURE_ASINS)
 
-    built = json.loads(paths.catalog_file.read_text(encoding="utf-8"))
+    built = json.loads(fake_paths.catalog_file.read_text(encoding="utf-8"))
     assert built["schema"] == catalog.CATALOG_SCHEMA
     assert built["marketplace"] == "us"
     assert built["synced_at"]
@@ -177,16 +177,16 @@ def test_fake_sync_writes_the_fixture_catalog(run_cli, validate_stream, paths):
     for book in built["books"]:
         assert set(book) == BOOK_KEYS
 
-    remote = json.loads(paths.remote_file.read_text(encoding="utf-8"))
+    remote = json.loads(fake_paths.remote_file.read_text(encoding="utf-8"))
     assert set(remote) == set(FIXTURE_ASINS)
     assert remote["B0FAKE0001"] == {"ms": 0, "updated_at": None}
 
 
-def test_sync_writes_remote_json_but_never_state_json(run_cli, paths):
+def test_sync_writes_remote_json_but_never_state_json(run_cli, fake_paths):
     assert run_cli("sync", fake=True).returncode == 0
-    assert paths.remote_file.is_file()
+    assert fake_paths.remote_file.is_file()
     # state.json belongs to Service.qml (ARCHITECTURE 4.8).
-    assert not paths.state_file.exists()
+    assert not fake_paths.state_file.exists()
 
 
 def test_sync_reports_progress_for_every_page(paths):
@@ -234,11 +234,11 @@ def test_interrupted_sync_leaves_the_old_catalog_intact(paths):
     assert paths.remote_file.read_bytes() == remote_before
 
 
-def test_sync_leaves_no_half_written_temp_files(run_cli, paths):
+def test_sync_leaves_no_half_written_temp_files(run_cli, fake_paths):
     assert run_cli("sync", fake=True).returncode == 0
-    leftovers = [path for path in paths.data_dir.rglob("*.tmp")]
+    leftovers = [path for path in fake_paths.data_dir.rglob("*.tmp")]
     assert leftovers == []
-    json.loads(paths.catalog_file.read_text(encoding="utf-8"))
+    json.loads(fake_paths.catalog_file.read_text(encoding="utf-8"))
 
 
 # --- covers ------------------------------------------------------------------
@@ -402,7 +402,7 @@ def test_sync_is_a_job_command():
     assert commands.REGISTRY["sync"].is_job is True
 
 
-def test_fake_sync_makes_no_network_call(env, monkeypatch, capsys, paths):
+def test_fake_sync_makes_no_network_call(env, monkeypatch, capsys, fake_paths):
     """Run ``sync --fake`` in-process with every socket entry point blocked."""
 
     def blocked(*_args, **_kwargs):
@@ -432,7 +432,7 @@ def test_fake_sync_makes_no_network_call(env, monkeypatch, capsys, paths):
         if line.strip()
     ]
     assert events[-1]["type"] == "done"
-    built = json.loads(paths.catalog_file.read_text(encoding="utf-8"))
+    built = json.loads(fake_paths.catalog_file.read_text(encoding="utf-8"))
     assert [book["asin"] for book in built["books"]] == FIXTURE_ASINS
 
 
