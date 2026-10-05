@@ -75,3 +75,9 @@ def test_cancel_without_an_asin_is_invalid(run_cli, events):
     result = run_cli("cancel", fake=True)
     assert result.returncode != 0
     assert events(result)[-1]["code"] == "invalid_args"
+
+
+def test_cancel_rejects_a_traversing_asin(run_cli, events):
+    result = run_cli("cancel", "../nope", fake=True)
+    assert result.returncode != 0
+    assert events(result)[-1]["code"] == "bad_asin"

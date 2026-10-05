@@ -151,3 +151,75 @@ def test_get_requires_an_asin(run_cli, events):
     result = run_cli("get", fake=True)
     assert result.returncode != 0
     assert events(result)[-1]["code"] == "invalid_args"
+
+
+# --- ASIN validation (ARCHITECTURE 4.4; shared library.validate_asin) --------
+# These mirror the traversal and symlink refusals in test_local_remove.py: an
+# ASIN is a single path component and `get` must never write or delete outside
+# booksDir. `get` reports a rejected ASIN as error(code=bad_asin).
+
+
+def test_get_refuses_a_path_outside_books_dir(run_cli, validate_stream, paths, tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "keep.txt").write_text("keep", encoding="utf-8")
+
+    result = run_cli("get", "../outside", fake=True)
+    assert result.returncode != 0
+    parsed = validate_stream(result, expect_last="error")
+    assert parsed[-1]["code"] == "bad_asin"
+    assert (outside / "keep.txt").is_file()
+    assert not (outside / "book.m4b").exists()
+
+
+def test_get_dotdot_never_deletes_the_parent_partial(run_cli, validate_stream, paths):
+    # `get ..` must not rmtree `<booksRoot>/../.partial/`, a directory the
+    # command does not own (the review's F1 reproduction).
+    parent_partial = paths.books_dir.parent / ".partial"
+    parent_partial.mkdir()
+    (parent_partial / "keep.txt").write_text("keep", encoding="utf-8")
+
+    result = run_cli("get", "..", fake=True)
+    assert result.returncode != 0
+    parsed = validate_stream(result, expect_last="error")
+    assert parsed[-1]["code"] == "bad_asin"
+    assert (parent_partial / "keep.txt").is_file()
+    assert not (paths.books_dir.parent / "book.m4b").exists()
+
+
+def test_get_refuses_an_absolute_path(run_cli, validate_stream, paths, tmp_path):
+    absolute = tmp_path / "absolute"
+    result = run_cli("get", str(absolute), fake=True)
+    assert result.returncode != 0
+    parsed = validate_stream(result, expect_last="error")
+    assert parsed[-1]["code"] == "bad_asin"
+    assert not absolute.exists()
+
+
+def test_get_refuses_a_symlink_inside_books_dir(run_cli, validate_stream, paths):
+    real = paths.books_dir / "B00FAKE03"
+    real.mkdir()
+    (real / "book.m4b").write_bytes(b"x")
+    link = paths.books_dir / "B00FAKE04"
+    link.symlink_to(real)
+
+    result = run_cli("get", "B00FAKE04", fake=True)
+    assert result.returncode != 0
+    parsed = validate_stream(result, expect_last="error")
+    assert parsed[-1]["code"] == "bad_asin"
+    assert link.is_symlink()
+    assert (real / "book.m4b").is_file()
+
+
+def test_get_refuses_a_symlink_pointing_outside(run_cli, validate_stream, paths, tmp_path):
+    victim = tmp_path / "victim"
+    victim.mkdir()
+    (victim / "keep.txt").write_text("keep", encoding="utf-8")
+    link = paths.books_dir / "B00LINK01"
+    link.symlink_to(victim)
+
+    result = run_cli("get", "B00LINK01", fake=True)
+    assert result.returncode != 0
+    parsed = validate_stream(result, expect_last="error")
+    assert parsed[-1]["code"] == "bad_asin"
+    assert (victim / "keep.txt").is_file()

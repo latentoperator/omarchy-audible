@@ -85,26 +85,28 @@ def run_cli(env: dict[str, str]):
     return _run
 
 
+def _ensure_tool(env: dict[str, str], name: str) -> bool:
+    """Put the fallback dir ahead on ``env["PATH"]`` when ``name`` is missing."""
+    if shutil.which(name, path=env.get("PATH")):
+        return True
+    if (FFMPEG_FALLBACK_DIR / name).is_file():
+        env["PATH"] = os.pathsep.join([str(FFMPEG_FALLBACK_DIR), env.get("PATH", "")])
+        return True
+    return False
+
+
 @pytest.fixture
-def ffmpeg_bin(env: dict[str, str]) -> dict[str, str]:
+def ffmpeg_bin(env: dict[str, str], monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
     """Make ``ffmpeg``/``ffprobe`` reachable, or skip a test that needs them.
 
-    Mutates the shared ``env`` fixture so ``run_cli`` subprocesses see the same
-    PATH. Skips cleanly on a machine without ffmpeg (ARCHITECTURE 8).
+    Prepends the Hopebox fallback directory to the shared ``env`` fixture (so
+    ``run_cli`` subprocesses see it) **and** to ``os.environ`` (so in-process
+    ``run_get()`` calls resolve ffmpeg via ``shutil.which``); pytest restores
+    both. Skips cleanly on a machine without ffmpeg (ARCHITECTURE 8).
     """
-
-    def _ensure(name: str) -> bool:
-        if shutil.which(name, path=env.get("PATH")):
-            return True
-        if (FFMPEG_FALLBACK_DIR / name).is_file():
-            env["PATH"] = os.pathsep.join(
-                [str(FFMPEG_FALLBACK_DIR), env.get("PATH", "")]
-            )
-            return True
-        return False
-
-    if not (_ensure("ffmpeg") and _ensure("ffprobe")):
+    if not (_ensure_tool(env, "ffmpeg") and _ensure_tool(env, "ffprobe")):
         pytest.skip("ffmpeg and ffprobe are required for the conversion pipeline")
+    monkeypatch.setenv("PATH", env["PATH"])
     return env
 
 

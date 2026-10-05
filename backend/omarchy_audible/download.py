@@ -43,6 +43,7 @@ from .library import (
     book_dir,
     dir_size,
     iso_now,
+    validate_asin,
     write_meta,
 )
 from .log import log
@@ -637,6 +638,9 @@ def run_get(
     failure path, and ``book.m4b`` only ever appears through an atomic rename.
     """
     tracker = children if children is not None else ChildTracker()
+    # ``cmd_get`` validates before calling; guard direct callers too, so an
+    # unvalidated ASIN can never reach the ``book_dir``/``rmtree`` below.
+    validate_asin(paths.books_dir, asin)
     target_dir = book_dir(paths.books_dir, asin)
     partial = target_dir / PARTIAL_DIRNAME
     tmp = target_dir / _M4B_TMP

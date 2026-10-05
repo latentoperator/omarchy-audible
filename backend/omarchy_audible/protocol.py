@@ -36,6 +36,7 @@ class ErrorCode:
     NOT_RUNNING = "not_running"
     NOT_LOCAL = "not_local"
     UNSAFE_PATH = "unsafe_path"
+    BAD_ASIN = "bad_asin"
     AUTH_FAILED = "auth_failed"
 
 

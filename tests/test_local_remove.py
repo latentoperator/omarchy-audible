@@ -13,6 +13,10 @@ import socket
 import urllib.request
 from pathlib import Path
 
+import pytest
+from omarchy_audible import library
+from omarchy_audible.errors import PipelineError
+
 ASIN = "B00FAKE01"
 
 
@@ -140,3 +144,36 @@ def test_remove_makes_no_network_call(env, monkeypatch, capsys, paths):
     events = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()]
     assert events[-1]["type"] == "done"
     assert not target.exists()
+
+
+# --- the shared ASIN validator (library.validate_asin, ARCHITECTURE 4.4) -----
+
+
+@pytest.mark.parametrize(
+    "bad",
+    ["", ".", "..", "../x", "a/b", "a\\b", "/abs", "x\x00y", "a b", "a.b", "-x", "x" * 33],
+)
+def test_validate_asin_rejects_malformed_values(paths, bad):
+    with pytest.raises(PipelineError) as excinfo:
+        library.validate_asin(paths.books_dir, bad)
+    assert excinfo.value.code == "bad_asin"
+
+
+def test_validate_asin_accepts_a_plain_asin(paths):
+    assert library.validate_asin(paths.books_dir, "B00FAKE01") == paths.books_dir / "B00FAKE01"
+
+
+def test_validate_asin_rejects_a_symlink(paths):
+    real = paths.books_dir / "B00FAKE03"
+    real.mkdir()
+    link = paths.books_dir / "B00FAKE04"
+    link.symlink_to(real)
+    with pytest.raises(PipelineError) as excinfo:
+        library.validate_asin(paths.books_dir, "B00FAKE04")
+    assert excinfo.value.code == "bad_asin"
+
+
+def test_ensure_safe_target_keeps_the_removal_safety_code(paths):
+    with pytest.raises(PipelineError) as excinfo:
+        library.ensure_safe_target(paths.books_dir, "../outside")
+    assert excinfo.value.code == "unsafe_path"

@@ -22,7 +22,7 @@ from typing import Self
 from . import joblock, protocol
 from .download import FAKE_FAIL_MODES, run_get
 from .errors import Cancelled, PipelineError
-from .library import remove_book, scan_local
+from .library import remove_book, scan_local, validate_asin
 from .paths import Paths
 
 # Tools required to play a book, and the extra tools checked by ``doctor``.
@@ -218,6 +218,12 @@ def cmd_get(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> i
         )
         return protocol.EXIT_USAGE
 
+    try:
+        validate_asin(paths.books_dir, asin)
+    except PipelineError as exc:
+        protocol.error(exc.code, exc.message, exc.hint)
+        return protocol.EXIT_USAGE
+
     path: Path | None = None
     try:
         with _sigterm_cancels():
@@ -246,6 +252,12 @@ def cmd_cancel(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -
             "cancel needs an ASIN",
             hint="try: omarchy-audible cancel <asin>",
         )
+        return protocol.EXIT_USAGE
+
+    try:
+        validate_asin(paths.books_dir, asin)
+    except PipelineError as exc:
+        protocol.error(exc.code, exc.message, exc.hint)
         return protocol.EXIT_USAGE
 
     record = joblock.read_job_json(paths.job_json)

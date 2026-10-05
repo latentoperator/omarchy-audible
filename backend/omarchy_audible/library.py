@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
@@ -26,6 +27,11 @@ from .protocol import ErrorCode
 BOOK_FILENAME = "book.m4b"
 META_FILENAME = "meta.json"
 PARTIAL_DIRNAME = ".partial"
+
+# An ASIN becomes exactly one directory name. Real ASINs are ten upper-case
+# letters and digits; allow a little slack around that, but the character class
+# alone already excludes ``.``/``..``, NUL and both path separators.
+_ASIN_RE = re.compile(r"^[A-Za-z0-9]{4,32}$")
 
 
 def dir_size(path: Path) -> int:
@@ -91,29 +97,43 @@ def scan_local(books_dir: Path) -> list[dict[str, Any]]:
     return books
 
 
-def ensure_safe_target(books_dir: Path, asin: str) -> Path:
+def validate_asin(books_dir: Path, asin: str, *, code: str = ErrorCode.BAD_ASIN) -> Path:
     """Resolve ``<booksDir>/<asin>`` or refuse it (ARCHITECTURE 4.4).
 
-    An ASIN is a single path component: a value with a separator, ``.``/``..``,
-    or one that resolves outside ``booksDir`` is refused. A symlink is refused
-    by :func:`remove_book`, after this check.
+    The one ASIN check shared by every command that turns an ASIN into a path:
+    the value must be a single path component of letters and digits (which
+    already excludes ``.``/``..``, NUL and both separators), its resolved target
+    must stay inside ``booksDir``, and the target must not be a symlink.
+    ``code`` is the protocol error code to raise: ``bad_asin`` for ``get`` and
+    ``cancel``, ``unsafe_path`` for ``remove`` (its documented safety code).
     """
-    if not asin or asin in {".", ".."} or "\0" in asin or "/" in asin or "\\" in asin:
+    if not isinstance(asin, str) or not _ASIN_RE.match(asin):
         raise PipelineError(
-            ErrorCode.UNSAFE_PATH,
-            f"refusing to remove {asin!r}: not a plain ASIN",
-            hint="remove takes a single ASIN",
+            code,
+            f"invalid ASIN: {asin!r}",
+            hint="an ASIN is 4-32 letters or digits, for example B00FAKE01",
         )
     target = books_dir / asin
     books_real = books_dir.resolve()
     target_real = target.resolve()
     if target_real == books_real or books_real not in target_real.parents:
         raise PipelineError(
-            ErrorCode.UNSAFE_PATH,
-            f"refusing to remove {target}: outside the books directory",
-            hint=f"only directories inside {books_dir} can be removed",
+            code,
+            f"refusing {target}: outside the books directory",
+            hint=f"only paths inside {books_dir} are allowed",
+        )
+    if target.is_symlink():
+        raise PipelineError(
+            code,
+            f"refusing symlink: {target}",
+            hint="only a real book directory is allowed",
         )
     return target
+
+
+def ensure_safe_target(books_dir: Path, asin: str) -> Path:
+    """Resolve ``<booksDir>/<asin>`` for ``remove`` (ARCHITECTURE 4.4)."""
+    return validate_asin(books_dir, asin, code=ErrorCode.UNSAFE_PATH)
 
 
 def remove_book(books_dir: Path, asin: str) -> int:
@@ -122,12 +142,6 @@ def remove_book(books_dir: Path, asin: str) -> int:
     Local only: nothing here touches the network or the Audible account.
     """
     target = ensure_safe_target(books_dir, asin)
-    if target.is_symlink():
-        raise PipelineError(
-            ErrorCode.UNSAFE_PATH,
-            f"refusing to remove symlink: {target}",
-            hint="remove only deletes a real book directory",
-        )
     if not target.is_dir():
         raise PipelineError(
             ErrorCode.NOT_LOCAL,
