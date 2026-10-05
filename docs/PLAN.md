@@ -81,7 +81,7 @@ All commands follow the protocol in ARCHITECTURE §4.2. Build the **fake mode fi
   `login-start`, `login-finish`, `login-import-cli`, `logout`, plus `status.authenticated/account/marketplace`. Implements ARCHITECTURE §4.7 exactly; working reference code is `spikes/s1_login.py`. `login-finish` reads the URL from **stdin**. Files created `0600` under umask 077. The clipboard-history check and `logout` deregistering only this device are part of the task.
   Acceptance: unit tests with mocked `audible` calls; file-mode test (including an import from a `0644` source); a test asserting the pasted URL and code never appear in argv, any log line, any event, or any file; expired/bad-URL tests; a test that `deregister_all=True` appears nowhere; a test that `logout` after `login-import-cli` (or with no recorded origin) makes **no** deregister call; manual run against a real account by Dante on the laptop.
 
-- [ ] **B4 — Catalog sync** (tier B, S4 result required; needs B3 or fake mode)
+- [x] **B4 — Catalog sync** (tier B, S4 result required; needs B3 or fake mode)
   `sync` pages the library (`num_results=50`, groups per ARCHITECTURE §4.5), builds `catalog.json` per the schema, filters out `Podcast*` types only (**keeps `Lecture`**), downloads missing covers (thumbnail ~252 px), fetches remote positions in batches of ≤ 25 into **`remote.json`** (never `state.json`, which the service owns), and writes everything atomically. Progress events per page. Never pushes a position.
   Acceptance: fake mode yields the fixture catalog; real mode matches `audible library list` count (minus filtered items); interrupted sync leaves the old catalog intact.
 
