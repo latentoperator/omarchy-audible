@@ -116,7 +116,8 @@ Every subcommand writes **one JSON object per line (NDJSON)** to stdout and exit
 
 ```
 status                      → {"type":"status","ready":bool,"missing":["mpv"],"authenticated":bool,
-                                "marketplace":"us","account":"j***@gmail.com","catalog_age_s":1234}
+                                "venv_ready":bool,"marketplace":"us","account":"j***@gmail.com",
+                                "catalog_age_s":1234}
 setup                       → progress events, then done
 login-start --marketplace us→ {"type":"login_url","url":"https://www.amazon.com/ap/signin?…","session":"<id>"}
 login-finish --session <id>  (pasted URL on stdin) → done | error(code=bad_url|expired|auth_failed)
@@ -135,6 +136,8 @@ doctor                      → {"type":"doctor","checks":[{"name":…,"ok":bool
 ```
 
 `--fake` (or env `OMARCHY_AUDIBLE_FAKE=1`) runs the same protocol against `fixtures/` with no network and no account. This lets UI work and tests proceed without credentials, and is what CI runs. Fake `get` produces a short synthetic m4b with chapters using `ffmpeg -f lavfi` and simulates progress and failures (`--fake-fail <code>`).
+
+Fake mode carries its own onboarding state so the sign-in and setup screens can be exercised without a real account. A fresh fake tree **starts signed in**; `logout --fake` writes a `fake-signed-out` marker in the fake config dir and `login-finish --fake` / `login-import-cli --fake` remove it, so `status --fake` flips `authenticated` (and `ready`) accordingly. An optional `<fake config dir>/fake-status.json` — `{"missing": ["mpv"], "venv_ready": false}`, both keys optional — overrides those two `status` fields, and `setup --fake` drops the `venv_ready` override so the UI can return to the ready state. Real mode reads neither file.
 
 ### 4.3 Download and decrypt pipeline ✅ (S2)
 Verified manually:
@@ -196,6 +199,8 @@ In-drawer login works (tested on the US store with a passkey sign-in; captcha, 2
 - **Clipboard history is a leak path.** Omarchy's clipboard plugin saves every copied text to `~/.local/state/omarchy/clipboard-history.json` (mode 644), so the redirect URL lands there when the user copies it. After a successful `login-finish`, the backend checks that file for the code and, if it's there, returns `{"clipboard_history_contains_code": true}` in `done` so the UI can tell the user to clear it (Omarchy's clipboard menu). The plugin never edits the shell's file. The code is single-use and already redeemed, so the residual risk is low; the notice is about hygiene.
 - `logout`: if the login was created by `login-finish`, call `deregister_device(deregister_all=False)` first (keeps Amazon's device list clean; best effort if offline), then delete the files. **If the login was imported, never deregister**: an imported auth file is the *same device* as the user's `~/.audible` login, and deregistering it would break their audible-cli. Record the origin (`"origin": "login"|"import"`) in a plugin-owned `account.json` next to `auth.json`; a missing or unknown origin means do not deregister. **Never** pass `deregister_all=True`.
 - Never log or persist the pasted URL. A test asserts it appears in no log line, event, or file.
+
+**The account label** in `status.account` comes from `account.json` when it holds one (a masked email such as `j***@gmail.com`). `login-finish` registers with `with_username=False`, so Amazon may return no email; `login-finish` and `login-import-cli` then fall back to the first name in the login's `customer_info` (`given_name`, then `name`) and store it in `account.json`. When `account.json` has no account, `status` reads the same `customer_info` from `auth.json` as plain JSON — no network and no `audible` import. A masked email always wins when there is one, and `user_id` is never used as the account label.
 
 Existing-login import (`login-import-cli`) validates `~/.audible/<primary profile>.json` with `Authenticator.from_file`, then copies it and its marketplace into the plugin config dir, written `0600` **regardless of the source mode** (audible-cli leaves it 644). The copy is independent of audible-cli afterward ✅ S1.
 

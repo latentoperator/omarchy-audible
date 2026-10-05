@@ -20,8 +20,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Self
 
-from . import joblock, protocol
+from . import fakestate, joblock, protocol
 from .auth import (
+    account_from_auth_file,
     login_finish,
     login_import_cli,
     login_start,
@@ -96,14 +97,20 @@ def cmd_status(
 ) -> int:
     """Report readiness (ARCHITECTURE 4.2)."""
     if fake:
-        # Fake mode pretends the environment is fully ready so the UI can run
-        # with no account, no network and no virtualenv. The dirs are the fake
-        # tree, never the real plugin folders.
+        # Fake mode pretends the tools and the venv are ready so the UI can run
+        # with no account, no network and no virtualenv. Its sign-in state and
+        # an optional tester override live in the fake tree, never the real one
+        # (B9). The dirs are the fake tree too.
+        overrides = fakestate.read_overrides(paths)
+        missing = overrides.get("missing", [])
+        venv = overrides.get("venv_ready", True)
+        authenticated = not fakestate.signed_out(paths)
         protocol.emit(
             "status",
-            ready=True,
-            missing=[],
-            authenticated=True,
+            ready=authenticated and not missing and venv,
+            missing=missing,
+            authenticated=authenticated,
+            venv_ready=venv,
             marketplace=DEFAULT_MARKETPLACE,
             account=FAKE_ACCOUNT,
             catalog_age_s=None,
@@ -114,15 +121,21 @@ def cmd_status(
 
     missing = _missing_required_tools()
     authenticated = paths.auth_file.is_file()
-    ready = authenticated and not missing and venv_ready(paths.venv_dir)
+    venv = venv_ready(paths.venv_dir)
     record = read_account_record(paths)
     account = record.get("account")
+    if not (isinstance(account, str) and account):
+        # ``login-finish`` registers with ``with_username=False``, so an email
+        # is not always present; fall back to the saved login's customer_info
+        # first name, read from auth.json as plain JSON (B9).
+        account = account_from_auth_file(paths.auth_file)
     marketplace = record.get("marketplace") or DEFAULT_MARKETPLACE
     protocol.emit(
         "status",
-        ready=ready,
+        ready=authenticated and not missing and venv,
         missing=missing,
         authenticated=authenticated,
+        venv_ready=venv,
         marketplace=marketplace,
         account=account if isinstance(account, str) else None,
         catalog_age_s=_catalog_age_s(paths),
@@ -177,6 +190,10 @@ def cmd_setup(args: Sequence[str], *, command: str, fake: bool, paths: Paths) ->
     except PipelineError as exc:
         protocol.error(exc.code, exc.message, exc.hint)
         return protocol.EXIT_ERROR
+    if fake:
+        # A successful ``setup --fake`` clears a tester's venv_ready override,
+        # so the UI can leave the setup screen (B9).
+        fakestate.clear_venv_ready_override(paths)
     protocol.done()
     return protocol.EXIT_OK
 
