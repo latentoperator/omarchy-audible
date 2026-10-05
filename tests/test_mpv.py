@@ -137,12 +137,22 @@ def test_chapter_end(mpv):
     assert mpv.call("chapterEndMs", [], 0, 180000) == -1
 
 
-def test_sleep_remaining(mpv):
+def test_chapter_sleep_timer_is_fixed_to_the_chapter_end(mpv):
     chapters = [{"startMs": 0}, {"startMs": 60000}]
+    assert mpv.call("chapterSleepTimer", chapters, 0, 120000) == {"mode": "chapter", "endMs": 60000}
+    assert mpv.call("chapterSleepTimer", chapters, 1, 120000) == {"mode": "chapter", "endMs": 120000}
+    assert mpv.call("chapterSleepTimer", chapters, 1, 0) is None
+    assert mpv.call("chapterSleepTimer", [], 0, 120000) is None
+
+
+def test_sleep_remaining(mpv):
     minutes = {"mode": "minutes", "endsAtMs": 10000}
-    assert mpv.call("sleepRemainingMs", minutes, 4000, 0, [], -1, 0, 1) == 6000
-    chapter = {"mode": "chapter"}
-    assert mpv.call("sleepRemainingMs", chapter, 0, 50000, chapters, 0, 120000, 1) == 10000
-    assert mpv.call("sleepRemainingMs", chapter, 0, 50000, chapters, 0, 120000, 2) == 5000
-    assert mpv.call("sleepRemainingMs", None, 0, 0, [], -1, 0, 1) == -1
-    assert mpv.call("sleepRemainingMs", {"mode": "x"}, 0, 0, [], -1, 0, 1) == -1
+    assert mpv.call("sleepRemainingMs", minutes, 4000, 0, 1) == 6000
+    chapter = {"mode": "chapter", "endMs": 60000}
+    assert mpv.call("sleepRemainingMs", chapter, 0, 50000, 1) == 10000
+    assert mpv.call("sleepRemainingMs", chapter, 0, 50000, 2) == 5000
+    # Past the chapter end it is overdue, not pushed to the next chapter.
+    assert mpv.call("sleepRemainingMs", chapter, 0, 61000, 1) == -1000
+    assert mpv.call("sleepRemainingMs", None, 0, 0, 1) == -1
+    assert mpv.call("sleepRemainingMs", {"mode": "x"}, 0, 0, 1) == -1
+    assert mpv.call("sleepRemainingMs", {"mode": "chapter"}, 0, 0, 1) == -1
