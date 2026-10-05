@@ -1,0 +1,13 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "omarchy-audible-backend"
+version = "0.0.1"
+description = "Backend package for the Omarchy Audible plugin."
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["omarchy_audible"]

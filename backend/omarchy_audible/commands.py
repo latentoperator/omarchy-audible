@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Self
 
 from . import joblock, protocol
+from .bootstrap import run_setup, venv_ready
 from .download import FAKE_FAIL_MODES, run_get
 from .errors import Cancelled, PipelineError
 from .library import remove_book, scan_local, validate_asin
@@ -83,7 +84,7 @@ def cmd_status(
 
     missing = _missing_required_tools()
     authenticated = paths.auth_file.is_file()
-    ready = authenticated and not missing and paths.venv_python.is_file()
+    ready = authenticated and not missing and venv_ready(paths.venv_dir)
     # ``marketplace``/``account`` are populated by B3 from the account record;
     # until then they stay at the documented defaults.
     protocol.emit(
@@ -120,7 +121,7 @@ def cmd_doctor(
     checks.append(
         {
             "name": "venv",
-            "ok": paths.venv_python.is_file(),
+            "ok": venv_ready(paths.venv_dir),
             "detail": str(paths.venv_dir),
         }
     )
@@ -133,6 +134,17 @@ def cmd_doctor(
         }
     )
     protocol.emit("doctor", checks=checks)
+    protocol.done()
+    return protocol.EXIT_OK
+
+
+def cmd_setup(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> int:
+    """Create and verify the plugin virtualenv (ARCHITECTURE 4.1)."""
+    try:
+        run_setup(paths, fake=fake)
+    except PipelineError as exc:
+        protocol.error(exc.code, exc.message, exc.hint)
+        return protocol.EXIT_ERROR
     protocol.done()
     return protocol.EXIT_OK
 
@@ -331,7 +343,7 @@ def _registry() -> dict[str, Command]:
     return {
         "status": Command(cmd_status, False),
         "doctor": Command(cmd_doctor, False),
-        "setup": job,
+        "setup": Command(cmd_setup, True),
         "sync": job,
         "get": Command(cmd_get, True),
         "remove": Command(cmd_remove, True),

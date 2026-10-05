@@ -31,6 +31,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 BACKEND_DIR = REPO_ROOT / "backend"
 MODULE = "omarchy_audible"
 
+# Names a completed virtualenv, written by `setup` last (backend/omarchy_audible/
+# bootstrap.py). A venv without it is a run that was killed midway; the launcher
+# must not dispatch into it. A test keeps this in step with the backend constant.
+VENV_MARKER = "omarchy-audible.setup.json"
+
 # Commands the launcher can run from the repository source with no dependency.
 LAUNCHER_COMMANDS = frozenset({"status", "doctor", "setup"})
 
@@ -82,6 +87,11 @@ def _venv_python(env: dict[str, str]) -> Path:
     return base / "omarchy-audible" / "venv" / "bin" / "python"
 
 
+def _venv_ready(venv_python: Path) -> bool:
+    """A venv is usable only once ``setup`` has written its ready marker."""
+    return venv_python.is_file() and (venv_python.parent.parent / VENV_MARKER).is_file()
+
+
 def _emit_error(code: str, message: str, hint: str | None = None) -> None:
     event: dict[str, str] = {"type": "error", "code": code, "message": message}
     if hint:
@@ -123,7 +133,7 @@ def main(argv: list[str]) -> int:
         return _run_backend(argv, env, fake, python)
 
     venv_python = _venv_python(env)
-    if not venv_python.is_file():
+    if not _venv_ready(venv_python):
         _emit_error(
             "no_venv",
             "the plugin virtualenv is not installed",

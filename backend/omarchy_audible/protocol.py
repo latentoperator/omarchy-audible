@@ -25,6 +25,7 @@ class ErrorCode:
     NO_VENV = "no_venv"
     BUSY = "busy"
     INTERNAL = "internal"
+    SETUP_FAILED = "setup_failed"
 
     # get / cancel / remove (B5, ARCHITECTURE 4.3, 4.4, 4.8)
     DISK_SPACE = "disk_space"
