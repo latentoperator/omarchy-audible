@@ -57,7 +57,7 @@ Item {
 
   function pump() {
     // A busy job waits out its retry delay; a newer job must not jump it.
-    if (retryTimer.running) {
+    if (root.retrying) {
       return
     }
     var job = JobQueue.take(root.queue)
@@ -102,6 +102,7 @@ Item {
     var step = JobQueue.complete(root.queue, outcome)
     root.sync()
     if (step.action === JobQueue.ACTION_RETRY) {
+      root.retrying = true
       retryTimer.interval = step.delayMs
       retryTimer.restart()
       return
@@ -131,6 +132,9 @@ Item {
   Timer {
     id: retryTimer
     repeat: false
-    onTriggered: root.pump()
+    onTriggered: {
+      root.retrying = false
+      root.pump()
+    }
   }
 }
