@@ -19,7 +19,7 @@ Read [SCOPE.md](SCOPE.md) (what and why) and [ARCHITECTURE.md](ARCHITECTURE.md) 
 M0  S1 S2 S3 S4 S5 S6   (all independent, run in parallel)  ──▶ GATE G0
 M1  B1 → B2 → B3 → B4 ; B5, B6, B7 after B1                 ──▶ GATE G1
 M2  P1 → P2 → P3 ; P4 after P2                              ──▶ GATE G2
-M3  U1 → U2a → U2 → U3 ; U4 after U1                        ──▶ GATE G3  (first usable build)
+M3  B9 → B10 ; L1 → L2 → L3 (Hopebox) ; U1 → U4 → U2a → U2 → U3 (laptop) ──▶ GATE G3  (first usable build)
 M4  U5, U6, U7 after G3                                     ──▶ GATE G4
 M5  R1 … R7                                                 ──▶ release v0.1.0
 ```
@@ -151,27 +151,56 @@ Depends on S5/S6 results and the fake backend.
 
 ## M3 — First usable UI
 
-- [ ] **U1 — Bar widget + Panel shell** (tier B; needs S6, P1)
-  Book glyph; play/pause state; optional title; tooltip; left click toggles the drawer (Mini if loaded else Library); middle click toggles play/pause. The widget's `KeyboardPanel` (pattern in `spikes/s6-BarWidget.qml`) hosts a stacked layout with Library/Mini/Full/Onboarding placeholders, closes on Esc/click-away/popout switch, and never affects playback. Widgets are per monitor: keep state in the service.
-  Acceptance: matches the behavior in SCOPE FR-U1/U5; works under three themes.
+**Split (2026-10-05).** As in M2: Hopebox Kanban builds the pure logic and the two backend fixes the UI needs; the laptop agent builds the QML views in the real shell, following [briefs/M3-laptop.md](briefs/M3-laptop.md).
+- **Hopebox, two chains that run side by side:** B9 → B10 (backend) and L1 → L2 → L3 (pure JavaScript under `qml/lib/`, tested through PySide6 `QJSEngine` like P1a/P3a/P4a). Implementers tick their own checkbox here but **do not edit `docs/STATE.md`**, so the two chains never conflict; Dante updates STATE.
+- **Laptop:** U1 → U4 → U2a → U2 → U3, then G3 with Chris. U1 needs nothing new and can start at once. Each later task waits for the Hopebox piece it imports.
 
-- [ ] **U2a — Minimal Mini view** (tier B; needs U1, P2) — moved into M3 at G0 because the Library view's "reopen on Mini when playback begins" and G3's "use it for a day" both need it.
+- [ ] **B9 — `status` fields and fake sign-in states for onboarding** (tier B; needs B3, B8)
+  Three changes; update `tests/schemas/status.json` and ARCHITECTURE §4.2 first. (1) **Account name.** `account` is `null` for a login made by `login-finish`, because it registers with `with_username=False` and Amazon returns no email. When `account.json` has no account, fall back to the first name in the saved login's `customer_info` (`given_name`, then `name`), read from `auth.json` as plain JSON: no network, no `audible` import. Never use `user_id`. `login-finish` and `login-import-cli` also store that fallback in `account.json` when there is no email. A masked email still wins when there is one. (2) **`venv_ready`** (bool, the same check `ready` already uses), so the UI can tell "run setup" apart from "connect". (3) **Fake sign-in states**, so the onboarding view can be tested without the real account. Today `status --fake` always says signed in, even after `logout --fake`. In fake mode only: a fresh fake tree starts signed in (so the M2 flow and existing tests keep working); `logout --fake` signs out, and `login-finish --fake` / `login-import-cli --fake` sign back in, tracked by a marker file in the fake config dir. An optional `<fake config dir>/fake-status.json` (`{"missing": [...], "venv_ready": false}`, both keys optional) overrides those two fields so a tester can show the missing-tools and setup screens by writing a file; `setup --fake` sets `venv_ready` back to true. Real mode ignores both files.
+  Acceptance: tests for each `customer_info` shape (email, name only, given name only, nothing, garbage, unreadable file), with `user_id` never returned; `venv_ready` true and false; fake logout → `authenticated: false` → fake login-finish → `true`; `fake-status.json` overrides and `setup --fake` clearing `venv_ready`; real mode never reads the fake files; the contract test passes with the updated schema; the B8 fake-path test still passes; the name appears in no stderr log line.
+
+- [ ] **B10 — Fake mode keeps positions** (tier B; needs B6, B8)
+  Fake mode's position store is stateless today: `position-push --fake` is a no-op and `position-get --fake` always returns 0 (finding from P4, #22). Make it hold state in the fake tree: a push writes `{ms, updated_at}` (`updated_at` is the `--at` value, else now) to `<fake data dir>/fake-account-positions.json`, and `position-get --fake` and `sync --fake` read it back, so the stale check and resume-from-the-account can be tested end to end in fake mode. Real mode is unchanged. The file exists only in the fake tree.
+  Acceptance: push then get returns the pushed position; a push older than the stored one is refused with `error(code=stale)`; `sync --fake` writes the stored positions into the fake `remote.json`; the B8 test (real tree untouched) still passes; no real-mode code path changes (test with the real port mocked).
+
+- [ ] **L1 — `Format.js`** (tier A; needs nothing)
+  `qml/lib/Format.js`, pure: `duration(ms)` ("3h 12m", "45m", "<1m", "0m"; bad input gives ""), `left(positionMs, durationMs)` ("3h 12m left", "" at or past the end), `clock(ms)` ("0:00", "2:05", "1:02:33", "123:04:05"), `bytes(n)` (1024-based, "B"/"KB"/"MB"/"GB", one decimal under 10), `storageLine(count, totalBytes)` ("No books on this laptop", "1 book · 12 MB", "3 books · 780 MB"), `ago(iso, nowMs)` ("just now", "5 min ago", "3 h ago", "2 days ago", "never" for null), `names(list)` ("A", "A and B", "A, B and 2 more"), and `tooltip(title, author, leftText)` for FR-U1 ("Title — Author · 3h 12m left", leaving out missing parts).
+  Acceptance: QJSEngine tests for 0, under a minute, over 100 hours, negative, NaN, null, missing title or author, and singular versus plural.
+
+- [ ] **L2 — Library view logic** (tier B; needs L1, P3a)
+  `qml/lib/LibraryUi.js`, pure, working on `Library.js` rows: `badge(row, progress, offline)` returns `{kind, label}` for every §5.3 state (`downloading` shows a percent from the `get` progress event's `bytes`/`total`; `error` is "Failed — Retry"; a cloud book while offline is "Offline"). `primaryAction(row, offline)` returns `play` (local), `download` (cloud and online), `retry` (error) or `none`. `resumeChoice(row, durationMs)` returns `resume`, `ask` (finished but not within 30 s of the end: offer Start over or Resume, SCOPE §6) or `start-over`. `listState({catalogLoaded, syncing, total, shown, offline, errorCode})` returns `{state, banner}`, where the state is `loading`/`error`/`empty`/`no-results`/`list` and the banner is `offline`/`reconnect`/`syncing`/null; `auth_failed` means reconnect (FR-A4). `moveSelection(index, delta, count)` clamps, and returns -1 for an empty list. `syncDue(catalogAgeS, hours)` is true when the age is null or at least `hours` (FR-L2). `storage(localBooks)` returns `{count, bytes}`.
+  Acceptance: QJSEngine tests for each function, covering every row state, offline versus online, and the empty and no-results cases, using rows built by `Library.buildRows` from `fixtures/library-sample.json`.
+
+- [ ] **L3 — Onboarding logic** (tier B; needs L2, B9)
+  `qml/lib/Onboarding.js`, pure: `step(status)` returns `loading` (null), `missing` (`missing` not empty), `setup` (`venv_ready` false), `connect` (not authenticated) or `ready`. `installCommand(missing)` returns `omarchy pkg add mpv ffmpeg`, mapping `ffprobe` to `ffmpeg`, removing duplicates and keeping a stable order. `view(step, playerLoaded, requested)` applies ARCHITECTURE §6: onboarding unless ready; a bar click opens `mini` when a book is loaded and `library` otherwise; `full` only when a book is loaded. `errorText(code, message, hint)` returns `{title, body, reconnect}` for **every** `protocol.ErrorCode` plus `no_venv`, never including the raw pasted URL. `looksLikeRedirect(text)` is true when the text holds `openid.oa2.authorization_code=`, and it never echoes the text. `marketplaces()` returns `[{code, label}]`. `clipboardNotice(done)` returns the clear-clipboard-history text when `done.clipboard_history_contains_code` is true (G1 note) and "" otherwise.
+  Acceptance: QJSEngine tests; one test asserts that `marketplaces()` codes equal the backend's `MARKETPLACES` in order, and one that `errorText` covers every `ErrorCode` member.
+
+- [ ] **U1 — Bar widget + Panel shell** (tier B; needs S6, P1; laptop)
+  Book glyph; play/pause state; optional title; tooltip; left click toggles the drawer (Mini if loaded else Library); middle click toggles play/pause. The widget's `KeyboardPanel` (pattern in `spikes/s6-BarWidget.qml`) hosts a stacked layout with Library/Mini/Full/Onboarding placeholders, closes on Esc/click-away/popout switch, and never affects playback. Widgets are per monitor: keep state in the service. **Removes the temporary debug panel.** The extra IPC methods added for testing (`play`, `pause`, `playerStatus`, `libraryQuery`, and the rest) stay through M3 so agents can test without touching the desktop; R6 either documents or removes them.
+  Acceptance: matches the behavior in SCOPE FR-U1/U5 under Chris's current theme; the three-theme check runs at G3.
+
+- [ ] **U4 — Cover + StateBadge** (tier A; needs U1, L1; laptop)
+  `Cover.qml` (async load, placeholder, fixed aspect, rounded per theme tokens) and `StateBadge.qml` (renders `LibraryUi.badge`). Text formatting comes from `Format.js` (L1).
+  Acceptance: documented manual checks for a missing cover, a very long title and each badge kind.
+
+- [ ] **U2a — Minimal Mini view** (tier B; needs U1, U4, L1, P2; laptop) — moved into M3 at G0 because the Library view's "reopen on Mini when playback begins" and G3's "use it for a day" both need it.
   Title and author, elapsed/remaining text, ⏯, ⏪15/⏩15, and a library button. No scrub bar, chapter popup, or speed (those stay in U5).
   Acceptance: J3's basic controls work with the fake backend; U5 later extends this file rather than replacing it.
 
-- [ ] **U2 — Library view (drawer)** (tier B; needs U1, P3)
-  Search field (autofocus), sort dropdown, filter chips, storage line, virtual-free `ListView` of `BookRow` (cover, title, author, runtime, progress bar, `StateBadge`). Enter/click plays; cloud books enqueue a download and show progress, then auto-play; row menu has Remove from laptop; "Remove all downloads"; designed empty/loading/offline/error states; placeholder cover.
+- [ ] **U2 — Library view (drawer)** (tier B; needs U1, U4, L2, P3; laptop)
+  Search field (autofocus), sort dropdown, filter chips, storage line, `ListView` of `BookRow` (cover, title, author, runtime, progress bar, `StateBadge`). Enter/click plays; cloud books enqueue a download and show progress, then auto-play; row menu has Remove from laptop; "Remove all downloads"; designed empty/loading/offline/error states; placeholder cover. All decisions come from `LibraryUi.js`.
   Acceptance: J2 and J6 pass with the fake backend; keyboard navigation per ARCHITECTURE §6.
 
-- [ ] **U3 — Onboarding / Setup / Login view** (tier B; needs U1, B2, B3)
-  Shows missing dependencies with copyable install commands; a "Set up" button that runs `setup` with progress; marketplace picker; "Connect Audible" opens the URL with `xdg-open`, shows a paste field plus "Paste from clipboard", then runs `login-finish` and starts the first `sync`; "Use existing audible-cli login" shortcut when detected; clear error messages for bad URL/expired session. Reconnect banner when credentials fail later. Disconnect action.
-  Acceptance: J1 passes end-to-end against a real account on a machine with no prior plugin state; no secret ever appears in the UI.
+- [ ] **U3 — Onboarding / Setup / Login view** (tier B; needs U1, L3, B9; laptop)
+  Shows missing dependencies with copyable install commands; a "Set up" button that runs `setup` with progress; marketplace picker; "Connect Audible" opens the URL with `xdg-open`, shows a paste field plus "Paste from clipboard", then runs `login-finish` and starts the first `sync`; "Use existing audible-cli login" shortcut when detected; clear error messages for bad URL/expired session; the clear-clipboard-history notice when `login-finish` reports it. Reconnect banner when credentials fail later. Disconnect action, showing the account name and marketplace (FR-A3). All decisions come from `Onboarding.js`.
+  Acceptance: every step and error state is checked in fake mode, using B9's fake sign-in states and `fake-status.json`; J1 end-to-end against the real account is run at G3 with Chris; no secret ever appears in the UI.
 
-- [ ] **U4 — Cover + Format utilities** (tier A; needs A0, runs parallel with U1)
-  `Cover.qml` (async load, placeholder, fixed aspect, rounded per theme tokens), `Format.js` (durations like "3h 12m left", timestamps `1:02:33`), `StateBadge.qml`.
-  Acceptance: small QML test harness or documented manual checks for edge values (0, <1 min, >100 h, missing cover).
-
-**GATE G3** — first usable build. The maintainer uses it for a day with real books. Fix blockers before M4. After G3, flip the repo to public if D2 still stands.
+**GATE G3** — first usable build, with Chris at the laptop in real mode. Checklist:
+1. J1: Disconnect, then Connect Audible through the drawer (this deregisters and re-registers the plugin's device; books stay). Then J2, J3 and J6 by hand.
+2. The two G2 items not yet run in real mode: a chapter change, and `omarchy-restart-shell` during playback with the audio continuing.
+3. J7 spot check: listen on the phone, then resume on the laptop at the phone's position.
+4. Three themes (one light, two dark) and a live theme switch with the drawer open; Chris's own theme restored afterward.
+5. Chris uses it for a day with real books. Fix blockers before M4. After G3, flip the repo to public if D2 still stands.
 
 ---
 
