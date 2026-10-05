@@ -1,20 +1,21 @@
 """Command registry and the implemented backend commands.
 
-``status`` and ``doctor`` (B1), ``get``/``cancel``/``local``/``remove`` (B5),
-the auth commands (B3) and the fake-mode failure switch are real. Every other
-documented command exists in the registry with the correct job/non-job
-classification and reports ``error(code=not_implemented)`` until its task
-lands, so the job lock and unknown-command handling stay exercisable.
+Every command in ARCHITECTURE 4.2 is implemented: ``status``/``doctor`` (B1),
+``setup`` (B2), the auth commands (B3), ``sync`` (B4),
+``get``/``cancel``/``local``/``remove`` (B5), and
+``position-get``/``position-push`` (B6). Each registry entry carries its
+job/non-job classification (ARCHITECTURE 4.8), which is what the job lock uses.
 """
 
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 import signal
 import sys
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Self
@@ -29,11 +30,19 @@ from .auth import (
     valid_session_id,
 )
 from .bootstrap import run_setup, venv_ready
-from .catalog import run_sync
+from .catalog import open_client, run_sync
 from .download import FAKE_FAIL_MODES, run_get
 from .errors import Cancelled, PipelineError
 from .library import remove_book, scan_local, validate_asin
 from .paths import Paths
+from .positions import (
+    FakePositions,
+    RealPositions,
+    fetch_positions,
+    load_remote,
+    push_position,
+    write_remote,
+)
 
 # Tools required to play a book, and the extra tools checked by ``doctor``.
 REQUIRED_TOOLS = ("mpv", "ffmpeg", "ffprobe")
@@ -159,17 +168,6 @@ def cmd_setup(args: Sequence[str], *, command: str, fake: bool, paths: Paths) ->
     return protocol.EXIT_OK
 
 
-def cmd_unimplemented(
-    args: Sequence[str], *, command: str, fake: bool, paths: Paths
-) -> int:
-    protocol.error(
-        protocol.ErrorCode.NOT_IMPLEMENTED,
-        f"command not implemented yet: {command}",
-        hint="this command lands in a later milestone",
-    )
-    return protocol.EXIT_ERROR
-
-
 def cmd_sync(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> int:
     """Page the library and refresh ``catalog.json``/``remote.json`` (4.5, 4.6)."""
     record = read_account_record(paths)
@@ -217,6 +215,40 @@ def split_get_args(args: Sequence[str]) -> tuple[str | None, str | None]:
             asin = token
         index += 1
     return asin, fake_fail
+
+
+def split_push_args(
+    args: Sequence[str],
+) -> tuple[str | None, str | None, str | None]:
+    """Split ``position-push`` arguments into ``(asin, ms, local_updated_at)``.
+
+    The local timestamp is the ``--at`` option: the time the listening that
+    produced the position happened (ARCHITECTURE 4.6). It defaults to now when
+    omitted, and is what the stale check compares against the remote position.
+    """
+    asin: str | None = None
+    ms_text: str | None = None
+    local_updated_at: str | None = None
+    index = 0
+    while index < len(args):
+        token = args[index]
+        if token == "--at":
+            local_updated_at = args[index + 1] if index + 1 < len(args) else None
+            index += 2
+            continue
+        if token.startswith("--at="):
+            local_updated_at = token.split("=", 1)[1] or None
+            index += 1
+            continue
+        if token.startswith("-"):
+            index += 1
+            continue
+        if asin is None:
+            asin = token
+        elif ms_text is None:
+            ms_text = token
+        index += 1
+    return asin, ms_text, local_updated_at
 
 
 def job_asin(command: str, args: Sequence[str]) -> str | None:
@@ -367,6 +399,102 @@ def cmd_remove(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -
     return protocol.EXIT_OK
 
 
+def _positional_args(args: Sequence[str]) -> list[str]:
+    """The non-flag tokens of ``args`` (ASIN lists)."""
+    return [token for token in args if not token.startswith("-")]
+
+
+@contextlib.contextmanager
+def _positions_port(fake: bool, paths: Paths) -> Iterator[FakePositions | RealPositions]:
+    """A positions port over the fake fixture or an authenticated client.
+
+    The real client is closed on the way out, like ``sync`` does.
+    """
+    if fake:
+        yield FakePositions()
+        return
+    with open_client(paths) as client:
+        yield RealPositions(client)
+
+
+def cmd_position_get(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> int:
+    """Read positions for the given ASINs and refresh ``remote.json`` (4.6)."""
+    asins = _positional_args(args)
+    if not asins:
+        protocol.error(
+            protocol.ErrorCode.INVALID_ARGS,
+            "position-get needs at least one ASIN",
+            hint="try: omarchy-audible position-get <asin> [<asin> ...]",
+        )
+        return protocol.EXIT_USAGE
+    for asin in asins:
+        try:
+            validate_asin(paths.books_dir, asin)
+        except PipelineError as exc:
+            protocol.error(exc.code, exc.message, exc.hint)
+            return protocol.EXIT_USAGE
+
+    try:
+        with _positions_port(fake, paths) as port:
+            items = fetch_positions(asins, port)
+    except PipelineError as exc:
+        protocol.error(exc.code, exc.message, exc.hint)
+        return _error_exit(exc)
+
+    # Refresh the requested entries in place so the other cached books survive.
+    cached = load_remote(paths.remote_file)
+    cached.update(items)
+    write_remote(paths.remote_file, cached)
+
+    protocol.emit("positions", items=items)
+    protocol.done()
+    return protocol.EXIT_OK
+
+
+def cmd_position_push(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> int:
+    """Write one local position back to the account (ARCHITECTURE 4.6)."""
+    asin, ms_text, local_updated_at = split_push_args(args)
+    if not asin or ms_text is None:
+        protocol.error(
+            protocol.ErrorCode.INVALID_ARGS,
+            "position-push needs an ASIN and a position in milliseconds",
+            hint="try: omarchy-audible position-push <asin> <ms> [--at <iso-8601>]",
+        )
+        return protocol.EXIT_USAGE
+    try:
+        position_ms = int(ms_text)
+    except ValueError:
+        position_ms = -1
+    if position_ms < 0:
+        protocol.error(
+            protocol.ErrorCode.INVALID_ARGS,
+            f"invalid position: {ms_text!r}",
+            hint="the position is a non-negative whole number of milliseconds",
+        )
+        return protocol.EXIT_USAGE
+
+    try:
+        validate_asin(paths.books_dir, asin)
+    except PipelineError as exc:
+        protocol.error(exc.code, exc.message, exc.hint)
+        return protocol.EXIT_USAGE
+
+    try:
+        with _positions_port(fake, paths) as port:
+            push_position(
+                asin,
+                position_ms,
+                books_dir=paths.books_dir,
+                port=port,
+                local_updated_at=local_updated_at,
+            )
+    except PipelineError as exc:
+        protocol.error(exc.code, exc.message, exc.hint)
+        return _error_exit(exc)
+    protocol.done()
+    return protocol.EXIT_OK
+
+
 def _option(args: Sequence[str], name: str) -> str | None:
     """The value of ``--name value`` or ``--name=value``, else ``None``."""
     for index, token in enumerate(args):
@@ -464,7 +592,6 @@ def _error_exit(exc: PipelineError) -> int:
 
 
 def _registry() -> dict[str, Command]:
-    plain = Command(cmd_unimplemented, False)
     return {
         "status": Command(cmd_status, False),
         "doctor": Command(cmd_doctor, False),
@@ -476,8 +603,8 @@ def _registry() -> dict[str, Command]:
         "login-import-cli": Command(cmd_login_import_cli, True),
         "logout": Command(cmd_logout, True),
         "local": Command(cmd_local, False),
-        "position-get": plain,
-        "position-push": plain,
+        "position-get": Command(cmd_position_get, False),
+        "position-push": Command(cmd_position_push, False),
         "login-start": Command(cmd_login_start, False),
         "cancel": Command(cmd_cancel, False),
     }
