@@ -17,6 +17,9 @@ var PHASE_FINISHING = "finishing";
 // Shown when the pasted text has no one-time code (FR-A1); it is not sent.
 var BAD_PASTE = "That doesn't look like the Amazon page address";
 
+// Shown instead when Connect is pressed with an empty field.
+var EMPTY_PASTE = "Paste the address first";
+
 // The confirm question for Disconnect (FR-A3).
 var DISCONNECT_QUESTION = "Disconnect Audible? Downloaded books stay on this laptop.";
 
@@ -52,6 +55,11 @@ function phase(session, starting, finishing) {
   if (typeof session === "string" && session.length > 0) return PHASE_PASTE;
   if (starting === true) return PHASE_STARTING;
   return PHASE_PICK;
+}
+
+// The rejected-paste message: `empty` is the service's blank check.
+function pasteMessage(empty) {
+  return empty === true ? EMPTY_PASTE : BAD_PASTE;
 }
 
 function isOnboardingCommand(command) {

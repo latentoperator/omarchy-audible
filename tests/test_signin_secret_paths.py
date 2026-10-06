@@ -57,8 +57,9 @@ def test_service_passes_the_paste_only_to_the_check_and_stdin():
     service = read("Service.qml")
     body = function_body(service, "finishLogin")
     uses = re.findall(r"\bpasted\b", body)
-    # parameter, looksLikeRedirect(pasted), runWithInput(..., pasted)
-    assert len(uses) == 3, body
+    # parameter, the blank check, looksLikeRedirect(pasted), runWithInput(..., pasted)
+    assert len(uses) == 4, body
+    assert "pasteEmpty = !/\\S/.test(pasted || \"\")" in body
     assert "Onboarding.looksLikeRedirect(pasted)" in body
     assert 'runner.runWithInput("login-finish", ["--session", loginSession], "login", pasted)' in body
     assert "logEvent" not in body

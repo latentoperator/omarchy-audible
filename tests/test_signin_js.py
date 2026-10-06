@@ -105,6 +105,19 @@ def test_bad_paste_text(signin):
     assert signin.evaluate("BAD_PASTE") == "That doesn't look like the Amazon page address"
 
 
+def test_empty_paste_text(signin):
+    assert signin.evaluate("EMPTY_PASTE") == "Paste the address first"
+
+
+@pytest.mark.parametrize("empty,text", [
+    (True, "Paste the address first"),
+    (False, "That doesn't look like the Amazon page address"),
+    (None, "That doesn't look like the Amazon page address"),
+])
+def test_paste_message(signin, empty, text):
+    assert signin.call("pasteMessage", empty) == text
+
+
 def test_store_options(signin):
     stores = qjs.load("Onboarding").call("marketplaces")
     options = signin.call("storeOptions", stores)
