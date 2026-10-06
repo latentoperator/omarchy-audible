@@ -126,7 +126,7 @@ Item {
   // downloadable cloud book (downloaded elsewhere, gone, offline) clear it.
   property string confirmAsin: ""
   readonly property bool confirmStillValid: LibraryUi.confirmValid(confirmAsin, library.rowFor(confirmAsin), syncFailure.offline)
-  onConfirmStillValidChanged: if (!confirmStillValid) confirmAsin = ""
+  onConfirmStillValidChanged: if (!confirmStillValid) Qt.callLater(dropInvalidConfirm)
   property string reopenAsin: ""
   // The last book the user chose to play; a finished download plays only
   // if it is still this one.
@@ -554,6 +554,14 @@ Item {
   function confirmDownload() {
     if (confirmAsin.length === 0) return "error: nothing asked"
     return pick(confirmAsin)
+  }
+
+  // Runs after the change that made the question invalid, so clearing it
+  // never feeds back into the binding that just changed; checks again in case
+  // the question was already replaced.
+  function dropInvalidConfirm() {
+    if (confirmAsin.length > 0
+        && !LibraryUi.confirmValid(confirmAsin, library.rowFor(confirmAsin), syncFailure.offline)) confirmAsin = ""
   }
 
   function cancelConfirm() {

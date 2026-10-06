@@ -64,7 +64,12 @@ def test_question_goes_away_when_no_longer_valid():
     service = read("Service.qml")
     assert ("readonly property bool confirmStillValid: "
             "LibraryUi.confirmValid(confirmAsin, library.rowFor(confirmAsin), syncFailure.offline)") in service
-    assert 'onConfirmStillValidChanged: if (!confirmStillValid) confirmAsin = ""' in service
+    # Cleared later, after a fresh check, never from inside the change that
+    # its own binding reads (Codex R1 #2: binding-loop warnings).
+    assert "onConfirmStillValidChanged: if (!confirmStillValid) Qt.callLater(dropInvalidConfirm)" in service
+    body = function_body(service, "dropInvalidConfirm")
+    assert "LibraryUi.confirmValid(confirmAsin, library.rowFor(confirmAsin), syncFailure.offline)" in body
+    assert 'confirmAsin = ""' in body
 
 
 def test_ipc_exposes_the_question():
@@ -120,3 +125,10 @@ def test_space_in_library_goes_through_play_pause():
     library = read("qml/views/LibraryView.qml")
     assert "player.toggle()" not in library
     assert "root.service.playPause()" in library
+
+
+def test_the_question_scrolls_into_view():
+    # Codex R1 #1: a row at the bottom grows past the clipped list; Enter
+    # again must never confirm a question the user can't fully see.
+    library = read("qml/views/LibraryView.qml")
+    assert "onHeightChanged: if (confirming) books.positionViewAtIndex(index, ListView.Contain)" in library

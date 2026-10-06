@@ -271,6 +271,8 @@ ColumnLayout {
         questionText: confirming ? root.questionText(modelData) : ""
         onPicked: root.pickAt(index)
         onRemoveRequested: root.service.removeBook(modelData.asin)
+        // The question makes the row taller; keep all of it in view.
+        onHeightChanged: if (confirming) books.positionViewAtIndex(index, ListView.Contain)
         onConfirmRequested: root.service.confirmDownload()
         onCancelRequested: root.service.cancelConfirm()
       }
