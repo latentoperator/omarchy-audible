@@ -46,13 +46,22 @@ function prefetchUsable(prefetch, asin, nowMs) {
 // Where to seek before resuming, or -1 to resume in place. Only an account
 // position newer than the saved local one counts (`localKey` and `remoteKey`
 // are `Positions.parseUpdatedAt` values; a null `localKey` means nothing was
-// saved here), so a skip made while paused is never pulled back.
-function jumpTarget(currentMs, localKey, remoteMs, remoteKey) {
+// saved here). `ownMs` lists positions this laptop wrote (its last push, its
+// saved pause position): the account stamps a push with the server's later
+// clock, so without this a skip made while paused would be pulled back to the
+// laptop's own pause push.
+function jumpTarget(currentMs, localKey, remoteMs, remoteKey, ownMs) {
   var remote = _number(remoteMs);
   var remoteAt = _number(remoteKey);
   if (remote === null || remote < 0 || remoteAt === null) return -1;
   var localAt = _number(localKey);
   if (localAt !== null && remoteAt <= localAt) return -1;
+  if (Array.isArray(ownMs)) {
+    for (var i = 0; i < ownMs.length; i++) {
+      var own = _number(ownMs[i]);
+      if (own !== null && Math.abs(remote - own) < JUMP_MIN_MS) return -1;
+    }
+  }
   var current = _number(currentMs);
   if (current !== null && Math.abs(remote - current) < JUMP_MIN_MS) return -1;
   return remote;

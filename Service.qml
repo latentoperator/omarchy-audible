@@ -311,16 +311,16 @@ Item {
   function playPause() {
     if (!player.loaded) return "error: nothing loaded"
     if (player.playing) {
-      catchupAsin = ""
-      catchupTimer.stop()
+      cancelCatchup()
       player.pause()
       return "ok"
     }
     if (catchupAsin.length > 0) {
-      catchupAsin = ""
-      catchupTimer.stop()
+      cancelCatchup()
       return "cancelled"
     }
+    // A Library pick is still reading its position; it decides where to play.
+    if (pendingResume.length > 0) return "busy"
     var asin = loadedAsin
     if (!Catchup.needsRead(pausedAtMs, Date.now())) {
       player.resume()
@@ -334,6 +334,12 @@ Item {
     catchupTimer.restart()
     if (catchupReading !== asin && !readCatchup(asin)) resumeCaughtUp(asin, null)
     return "checking"
+  }
+
+  // Drops a waiting ⏯; the read itself finishes and is kept as `prefetched`.
+  function cancelCatchup() {
+    catchupAsin = ""
+    catchupTimer.stop()
   }
 
   // Opening the drawer on a book paused long enough starts the read early,
@@ -354,15 +360,16 @@ Item {
   // Resume `asin`, first jumping to `remote` (an account entry, or null)
   // when it is newer than the position saved here.
   function resumeCaughtUp(asin, remote) {
-    catchupAsin = ""
-    catchupTimer.stop()
+    cancelCatchup()
     prefetched = null
     if (!player.loaded || loadedAsin !== asin || player.playing) return
-    if (remote) {
+    // An unread state.json is not "nothing saved here": stay put.
+    if (remote && store.loaded) {
       var local = store.doc.books ? store.doc.books[asin] : null
+      var own = [sync.lastPushed[asin], local ? local.ms : null]
       var target = Catchup.jumpTarget(player.positionMs,
         local ? Positions.parseUpdatedAt(local.updated_at) : null,
-        remote.ms, Positions.parseUpdatedAt(remote.updated_at))
+        remote.ms, Positions.parseUpdatedAt(remote.updated_at), own)
       if (target >= 0) {
         logEvent("catchup", "jump " + Math.round(player.positionMs) + " -> " + target)
         player.seekMs(target)
@@ -483,6 +490,7 @@ Item {
   // this book, and the download-then-play check (`latestPick`).
   function noteIntent(asin) {
     latestPick = asin
+    cancelCatchup()
     askAsin = ""
     if (pendingResume !== asin) pendingResume = ""
     removeAfterUnload = removeAfterUnload.filter(function(a) { return a !== asin })

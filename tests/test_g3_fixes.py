@@ -108,6 +108,30 @@ def test_catch_up_falls_back_after_the_timeout():
     assert "loadedAsin !== asin" in body
 
 
+def test_a_new_pick_cancels_catch_up():
+    # Codex R1 #1: a Library pick (or IPC play) wins over a waiting ⏯.
+    service = read("Service.qml")
+    body = function_body(service, "noteIntent")
+    assert "cancelCatchup()" in body
+    assert "catchupTimer.stop()" in function_body(service, "cancelCatchup")
+    # ⏯ while a pick is still reading its position leaves that pick alone.
+    assert 'if (pendingResume.length > 0) return "busy"' in function_body(service, "playPause")
+
+
+def test_catch_up_needs_loaded_local_state():
+    # Codex R1 #3: an unread state.json is not "nothing saved here".
+    body = function_body(read("Service.qml"), "resumeCaughtUp")
+    assert "if (remote && store.loaded)" in body
+    assert "sync.lastPushed[asin]" in body
+
+
+def test_library_shows_the_player_error():
+    # Codex R1 #4: a failed pick reopens on Library, not Mini.
+    library = read("qml/views/LibraryView.qml")
+    assert 'root.service.player.connection === "failed"' in library
+    assert "Couldn't start playback: " in library
+
+
 def test_opening_the_drawer_prefetches():
     service = read("Service.qml")
     assert "prefetchCatchup()" in function_body(service, "viewForOpen")

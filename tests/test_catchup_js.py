@@ -82,3 +82,16 @@ def test_jump_target_ignores_a_skip_while_paused(catchup):
     # Skipping while paused moves the player but not the saved entry. The
     # account (the laptop's own older push) must not pull it back.
     assert catchup.call("jumpTarget", 125_757, 2_000, 110_757, 1_500) == -1
+
+
+@pytest.mark.parametrize("own", [[110_757], [None, 110_757], [111_500], [110_757, 999]])
+def test_jump_target_ignores_the_laptops_own_push(catchup, own):
+    # Codex R1 #2: the pause push gets the server's (later) timestamp, so the
+    # account looks newer than the local entry. After a skip while paused it
+    # must still not pull the player back to the laptop's own position.
+    assert catchup.call("jumpTarget", 125_757, 1_000, 110_757, 2_000, own) == -1
+
+
+def test_jump_target_other_device_still_wins_with_own_values(catchup):
+    assert catchup.call("jumpTarget", 125_757, 1_000, 1_684_289, 2_000, [110_757]) == 1_684_289
+    assert catchup.call("jumpTarget", 125_757, 1_000, 1_684_289, 2_000, "junk") == 1_684_289
