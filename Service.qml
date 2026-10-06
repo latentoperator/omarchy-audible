@@ -121,6 +121,12 @@ Item {
   // from its end asks first (`askAsin`); a book picked from the drawer
   // reopens the panel on Mini once it is playing (`reopenAsin`).
   property string askAsin: ""
+  // A cloud book waiting on "Download about … ?" (G3 finding 3, PR #44). Any
+  // other pick, opening the Library, and the book no longer being a
+  // downloadable cloud book (downloaded elsewhere, gone, offline) clear it.
+  property string confirmAsin: ""
+  readonly property bool confirmStillValid: LibraryUi.confirmValid(confirmAsin, library.rowFor(confirmAsin), syncFailure.offline)
+  onConfirmStillValidChanged: if (!confirmStillValid) Qt.callLater(dropInvalidConfirm)
   property string reopenAsin: ""
   // The last book the user chose to play; a finished download plays only
   // if it is still this one.
@@ -514,6 +520,7 @@ Item {
     cancelCatchup()
     catchupNote = ""
     askAsin = ""
+    confirmAsin = ""
     if (pendingResume !== asin) pendingResume = ""
     removeAfterUnload = removeAfterUnload.filter(function(a) { return a !== asin })
     if (removeAfterUnload.length === 0) unloadTimer.stop()
@@ -528,13 +535,38 @@ Item {
   function pick(asin) {
     var row = library.rowFor(asin)
     if (!row) return "error: unknown book"
+    // Decide first: noteIntent clears confirmAsin, and a second pick of the
+    // book whose question is up is what confirms it.
+    var decision = LibraryUi.pickDecision(row, syncFailure.offline, confirmAsin)
     noteIntent(asin)
-    var action = LibraryUi.primaryAction(row, syncFailure.offline)
-    if (action === LibraryUi.ACTION_PLAY) return playPicked(asin, true)
-    if (action === LibraryUi.ACTION_DOWNLOAD || action === LibraryUi.ACTION_RETRY) {
+    if (decision === LibraryUi.PICK_CONFIRM) {
+      confirmAsin = asin
+      return "confirm"
+    }
+    if (decision === LibraryUi.PICK_PLAY) return playPicked(asin, true)
+    if (decision === LibraryUi.PICK_DOWNLOAD || decision === LibraryUi.PICK_RETRY) {
       return run("get", [asin], "autoplay") ? "ok" : "error: refused"
     }
     return "error: nothing to do"
+  }
+
+  // The question's Download button: the same as picking that book again.
+  function confirmDownload() {
+    if (confirmAsin.length === 0) return "error: nothing asked"
+    return pick(confirmAsin)
+  }
+
+  // Runs after the change that made the question invalid, so clearing it
+  // never feeds back into the binding that just changed; checks again in case
+  // the question was already replaced.
+  function dropInvalidConfirm() {
+    if (confirmAsin.length > 0
+        && !LibraryUi.confirmValid(confirmAsin, library.rowFor(confirmAsin), syncFailure.offline)) confirmAsin = ""
+  }
+
+  function cancelConfirm() {
+    confirmAsin = ""
+    return "ok"
   }
 
   // `hidePanel`: the user picked the book in the open drawer, so the panel
@@ -597,6 +629,8 @@ Item {
 
   // Opening the drawer on Library syncs when the catalog is old (FR-L2).
   function libraryOpened() {
+    // A question left from an earlier visit is not one the user sees now.
+    confirmAsin = ""
     var now = Date.now()
     if (syncing || Drawer.autoSyncBlocked(lastSyncAttemptAtMs, now)) return
     var age = Drawer.catalogAgeS(status ? status.catalog_age_s : null, statusAtMs, lastSyncAtMs, now)
@@ -906,9 +940,11 @@ Item {
     function syncNow(): string { return root.run("sync", [], "ipc") ? "ok" : "refused" }
     function pick(asin: string): string { return root.pick(asin) }
     function answer(choice: string): string { return root.answerAsk(choice === "resume") }
+    function confirmDownload(): string { return root.confirmDownload() }
+    function cancelConfirm(): string { return root.cancelConfirm() }
     function removeBook(asin: string): string { return root.removeBook(asin) }
     function libraryState(): string {
-      return JSON.stringify({ "list": root.listState, "ask": root.askAsin, "reopen": root.reopenAsin,
+      return JSON.stringify({ "list": root.listState, "ask": root.askAsin, "confirm": root.confirmAsin, "reopen": root.reopenAsin,
         "syncing": root.syncing, "lastSyncCode": root.lastSyncCode, "count": library.count,
         "total": library.allRows.length, "storage": LibraryUi.storage(library.localBooks) })
     }

@@ -7,8 +7,10 @@ import "../lib/Format.js" as Format
 
 // One Library row (FR-L6): cover, title, author, runtime, progress bar and
 // state badge, a failure line for a failed download, plus Remove from
-// laptop for a book on this laptop. Bind the row
-// and the flags; `picked` and `removeRequested` go back to the view.
+// laptop for a book on this laptop. The action icon says what a click does
+// (▶ play, ⤓ download, ↻ retry), and a cloud book asks before downloading
+// (`confirming`). Bind the row and the flags; `picked`, `removeRequested`,
+// `confirmRequested` and `cancelRequested` go back to the view.
 Rectangle {
   id: root
 
@@ -21,9 +23,15 @@ Rectangle {
   property real coverVersion: 0
   property bool removable: false
   property bool removing: false
+  property string iconGlyph: ""
+  property string iconTooltip: ""
+  property bool confirming: false
+  property string questionText: ""
 
   signal picked()
   signal removeRequested()
+  signal confirmRequested()
+  signal cancelRequested()
 
   implicitHeight: content.implicitHeight + Style.spacing.md * 2
   radius: Style.cornerRadius
@@ -89,6 +97,32 @@ Rectangle {
         }
       }
 
+      // "Download about 734 MB?" (G3 finding 3): nothing downloads until the
+      // user says so here, or picks the row again.
+      RowLayout {
+        Layout.fillWidth: true
+        visible: root.confirming
+        spacing: Style.spacing.md
+
+        Text {
+          Layout.fillWidth: true
+          text: root.questionText
+          textFormat: Text.PlainText
+          wrapMode: Text.WordWrap
+          color: Color.popups.text
+          font.family: Style.font.family
+          font.pixelSize: Style.font.bodySmall
+        }
+        Button {
+          text: "Download"
+          onClicked: root.confirmRequested()
+        }
+        Button {
+          text: "Cancel"
+          onClicked: root.cancelRequested()
+        }
+      }
+
       Text {
         Layout.fillWidth: true
         visible: root.removing
@@ -134,6 +168,13 @@ Rectangle {
           offline: root.offline
         }
       }
+    }
+
+    PanelActionButton {
+      visible: root.iconGlyph.length > 0 && !root.confirming
+      iconText: root.iconGlyph
+      tooltipText: root.iconTooltip
+      onClicked: root.picked()
     }
 
     PanelActionButton {
