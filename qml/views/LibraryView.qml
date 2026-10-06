@@ -44,6 +44,13 @@ ColumnLayout {
     if (selected >= 0) books.positionViewAtIndex(selected, ListView.Contain)
   }
 
+  // The download question for a cloud row. Catalog rows carry no size, so
+  // it's an estimate from the runtime; an unknown runtime asks without one.
+  function questionText(row) {
+    var bytes = LibraryUi.estimatedBytes(row)
+    return Drawer.downloadQuestion(bytes > 0 ? Format.bytes(bytes) : "")
+  }
+
   function pickAt(index) {
     if (!service || !library || !Drawer.validIndex(index, library.count)) return
     selected = index
@@ -72,11 +79,15 @@ ColumnLayout {
       }
       Keys.onPressed: function(event) {
         var action = Drawer.searchKey(event.key, search.text)
-        if (action === Drawer.KEY_CLOSE) root.closeRequested()
+        // Esc first drops an open download question, then closes.
+        if (action === Drawer.KEY_CLOSE) {
+          if (root.service && root.service.confirmAsin.length > 0) root.service.cancelConfirm()
+          else root.closeRequested()
+        }
         else if (action === Drawer.KEY_MOVE_UP) root.move(-1)
         else if (action === Drawer.KEY_MOVE_DOWN) root.move(1)
         else if (action === Drawer.KEY_PICK) root.pickAt(Drawer.pickIndex(root.selected, root.library ? root.library.count : 0))
-        else if (action === Drawer.KEY_TOGGLE) { if (root.service && root.service.player.loaded) root.service.player.toggle() }
+        else if (action === Drawer.KEY_TOGGLE) { if (root.service && root.service.player.loaded) root.service.playPause() }
         else return
         event.accepted = true
       }
@@ -254,8 +265,14 @@ ColumnLayout {
         removable: Drawer.canRemove(modelData)
         removing: root.service ? Drawer.removing(modelData.asin, root.service.removeAfterUnload,
           root.service.runner.pendingJobs, root.service.runner.activeJob) : false
+        iconGlyph: LibraryUi.rowIcon(modelData, root.offline).glyph
+        iconTooltip: LibraryUi.rowIcon(modelData, root.offline).tooltip
+        confirming: root.service ? root.service.confirmAsin === modelData.asin : false
+        questionText: confirming ? root.questionText(modelData) : ""
         onPicked: root.pickAt(index)
         onRemoveRequested: root.service.removeBook(modelData.asin)
+        onConfirmRequested: root.service.confirmDownload()
+        onCancelRequested: root.service.cancelConfirm()
       }
     }
   }
@@ -371,7 +388,7 @@ ColumnLayout {
       PanelActionButton {
         iconText: Mini.playGlyph(root.service ? root.service.player.playing : false)
         tooltipText: "Play / pause"
-        onClicked: if (root.service) root.service.player.toggle()
+        onClicked: if (root.service) root.service.playPause()
       }
     }
   }

@@ -74,8 +74,10 @@ def test_mini_shows_the_player_error():
 # ---- 5: every play/pause goes through the service ----
 
 def test_no_view_toggles_the_player_directly():
-    for rel in ("BarWidget.qml", "qml/views/MiniView.qml"):
-        assert "player.toggle()" not in read(rel), rel
+    # Every view, so no ⏯ skips the catch-up (the Library's search Space and
+    # now-playing strip were missed in #41).
+    for path in sorted((REPO / "qml").rglob("*.qml")) + [REPO / "BarWidget.qml"]:
+        assert "player.toggle()" not in path.read_text(encoding="utf-8"), path
 
 
 def test_play_pause_entry_points_use_the_service():
