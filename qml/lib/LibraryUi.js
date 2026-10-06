@@ -39,6 +39,27 @@ var ACTION_DOWNLOAD = "download";
 var ACTION_RETRY = "retry";
 var ACTION_NONE = "none";
 
+// `pickDecision` results: what one pick of a row does now. `confirm` asks
+// "Download about … ?" in the row instead of downloading (G3 finding 3: one
+// click used to start a ~1 GB download with no warning).
+var PICK_PLAY = "play";
+var PICK_CONFIRM = "confirm";
+var PICK_DOWNLOAD = "download";
+var PICK_RETRY = "retry";
+var PICK_NONE = "none";
+
+// Row icons from the theme's icon font (Font Awesome, as the bar uses): play
+// for a book on this laptop, download for a cloud book, retry for a failed
+// one. A row with nothing to do has no icon.
+var ICON_PLAY = "\uf04b";
+var ICON_DOWNLOAD = "\uf019";
+var ICON_RETRY = "\uf01e";
+
+// Download size per hour of audio, for the confirm question's estimate.
+// Measured on the real account (G3): 773 MB for 13.5 h and 138 MB for 2.4 h
+// (aaxc, 44 kHz/128 k), about 57 MB per hour.
+var BYTES_PER_HOUR = 57000000;
+
 // `resumeChoice` results.
 var CHOICE_RESUME = "resume";
 var CHOICE_ASK = "ask";
@@ -326,4 +347,64 @@ function storage(localBooks) {
     }
   }
   return { "count": count, "bytes": bytes };
+}
+
+// What the row's icon shows for `primaryAction(row, offline)`, as
+// `{glyph, tooltip}`; both "" when picking it does nothing.
+function rowIcon(row, offline) {
+  var action = primaryAction(row, offline);
+  if (action === ACTION_PLAY) {
+    return { "glyph": ICON_PLAY, "tooltip": "Play" };
+  }
+  if (action === ACTION_DOWNLOAD) {
+    return { "glyph": ICON_DOWNLOAD, "tooltip": "Download to this laptop" };
+  }
+  if (action === ACTION_RETRY) {
+    return { "glyph": ICON_RETRY, "tooltip": "Retry download" };
+  }
+  return { "glyph": "", "tooltip": "" };
+}
+
+// The estimated download size of a row in bytes, from its runtime at
+// `BYTES_PER_HOUR`, or 0 when the runtime is unknown. Catalog rows carry no
+// download size, so this is an estimate and is shown as "about".
+function estimatedBytes(row) {
+  if (!_p.isObject(row)) {
+    return 0;
+  }
+  var minutes = _p.numberOrNull(row.runtimeMin);
+  if (minutes === null || minutes <= 0) {
+    return 0;
+  }
+  return Math.round(minutes / 60 * BYTES_PER_HOUR);
+}
+
+// What picking `row` does now. A cloud book asks first (`confirm`); picking it
+// again while its question is up (`confirmAsin` is its ASIN) downloads it. A
+// failed download retries without asking, because it was confirmed once
+// already. Everything else follows `primaryAction`.
+function pickDecision(row, offline, confirmAsin) {
+  var action = primaryAction(row, offline);
+  if (action === ACTION_PLAY) {
+    return PICK_PLAY;
+  }
+  if (action === ACTION_RETRY) {
+    return PICK_RETRY;
+  }
+  if (action === ACTION_DOWNLOAD) {
+    var asin = _p.isObject(row) ? _p.stringOrNull(row.asin) : null;
+    return asin !== null && asin === confirmAsin ? PICK_DOWNLOAD : PICK_CONFIRM;
+  }
+  return PICK_NONE;
+}
+
+// Whether a confirm question for `confirmAsin` should stay up: only while that
+// book is still a cloud book that can be downloaded now. It goes away when the
+// row is gone, the book was downloaded some other way, or the laptop went
+// offline.
+function confirmValid(confirmAsin, row, offline) {
+  if (typeof confirmAsin !== "string" || confirmAsin.length === 0 || !_p.isObject(row)) {
+    return false;
+  }
+  return row.asin === confirmAsin && primaryAction(row, offline) === ACTION_DOWNLOAD;
 }

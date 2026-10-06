@@ -29,10 +29,19 @@ EXPECTED_API = {
     "BANNER_OFFLINE",
     "BANNER_RECONNECT",
     "BANNER_SYNCING",
+    "BYTES_PER_HOUR",
     "CHOICE_ASK",
     "CHOICE_RESUME",
     "CHOICE_START_OVER",
     "FINISH_TRAILING_MS",
+    "ICON_DOWNLOAD",
+    "ICON_PLAY",
+    "ICON_RETRY",
+    "PICK_CONFIRM",
+    "PICK_DOWNLOAD",
+    "PICK_NONE",
+    "PICK_PLAY",
+    "PICK_RETRY",
     "STATE_EMPTY",
     "STATE_ERROR",
     "STATE_LIST",
@@ -40,10 +49,14 @@ EXPECTED_API = {
     "STATE_NO_RESULTS",
     "_p",
     "badge",
+    "confirmValid",
+    "estimatedBytes",
     "listState",
     "moveSelection",
+    "pickDecision",
     "primaryAction",
     "resumeChoice",
+    "rowIcon",
     "storage",
     "syncDue",
 }
@@ -584,3 +597,92 @@ def test_storage_accepts_a_map(ui: qjs.JsModule) -> None:
         "bytes": 10,
     }
     assert ui.call("storage", {"": {"size": 10}}) == {"count": 0, "bytes": 0}
+
+
+# --- row icons and the download question (G3 finding 3) ---------------------
+STATES = ["cloud", "queued", "downloading", "converting", "local", "error"]
+
+
+@pytest.mark.parametrize(
+    ("state", "offline", "glyph", "tooltip", "pick"),
+    [
+        ("local", False, "\uf04b", "Play", "play"),
+        ("local", True, "\uf04b", "Play", "play"),
+        ("cloud", False, "\uf019", "Download to this laptop", "confirm"),
+        ("cloud", True, "", "", "none"),
+        ("error", False, "\uf01e", "Retry download", "retry"),
+        ("queued", False, "", "", "none"),
+        ("downloading", False, "", "", "none"),
+        ("converting", False, "", "", "none"),
+    ],
+)
+def test_row_icon_and_pick_follow_primary_action(
+    ui, library, catalog, state, offline, glyph, tooltip, pick
+) -> None:
+    row = row_in_state(library, catalog, state)
+    assert ui.call("rowIcon", row, offline) == {"glyph": glyph, "tooltip": tooltip}
+    assert ui.call("pickDecision", row, offline, "") == pick
+
+
+def test_pick_confirms_then_downloads_the_same_book(ui, library, catalog) -> None:
+    cloud = row_in_state(library, catalog, "cloud")
+    assert ui.call("pickDecision", cloud, False, None) == "confirm"
+    assert ui.call("pickDecision", cloud, False, "B0FAKE9999") == "confirm"
+    assert ui.call("pickDecision", cloud, False, cloud["asin"]) == "download"
+    # Offline, even an answered question downloads nothing.
+    assert ui.call("pickDecision", cloud, True, cloud["asin"]) == "none"
+
+
+def test_retry_and_play_never_ask(ui, library, catalog) -> None:
+    for state, expected in (("error", "retry"), ("local", "play")):
+        row = row_in_state(library, catalog, state)
+        assert ui.call("pickDecision", row, False, row["asin"]) == expected
+
+
+@pytest.mark.parametrize("row", [None, "garbage", {}, {"state": "exploded"}, []])
+def test_pick_decision_bad_input(ui, row) -> None:
+    # An unknown row reads as a cloud book with no ASIN: it can only ask.
+    assert ui.call("pickDecision", row, False, "") in ("confirm", "none")
+    assert ui.call("pickDecision", row, True, "") == "none"
+    assert ui.call("rowIcon", row, True) == {"glyph": "", "tooltip": ""}
+
+
+@pytest.mark.parametrize(
+    ("runtime_min", "expected"),
+    [
+        (60, 57000000),
+        (810, 769500000),  # 13.5 h, about the 773 MB measured
+        (145, 137750000),  # 2.4 h, about the 138 MB measured
+        (0, 0),
+        (-5, 0),
+        (None, 0),
+        ("60", 0),
+    ],
+)
+def test_estimated_bytes(ui, runtime_min, expected) -> None:
+    assert ui.call("estimatedBytes", {"runtimeMin": runtime_min}) == expected
+
+
+@pytest.mark.parametrize("row", [None, "x", [], 7])
+def test_estimated_bytes_bad_row(ui, row) -> None:
+    assert ui.call("estimatedBytes", row) == 0
+
+
+def test_estimated_bytes_of_a_real_row(ui, library, catalog) -> None:
+    row = row_in_state(library, catalog, "cloud")
+    assert row["runtimeMin"] > 0
+    assert ui.call("estimatedBytes", row) == round(row["runtimeMin"] / 60 * 57000000)
+
+
+def test_confirm_stays_only_for_a_downloadable_cloud_book(ui, library, catalog) -> None:
+    for state in STATES:
+        row = row_in_state(library, catalog, state)
+        expected = state == "cloud"
+        assert ui.call("confirmValid", row["asin"], row, False) is expected
+        assert ui.call("confirmValid", row["asin"], row, True) is False
+    cloud = row_in_state(library, catalog, "cloud")
+    assert ui.call("confirmValid", "B0FAKE9999", cloud, False) is False
+    assert ui.call("confirmValid", "", cloud, False) is False
+    assert ui.call("confirmValid", None, cloud, False) is False
+    assert ui.call("confirmValid", cloud["asin"], None, False) is False
+
