@@ -121,7 +121,7 @@ Item {
   // from its end asks first (`askAsin`); a book picked from the drawer
   // reopens the panel on Mini once it is playing (`reopenAsin`).
   property string askAsin: ""
-  // A cloud book waiting on "Download about … ?" (G3 finding 3, PR #44). Any
+  // A cloud book waiting on "Download up to … ?" (G3 finding 3, PR #44). Any
   // other pick, opening the Library, and the book no longer being a
   // downloadable cloud book (downloaded elsewhere, gone, offline) clear it.
   property string confirmAsin: ""

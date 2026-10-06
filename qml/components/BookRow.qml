@@ -97,7 +97,7 @@ Rectangle {
         }
       }
 
-      // "Download about 734 MB?" (G3 finding 3): nothing downloads until the
+      // "Download up to 734 MB?" (G3 finding 3): nothing downloads until the
       // user says so here, or picks the row again.
       RowLayout {
         Layout.fillWidth: true

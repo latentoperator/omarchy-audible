@@ -200,7 +200,7 @@ function askText(row) {
 // estimate is 0 (no runtime); without a size, the question gives none.
 function downloadQuestion(sizeText) {
   var size = typeof sizeText === "string" ? sizeText.trim() : "";
-  return size.length > 0 ? "Download about " + size + "?" : "Download this book?";
+  return size.length > 0 ? "Download up to " + size + "?" : "Download this book?";
 }
 
 // The failure line under a failed row (SCOPE 6), else "".

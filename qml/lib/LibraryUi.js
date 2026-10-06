@@ -40,7 +40,7 @@ var ACTION_RETRY = "retry";
 var ACTION_NONE = "none";
 
 // `pickDecision` results: what one pick of a row does now. `confirm` asks
-// "Download about … ?" in the row instead of downloading (G3 finding 3: one
+// "Download up to … ?" in the row instead of downloading (G3 finding 3: one
 // click used to start a ~1 GB download with no warning).
 var PICK_PLAY = "play";
 var PICK_CONFIRM = "confirm";
@@ -57,7 +57,8 @@ var ICON_RETRY = "\uf01e";
 
 // Download size per hour of audio, for the confirm question's estimate.
 // Measured on the real account (G3): 773 MB for 13.5 h and 138 MB for 2.4 h
-// (aaxc, 44 kHz/128 k), about 57 MB per hour.
+// (aaxc, 44 kHz/128 k), about 57 MB per hour. That is the top bitrate, so
+// the estimate never undershoots; lower-bitrate books come in smaller.
 var BYTES_PER_HOUR = 57000000;
 
 // `resumeChoice` results.
@@ -367,7 +368,9 @@ function rowIcon(row, offline) {
 
 // The estimated download size of a row in bytes, from its runtime at
 // `BYTES_PER_HOUR`, or 0 when the runtime is unknown. Catalog rows carry no
-// download size, so this is an estimate and is shown as "about".
+// download size, so this is an estimate. `BYTES_PER_HOUR` is Audible's
+// highest bitrate, so it is an upper bound and is shown as "up to": a 64 kbps
+// book downloads at about half (Strange Dogs: 71 MB for 149 min, #45).
 function estimatedBytes(row) {
   if (!_p.isObject(row)) {
     return 0;
