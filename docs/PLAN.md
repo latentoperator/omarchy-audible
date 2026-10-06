@@ -216,7 +216,7 @@ Depends on S5/S6 results and the fake backend.
   `get` keeps the original aaxc/aax plus its key material (`0600`) instead of converting; the free-space check falls to ~1×; `PlayerController` passes the key the S7 way; chapters come from `chapters.json`; `remove` deletes the key material too. Existing `.m4b` books keep playing (or are migrated; S7 decides). README and SCOPE §7 say no unlocked copy is stored.
   Acceptance: fake and real-mode get → play → seek → chapter → resume → remove on the laptop; no key in any process's argv (`ps -eo args`), logs or `recentEvents`; contract tests updated.
 
-- [ ] **U5 — Mini view, complete** (tier B; needs G3, extends U2a)
+- [x] **U5 — Mini view, complete** (tier B; needs G3, extends U2a)
   Per SCOPE FR-U3: cover, title/author, current chapter with a tap-to-open chapter popup, scrub bar (drag to seek, elapsed/remaining), ⏮ ⏪N ⏯ ⏩N ⏭, speed pill that cycles presets, maximize, library, dismiss.
   Acceptance: J3, J4 pass; dragging the scrub bar doesn't fight position updates; text elides cleanly for long titles.
 
