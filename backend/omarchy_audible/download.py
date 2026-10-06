@@ -417,13 +417,24 @@ def _real_content_metadata(asin: str, paths: Paths) -> dict[str, Any]:
 
 
 def _content_size(metadata: dict[str, Any]) -> int:
+    """The download size from ``1.0/content/{asin}/metadata``, or 0 if unknown.
+
+    Audible returns it as ``content_metadata.content_reference
+    .content_size_in_bytes`` (checked against the real account; the S4 spike
+    read the same field). The other two places are fallbacks for other
+    response shapes. It feeds the free-space pre-flight and the ``total`` of
+    every ``get`` progress event, so 0 disables both.
+    """
     content = metadata.get("content_metadata") or {}
-    size = content.get("content_size_in_bytes")
-    if not isinstance(size, int) or size <= 0:
-        size = (content.get("content_url") or {}).get("content_size_in_bytes")
-    if not isinstance(size, int) or size <= 0:
-        return 0  # unknown: let the download proceed rather than block it
-    return size
+    for source in (
+        content.get("content_reference") or {},
+        content,
+        content.get("content_url") or {},
+    ):
+        size = source.get("content_size_in_bytes") if isinstance(source, dict) else None
+        if isinstance(size, int) and not isinstance(size, bool) and size > 0:
+            return size
+    return 0  # unknown: let the download proceed rather than block it
 
 
 def _metadata_duration_ms(metadata: dict[str, Any]) -> int | None:

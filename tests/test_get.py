@@ -131,6 +131,26 @@ def test_free_space_preflight_requires_2_1x():
     assert excinfo.value.code == "disk_space"
 
 
+@pytest.mark.parametrize(
+    ("metadata", "size"),
+    [
+        # The shape the real account returns (G3 finding 4: total was 0).
+        ({"content_metadata": {"content_reference": {"content_size_in_bytes": 779090696}}}, 779090696),
+        ({"content_metadata": {"content_size_in_bytes": 1234}}, 1234),
+        ({"content_metadata": {"content_url": {"content_size_in_bytes": 99}}}, 99),
+        ({"content_metadata": {"content_reference": {"content_size_in_bytes": 5}, "content_size_in_bytes": 7}}, 5),
+        ({"content_metadata": {"content_reference": {"content_size_in_bytes": 0}}}, 0),
+        ({"content_metadata": {"content_reference": {"content_size_in_bytes": "779"}}}, 0),
+        ({"content_metadata": {"content_reference": {"content_size_in_bytes": True}}}, 0),
+        ({"content_metadata": {"content_reference": None}}, 0),
+        ({"content_metadata": {"content_reference": []}}, 0),
+        ({}, 0),
+    ],
+)
+def test_content_size_reads_content_reference(metadata, size):
+    assert dl._content_size(metadata) == size
+
+
 def test_get_novoucher_falls_back_to_aax(
     run_cli, events, ffmpeg_bin, fake_paths
 ):
