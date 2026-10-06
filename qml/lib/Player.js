@@ -22,6 +22,9 @@ var MAX_TICKS = 40;
 // A seek has landed once the player reports a position this close to it.
 var SEEK_SETTLE_MS = 1500;
 
+// mpv can land a seek this far short of the target (audio frame boundaries).
+var SEEK_LAND_MS = 250;
+
 // Glyphs from the theme's icon font (Font Awesome, as the bar uses).
 var GLYPH_PREV_CHAPTER = "";
 var GLYPH_NEXT_CHAPTER = "";
@@ -136,15 +139,17 @@ function positionAt(fractionValue, durationMs) {
 }
 
 // After a release the bar shows the seek target until the player reports a
-// position near it, so the handle doesn't jump back to the old spot first.
-// `fromMs` is where playback was when the drag ended: a position report that
-// is still nearer that spot than the target is a stale one from before the
-// seek, even when the two are close together.
+// position that can only come after the seek, so the handle doesn't jump
+// back to the old spot first. `fromMs` is where playback was when the drag
+// ended. Reports from before the seek keep counting up from `fromMs`, so:
+// after a seek forward only a report at (or just short of) the target
+// counts, and after a seek back only one below `fromMs`. Without `fromMs`,
+// nearness alone decides. ScrubBar also lets go after a few seconds.
 function seekSettled(positionMs, targetMs, fromMs) {
   if (!isNumber(targetMs) || targetMs < 0) return true;
   if (!isNumber(positionMs)) return false;
-  var distance = Math.abs(positionMs - targetMs);
-  if (distance > SEEK_SETTLE_MS) return false;
-  if (isNumber(fromMs) && fromMs >= 0 && Math.abs(positionMs - fromMs) < distance) return false;
-  return true;
+  if (Math.abs(positionMs - targetMs) > SEEK_SETTLE_MS) return false;
+  if (!isNumber(fromMs) || fromMs < 0) return true;
+  if (targetMs >= fromMs) return positionMs >= targetMs - SEEK_LAND_MS;
+  return positionMs < fromMs && positionMs >= targetMs - SEEK_LAND_MS;
 }

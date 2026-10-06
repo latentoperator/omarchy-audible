@@ -613,6 +613,7 @@ Item {
   }
 
   function closeSurfaces() {
+    chapterListOpen = false
     surfaces.forEach(function(s) { if (s.opened) s.close() })
   }
 

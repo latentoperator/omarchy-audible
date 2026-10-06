@@ -27,7 +27,15 @@ BarWidget {
     if (service) service.viewForOpen()
     opened = true
   }
-  function close() { opened = false }
+  // KeyboardPanel calls this for every outside click, including the
+  // dismissal windows it puts on the other monitors.
+  function close() {
+    if (service && opened && !Panel.dismissClosesPanel(service.view, service.chapterListOpen)) {
+      service.chapterListOpen = false
+      return
+    }
+    opened = false
+  }
   function toggle() { opened ? close() : open() }
   function closeForPopoutSwitch() {
     popoutSwitchClosing = true

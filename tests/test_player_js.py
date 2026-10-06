@@ -258,15 +258,22 @@ def test_seek_settled(player, pos, target, settled):
 
 
 @pytest.mark.parametrize("pos,target,start,settled", [
-    # Seek forward 100000 → 101000: a report from before the seek is stale.
+    # Seek forward 100000 → 101000: reports from before the seek are stale,
+    # even past the midpoint.
     (100100, 101000, 100000, False),
-    (100499, 101000, 100000, False),
-    (100500, 101000, 100000, True),
+    (100600, 101000, 100000, False),
+    (100749, 101000, 100000, False),
+    (100750, 101000, 100000, True),
     (101000, 101000, 100000, True),
-    (101800, 101000, 100000, True),
-    # Seek back 200000 → 199000.
-    (199900, 199000, 200000, False),
+    (102500, 101000, 100000, True),
+    (102501, 101000, 100000, False),
+    # Seek back 200000 → 199000: stale reports are at or past 200000.
+    (200000, 199000, 200000, False),
+    (200300, 199000, 200000, False),
+    (199900, 199000, 200000, True),
     (199100, 199000, 200000, True),
+    (198750, 199000, 200000, True),
+    (198749, 199000, 200000, False),
     # A long seek: the old position is never within the settle window.
     (20000000, 20000000, 8642562, True),
     (8643000, 20000000, 8642562, False),
