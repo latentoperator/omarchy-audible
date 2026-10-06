@@ -83,6 +83,18 @@ ColumnLayout {
       }
     }
 
+    // A sleep timer is set (FR-U4: Mini shows only this glyph).
+    Text {
+      Layout.alignment: Qt.AlignTop
+      Layout.topMargin: Style.spacing.controlPaddingY
+      visible: root.player ? root.player.sleepTimer !== null : false
+      text: Player.GLYPH_MOON
+      textFormat: Text.PlainText
+      color: Color.popups.text
+      font.family: Style.font.family
+      font.pixelSize: Style.font.iconSmall
+    }
+
     Button {
       Layout.alignment: Qt.AlignTop
       enabled: root.loaded

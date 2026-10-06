@@ -268,3 +268,127 @@ def test_seek_settled(player, pos, target, at, now, settled):
 
 def test_speed_presets(player):
     assert player.evaluate("SPEED_PRESETS") == [0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0]
+
+
+# ---- Full view (U6) ----
+
+@pytest.mark.parametrize("pos,dur,pct", [
+    (0, 1000, 0), (5, 1000, 0), (10, 1000, 1), (999, 1000, 99), (1000, 1000, 100),
+    (2000, 1000, 100), (-5, 1000, 0), (500, 0, 0), (None, 1000, 0),
+    (8642562, 48693108, 17),
+])
+def test_percent_complete(player, pos, dur, pct):
+    assert player.call("percentComplete", pos, dur) == pct
+
+
+@pytest.mark.parametrize("pos,dur,speed,left", [
+    (0, 3600000, 1, 3600000),
+    (0, 3600000, 2, 1800000),
+    (1800000, 3600000, 1.5, 1200000),
+    (3600000, 3600000, 1, 0),
+    (4000000, 3600000, 1, 0),
+    (0, 3600000, 0, 3600000),
+    (0, 3600000, None, 3600000),
+    (None, 3600000, 1, 0),
+    (0, 0, 1, 0),
+])
+def test_left_at_speed(player, pos, dur, speed, left):
+    assert player.call("leftAtSpeedMs", pos, dur, speed) == left
+
+
+@pytest.mark.parametrize("speed,direction,result", [
+    (1.0, 1, 1.05), (1.0, -1, 0.95), (1.25, 1, 1.3),
+    (0.75, -1, 0.75), (0.8, -1, 0.75), (3.0, 1, 3.0), (2.95, 1, 3.0),
+    # Off the grid: the next grid value that way.
+    (1.12, 1, 1.15), (1.12, -1, 1.1), (1.1000000001, 1, 1.15),
+    # Below the minimum (mpv allows 0.5): up stays in range.
+    (0.5, 1, 0.75), (0.5, -1, 0.75),
+    (1.0, 0, 1.0), (5, 0, 3.0),
+    (0, 1, 1.0), (None, 1, 1.0),
+])
+def test_fine_speed(player, speed, direction, result):
+    assert player.call("fineSpeed", speed, direction) == pytest.approx(result)
+
+
+def test_fine_speed_walks_the_whole_range(player):
+    speed, seen = 0.75, [0.75]
+    while True:
+        nxt = player.call("fineSpeed", speed, 1)
+        if nxt == speed:
+            break
+        seen.append(nxt)
+        speed = nxt
+    assert len(seen) == 46 and seen[-1] == 3.0
+
+
+@pytest.mark.parametrize("speed,direction,ok", [
+    (1.0, 1, True), (1.0, -1, True), (0.75, -1, False), (3.0, 1, False),
+    (0.5, -1, True), (None, 1, False),
+])
+def test_can_fine_step(player, speed, direction, ok):
+    assert player.call("canFineStep", speed, direction) is ok
+
+
+@pytest.mark.parametrize("speed,preset,result", [
+    (1.25, 1.25, True), (1.2500000001, 1.25, True), (1.2495, 1.25, False), (None, 1, False),
+])
+def test_is_speed(player, speed, preset, result):
+    assert player.call("isSpeed", speed, preset) is result
+
+
+@pytest.mark.parametrize("row,names", [
+    ({"narrators": ["Ines Vale", " ", None, " Two "]}, ["Ines Vale", "Two"]),
+    ({"narrators": []}, []), ({"narrators": "Ines"}, []), ({}, []), (None, []),
+])
+def test_narrators(player, row, names):
+    assert player.call("narrators", row) == names
+
+
+@pytest.mark.parametrize("timer,remaining,text", [
+    (None, -1, ""),
+    ({"mode": "chapter", "endMs": 5000}, 3000, "At end of chapter"),
+    ({"mode": "minutes", "endsAtMs": 1}, 760000, "Sleeping in 12:40"),
+    ({"mode": "minutes", "endsAtMs": 1}, 759001, "Sleeping in 12:40"),
+    ({"mode": "minutes", "endsAtMs": 1}, 1, "Sleeping in 0:01"),
+    ({"mode": "minutes", "endsAtMs": 1}, 0, "Sleeping in 0:00"),
+    ({"mode": "minutes", "endsAtMs": 1}, -50, "Sleeping in 0:00"),
+    ({"mode": "minutes", "endsAtMs": 1}, 3600000, "Sleeping in 1:00:00"),
+    ({"mode": "minutes", "endsAtMs": 1}, None, "Sleeping in 0:00"),
+    ({"mode": "other"}, 1000, ""),
+    ("minutes", 1000, ""),
+])
+def test_sleep_text(player, timer, remaining, text):
+    assert player.call("sleepText", timer, remaining) == text
+
+
+@pytest.mark.parametrize("now,scrolled,follow", [
+    (10000, 0, True), (10000, -1, True), (10000, None, True),
+    (10000, 7000, False), (10000, 6000, True), (10000, 6001, False), (None, 5000, False),
+])
+def test_follow_chapter(player, now, scrolled, follow):
+    assert player.call("followChapter", now, scrolled) is follow
+
+
+@pytest.mark.parametrize("now,scrolled,moving,follow", [
+    # Mid-gesture: never, however old the gesture's start.
+    (100000, 1000, True, False),
+    (100000, 0, True, False),
+    # Scrolled for 5 s, released just now: the hold counts from the release.
+    (106000, 105500, False, False),
+    (109600, 105500, False, True),
+    (10000, 0, False, True),
+    (10000, 0, None, True),
+])
+def test_follow_chapter_gesture(player, now, scrolled, moving, follow):
+    assert player.call("followChapter", now, scrolled, moving) is follow
+
+
+@pytest.mark.parametrize("view,text,action", [
+    ("full", "\b", "collapse"), ("mini", "\b", "none"), ("full", "x", "none"), ("full", None, "none"),
+])
+def test_full_key_action(player, view, text, action):
+    assert player.call("fullKeyAction", view, text) == action
+
+
+def test_sleep_minutes(player):
+    assert player.evaluate("SLEEP_MINUTES") == [15, 30, 45, 60]

@@ -5,6 +5,7 @@ import qs.Commons
 import qs.Ui
 import "qml/lib/Mini.js" as Mini
 import "qml/lib/Panel.js" as Panel
+import "qml/lib/Player.js" as Player
 import "qml/views"
 
 // Book glyph that toggles an anchored, themed drawer. The widget is a view
@@ -50,6 +51,11 @@ BarWidget {
     var action = Mini.keyAction(service.view, player.loaded, kind, dx)
     if (action === Mini.ACTION_TOGGLE) service.playPause()
     else if (action !== Mini.ACTION_NONE) player.skip(Mini.skipSeconds(action))
+  }
+
+  // Backspace in Full collapses to Mini.
+  function panelText(text) {
+    if (service && Player.fullKeyAction(service.view, text) === Player.KEY_COLLAPSE) service.showView(Panel.VIEW_MINI)
   }
 
   // Library takes keys in its search field; every other view through the
@@ -112,9 +118,10 @@ BarWidget {
     owner: root
     open: root.opened
     focusTarget: keys
-    contentWidth: fittedContentWidth(Style.space(420))
+    readonly property string viewName: root.service ? root.service.view : ""
+    contentWidth: fittedContentWidth(Style.space(Panel.contentWidth(viewName)))
     // The current view's height, not the tallest view's.
-    contentHeight: fittedContentHeight(views.currentHeight, Style.space(560))
+    contentHeight: fittedContentHeight(views.currentHeight, Style.space(Panel.heightCap(viewName)))
     onOpenChanged: if (open) root.focusView()
 
     PanelKeyCatcher {
@@ -131,6 +138,7 @@ BarWidget {
         root.enterPressed = false
       }
       onMoveRequested: function(dx, dy) { if (dy === 0) root.panelKey("move", dx) }
+      onTextKey: function(text) { root.panelText(text) }
 
       StackLayout {
         id: views
@@ -156,7 +164,10 @@ BarWidget {
           onCloseRequested: root.close()
           onKeysReleased: root.focusView()
         }
-        FullView { service: root.service }
+        FullView {
+          service: root.service
+          onCloseRequested: root.close()
+        }
       }
     }
   }

@@ -59,3 +59,14 @@ def test_bar_title_cut_at_max(panel):
 ])
 def test_dismiss_closes_panel(panel, view, open_, closes):
     assert panel.call("dismissClosesPanel", view, open_) is closes
+@pytest.mark.parametrize("view,width,cap", [
+    ("full", 680, 760),
+    ("mini", 420, 560),
+    ("library", 420, 560),
+    ("onboarding", 420, 560),
+    ("bogus", 420, 560),
+    (None, 420, 560),
+])
+def test_panel_size_per_view(panel, view, width, cap):
+    assert panel.call("contentWidth", view) == width
+    assert panel.call("heightCap", view) == cap

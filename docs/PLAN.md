@@ -220,11 +220,11 @@ Depends on S5/S6 results and the fake backend.
   Per SCOPE FR-U3: cover, title/author, current chapter with a tap-to-open chapter popup, scrub bar (drag to seek, elapsed/remaining), ⏮ ⏪N ⏯ ⏩N ⏭, speed pill that cycles presets, maximize, library, dismiss.
   Acceptance: J3, J4 pass; dragging the scrub bar doesn't fight position updates; text elides cleanly for long titles.
 
-- [ ] **U6 — Full view** (tier B; needs U5)
+- [x] **U6 — Full view** (tier B; needs U5)
   Large cover, chapter list (auto-scroll to current, click to jump), speed presets and fine control, sleep timer picker, details (narrator, runtime, % complete), Remove from this device, collapse.
   Acceptance: J5 passes; 100+ chapter books scroll smoothly.
 
-- [ ] **U7 — Now-playing strip in Library view** (tier A; needs U2, P2)
+- [x] **U7 — Now-playing strip in Library view** (tier A; needs U2, P2)
   A compact pinned strip showing title, play/pause, and ⏪/⏩, tapping it opens Mini.
   Acceptance: visible only when a book is loaded; no layout jump when it appears.
 
