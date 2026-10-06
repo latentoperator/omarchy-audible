@@ -81,6 +81,9 @@ Item {
   property string catchupAsin: ""
   property string catchupReading: ""
   property var prefetched: null
+  // Results of catch-up reads still running, by ASIN (like `resumeRemotes`),
+  // so overlapping reads of different books never touch each other's result.
+  property var catchupResults: ({})
 
   // The book that is loaded and the last position seen for it. Kept so a
   // switch or a crash can still save where the old book stopped.
@@ -967,7 +970,9 @@ Item {
         library.localBooks = record.books
       } else if (record.type === "positions" && job.purpose === "catchup") {
         var read = job.args[0]
-        root.prefetched = { "asin": read, "atMs": Date.now(), "remote": record.items[read] || null }
+        var results = root.catchupResults
+        results[read] = { "asin": read, "atMs": Date.now(), "remote": record.items[read] || null }
+        root.catchupResults = results
       } else if (record.type === "positions" && job.purpose === "resume") {
         var resumed = job.args[0]
         var remotes = root.resumeRemotes
@@ -999,10 +1004,12 @@ Item {
       if (job.purpose === "catchup") {
         var readAsin = job.args[0]
         if (root.catchupReading === readAsin) root.catchupReading = ""
-        if (!outcome.ok) root.prefetched = null
-        if (Catchup.readResumes(root.catchupAsin, readAsin)) {
-          root.resumeCaughtUp(readAsin, root.prefetched && root.prefetched.asin === readAsin ? root.prefetched.remote : null)
-        }
+        var result = outcome.ok ? (root.catchupResults[readAsin] || null) : null
+        delete root.catchupResults[readAsin]
+        // Only this read's own book: a failed read of A never clears B's.
+        if (result) root.prefetched = result
+        else if (root.prefetched && root.prefetched.asin === readAsin) root.prefetched = null
+        if (Catchup.readResumes(root.catchupAsin, readAsin)) root.resumeCaughtUp(readAsin, result ? result.remote : null)
       }
       if (job.purpose === "resume") {
         var resumedAsin = job.args[0]

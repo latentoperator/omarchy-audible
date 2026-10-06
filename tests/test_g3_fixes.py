@@ -132,6 +132,15 @@ def test_library_shows_the_player_error():
     assert "Couldn't start playback: " in library
 
 
+def test_overlapping_reads_keep_their_own_results():
+    # Codex R3: a failed read of book A must not clear book B's result.
+    service = read("Service.qml")
+    assert "results[read] = {" in service
+    assert "delete root.catchupResults[readAsin]" in service
+    assert "root.prefetched.asin === readAsin) root.prefetched = null" in service
+    assert "if (!outcome.ok) root.prefetched = null" not in service
+
+
 def test_opening_the_drawer_prefetches():
     service = read("Service.qml")
     assert "prefetchCatchup()" in function_body(service, "viewForOpen")
