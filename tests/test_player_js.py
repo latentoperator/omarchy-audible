@@ -157,6 +157,10 @@ def test_speed_label(player, speed, label):
     # mpv's float for a preset still counts as that preset.
     (1.2500000001, 1.5),
     (1.2499999999, 1.5),
+    # ...but a real non-preset speed just under a preset snaps up to it.
+    (1.2495, 1.25),
+    (2.999, 3.0),
+    (0.7499, 0.75),
     # Bad input.
     (0, 1.0),
     (-2, 1.0),
@@ -251,6 +255,27 @@ def test_position_at(player, frac, dur, pos):
 ])
 def test_seek_settled(player, pos, target, settled):
     assert player.call("seekSettled", pos, target) == settled
+
+
+@pytest.mark.parametrize("pos,target,start,settled", [
+    # Seek forward 100000 → 101000: a report from before the seek is stale.
+    (100100, 101000, 100000, False),
+    (100499, 101000, 100000, False),
+    (100500, 101000, 100000, True),
+    (101000, 101000, 100000, True),
+    (101800, 101000, 100000, True),
+    # Seek back 200000 → 199000.
+    (199900, 199000, 200000, False),
+    (199100, 199000, 200000, True),
+    # A long seek: the old position is never within the settle window.
+    (20000000, 20000000, 8642562, True),
+    (8643000, 20000000, 8642562, False),
+    # Start unknown: proximity alone.
+    (100100, 101000, -1, True),
+    (100100, 101000, None, True),
+])
+def test_seek_settled_ignores_stale_reports(player, pos, target, start, settled):
+    assert player.call("seekSettled", pos, target, start) == settled
 
 
 def test_speed_presets(player):

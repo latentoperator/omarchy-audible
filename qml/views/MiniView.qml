@@ -140,11 +140,8 @@ ColumnLayout {
       anchors.fill: parent
       hoverEnabled: true
       cursorShape: Qt.PointingHandCursor
-      // A press on this line while the popup is open closes it (a press
-      // outside the popup); the click that follows must not reopen it.
-      property bool wasOpen: false
-      onPressed: wasOpen = chapterMenu.opened || chapterMenu.closedJustNow
-      onClicked: if (root.service && !wasOpen) root.service.chapterListOpen = true
+      // While the popup is open it is modal, so this line never sees the press.
+      onClicked: if (root.service) root.service.chapterListOpen = true
     }
   }
 

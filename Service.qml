@@ -981,8 +981,10 @@ Item {
     function autoRemove(value: string): string { root.autoRemoveFinished = value === "on"; return "ok" }
     function pushState(): string { return JSON.stringify({ "queue": sync.queue, "flushing": sync.flushing, "last": sync.lastResult }) }
     // Opens the panel on a view (Onboarding.view still decides: Mini or Full
-    // with nothing loaded shows the Library). Returns the view shown.
+    // with nothing loaded shows the Library). Returns the view shown. Fake
+    // mode only: opening the panel can read positions or start a sync.
     function view(name: string): string {
+      if (!root.fake) return "error: fake mode only"
       if (Panel.VIEWS.indexOf(name) === -1) return "error: unknown view"
       var surface = root.primarySurface()
       if (!surface) return "error: no surface"

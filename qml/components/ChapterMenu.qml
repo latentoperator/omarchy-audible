@@ -22,9 +22,6 @@ Item {
   property int visibleRows: 8
 
   readonly property bool opened: popup.opened
-  // True for a moment after closing, so the press that closed it (on the
-  // line that opens it) doesn't open it again.
-  readonly property bool closedJustNow: reopenGuard.running
   readonly property real listHeight: Math.min(rows.length, visibleRows) * Style.spacing.popupRowHeight
     + Border.top(popupBorder) + Border.bottom(popupBorder) + Style.spacing.hairline * 2
   readonly property var popupBorder: Border.localOrSurfaceSpec("popups", "border", Color.popups.border,
@@ -38,11 +35,6 @@ Item {
 
   implicitHeight: popup.opened ? listHeight : 0
 
-  Timer {
-    id: reopenGuard
-    interval: 250
-  }
-
   Popup {
     id: popup
     x: 0
@@ -55,6 +47,11 @@ Item {
     topPadding: Border.top(root.popupBorder) + Style.spacing.hairline
     bottomPadding: Border.bottom(root.popupBorder) + Style.spacing.hairline
     focus: true
+    // Modal without a dim: a press outside only closes the popup. A
+    // non-modal popup would let it through to the panel's own dismissal
+    // area, closing the panel too.
+    modal: true
+    dim: false
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
     background: BorderSurface {
@@ -68,10 +65,7 @@ Item {
       list.positionViewAtIndex(list.currentIndex, ListView.Center)
       list.forceActiveFocus()
     }
-    onClosed: {
-      reopenGuard.restart()
-      root.closed()
-    }
+    onClosed: root.closed()
 
     contentItem: ListView {
       id: list

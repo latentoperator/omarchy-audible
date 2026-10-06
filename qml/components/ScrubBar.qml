@@ -26,6 +26,8 @@ ColumnLayout {
   property bool dragging: false
   property real dragFraction: 0
   property int pendingMs: -1
+  // Where playback was when the drag ended (see `Player.seekSettled`).
+  property int pendingFromMs: -1
 
   readonly property int shownMs: dragging ? Player.positionAt(dragFraction, durationMs)
     : (pendingMs >= 0 ? pendingMs : positionMs)
@@ -34,7 +36,7 @@ ColumnLayout {
 
   spacing: Style.spacing.xxs
 
-  onPositionMsChanged: if (pendingMs >= 0 && Player.seekSettled(positionMs, pendingMs)) pendingMs = -1
+  onPositionMsChanged: if (pendingMs >= 0 && Player.seekSettled(positionMs, pendingMs, pendingFromMs)) pendingMs = -1
 
   // The player never reported the target (paused far away, or the seek was
   // refused): stop holding it.
@@ -49,7 +51,7 @@ ColumnLayout {
     Layout.fillWidth: true
     implicitHeight: Math.max(Style.space(22), knob.height + Style.spacing.md)
 
-    readonly property real trackHeight: Math.max(4, Math.round(Style.spacing.controlHeight * 0.11))
+    readonly property real trackHeight: Math.max(Style.space(4), Math.round(Style.spacing.controlHeight * 0.11))
     readonly property bool hot: mouse.containsMouse || root.dragging
 
     Rectangle {
@@ -86,7 +88,7 @@ ColumnLayout {
 
     Rectangle {
       id: knob
-      readonly property real size: Math.max(12, Math.round(Style.spacing.controlHeight * 0.38))
+      readonly property real size: Math.max(Style.space(12), Math.round(Style.spacing.controlHeight * 0.38))
       width: size
       height: size
       radius: size / 2
@@ -121,6 +123,7 @@ ColumnLayout {
         if (!root.dragging) return
         root.dragFraction = fractionAt(event.x)
         var ms = Player.positionAt(root.dragFraction, root.durationMs)
+        root.pendingFromMs = root.positionMs
         root.pendingMs = ms
         root.dragging = false
         settleTimer.restart()

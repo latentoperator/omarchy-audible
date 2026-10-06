@@ -12,7 +12,8 @@
 var SPEED_PRESETS = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0];
 
 // Two speeds this close are the same preset (mpv reports binary fractions).
-var SPEED_EPSILON = 0.001;
+// Small enough that a real non-preset speed (1.2495) never counts as one.
+var SPEED_EPSILON = 1e-6;
 
 // More chapters than this and the scrub bar shows no chapter ticks: at 100+
 // they would merge into a solid band.
@@ -136,8 +137,14 @@ function positionAt(fractionValue, durationMs) {
 
 // After a release the bar shows the seek target until the player reports a
 // position near it, so the handle doesn't jump back to the old spot first.
-function seekSettled(positionMs, targetMs) {
+// `fromMs` is where playback was when the drag ended: a position report that
+// is still nearer that spot than the target is a stale one from before the
+// seek, even when the two are close together.
+function seekSettled(positionMs, targetMs, fromMs) {
   if (!isNumber(targetMs) || targetMs < 0) return true;
   if (!isNumber(positionMs)) return false;
-  return Math.abs(positionMs - targetMs) <= SEEK_SETTLE_MS;
+  var distance = Math.abs(positionMs - targetMs);
+  if (distance > SEEK_SETTLE_MS) return false;
+  if (isNumber(fromMs) && fromMs >= 0 && Math.abs(positionMs - fromMs) < distance) return false;
+  return true;
 }
