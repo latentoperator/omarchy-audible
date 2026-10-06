@@ -166,3 +166,24 @@ def test_author_names_are_not_muted():
         block = block[:block.index("}")]
         assert "Color.muted" not in block, rel
         assert re.search(r"Qt\.rgba\(Color\.popups\.text\.r, Color\.popups\.text\.g, Color\.popups\.text\.b, 0\.75\)", block), rel
+
+
+# ---- the note after a catch-up jump ----
+
+def test_jump_sets_a_short_note():
+    service = read("Service.qml")
+    body = function_body(service, "resumeCaughtUp")
+    assert "showCatchupNote(Format.clock(player.positionMs))" in body
+    assert body.index("showCatchupNote(") < body.index("player.seekMs(target)")
+    note = function_body(service, "showCatchupNote")
+    assert "catchupNote = Catchup.jumpNote(was)" in note
+    assert "catchupNoteTimer.restart()" in note
+    assert "interval: Catchup.NOTE_MS" in service
+    # A new pick or a pause drops the note.
+    assert "catchupNote = \"\"" in function_body(service, "noteIntent")
+    assert '"catchupNote": root.catchupNote' in service
+
+
+def test_mini_shows_the_note():
+    mini = read("qml/views/MiniView.qml")
+    assert "root.service.catchupNote" in mini

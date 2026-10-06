@@ -107,3 +107,12 @@ function resumeAction(state) {
   if (state.loaded !== true || state.sameBook !== true || state.playing === true) return "none";
   return state.hasRemote === true && state.storeLoaded === true ? "compare" : "resume";
 }
+
+// The Mini line after a catch-up jump, so a jump never looks like a glitch:
+// it says why the position moved and where it was. Shown for NOTE_MS.
+var NOTE_MS = 5000;
+
+function jumpNote(wasText) {
+  var base = "Continued from your other device";
+  return typeof wasText === "string" && wasText.length > 0 ? base + " (was " + wasText + ")" : base;
+}
