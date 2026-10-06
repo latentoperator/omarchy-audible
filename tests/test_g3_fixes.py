@@ -83,7 +83,9 @@ def test_no_view_toggles_the_player_directly():
 def test_play_pause_entry_points_use_the_service():
     bar = read("BarWidget.qml")
     assert bar.count("service.playPause()") == 2   # Space and middle-click
-    assert "root.service.playPause()" in read("qml/views/MiniView.qml")
+    # Mini's ⏯ is in the shared transport row (U5).
+    assert "root.service.playPause()" in read("qml/components/TransportRow.qml")
+    assert "TransportRow {" in read("qml/views/MiniView.qml")
     service = read("Service.qml")
     ipc = service[service.index("IpcHandler {"):]
     assert "return root.playPause()" in function_body(ipc, "playPause")

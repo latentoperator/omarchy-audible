@@ -48,3 +48,9 @@ function barTitle(setting, vertical, loaded, title) {
   }
   return text.slice(0, TITLE_MAX - 1).trim() + "…";
 }
+
+// A dismissal (a click outside, on this or another monitor) while the Mini
+// chapter popup is open closes only the popup; the panel stays (U5).
+function dismissClosesPanel(view, chapterListOpen) {
+  return !(view === VIEW_MINI && chapterListOpen === true);
+}

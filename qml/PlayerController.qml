@@ -40,6 +40,9 @@ Item {
   property string lastError: ""
 
   property var mpvState: Mpv.emptyState()
+  // mpv's playback-restart events: one after every seek has landed (and on
+  // each load). The scrub bar waits for one before trusting positions again.
+  property int restarts: 0
   property var pendingLoad: null
   property int nextRequest: 1
 
@@ -117,6 +120,8 @@ Item {
     if (!message) return
     if (message.kind === "property") {
       mpvState = Mpv.applyProperty(mpvState, message.name, message.data)
+    } else if (message.kind === "event" && message.event === "playback-restart") {
+      restarts += 1
     } else if (message.kind === "reply" && message.error) {
       lastError = "mpv: " + message.error
     }

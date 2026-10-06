@@ -48,3 +48,14 @@ def test_bar_title_cut_at_max(panel):
     out = panel.call("barTitle", "On", False, True, title)
     assert len(out) <= 32 and out.endswith("…")
     assert panel.call("barTitle", "On", False, True, "x" * 32) == "x" * 32
+
+
+@pytest.mark.parametrize("view,open_,closes", [
+    ("mini", True, False),
+    ("mini", False, True),
+    ("full", True, True),
+    ("library", True, True),
+    ("mini", None, True),
+])
+def test_dismiss_closes_panel(panel, view, open_, closes):
+    assert panel.call("dismissClosesPanel", view, open_) is closes
