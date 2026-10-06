@@ -119,13 +119,6 @@ def test_removal_allowed(drawer, asin, busy, ok):
     assert drawer.call("removalAllowed", asin, busy) is ok
 
 
-@pytest.mark.parametrize("asin,latest,ok", [
-    ("A", "A", True), ("A", "B", False), ("A", "", False), ("", "", False), (None, None, False),
-])
-def test_autoplay_allowed(drawer, asin, latest, ok):
-    assert drawer.call("autoplayAllowed", asin, latest) is ok
-
-
 @pytest.mark.parametrize("row,text", [
     ({"state": "error", "error": "Not enough disk space"}, "Not enough disk space"),
     ({"state": "error", "error": "  "}, "Download failed"),

@@ -21,7 +21,7 @@ The user is an Omarchy user with an Audible account who works at the computer an
 | # | Journey | Success looks like |
 |---|---------|--------------------|
 | J1 | **First run** | Click the book icon, click "Connect Audible", sign in in the browser, paste the URL back. The library appears in under a minute. |
-| J2 | **Start a book** | Open the drawer, type three letters, press Enter. The book downloads (progress visible), the drawer closes, and the mini player is playing from the right spot. |
+| J2 | **Start a book** | Open the drawer, type three letters, press Enter. A cloud book downloads (progress visible) and its row turns into a play button; it does not start on its own. Press Enter again: the drawer closes and the mini player is playing from the right spot. |
 | J3 | **Dismiss and keep listening** | Press Esc or click away. The audio continues. Clicking the bar icon brings back the mini player. |
 | J4 | **Control it** | Rewind 15s, forward 15s, change chapter, set speed, and set a sleep timer. Optionally bind hotkeys. |
 | J5 | **Maximize** | One click expands the mini player into the full view (large cover, chapter list, speed, sleep timer). |
@@ -45,7 +45,7 @@ The user is an Omarchy user with an Audible account who works at the computer an
 - **FR-L6** Each row shows cover, title, author, runtime, a progress bar, and a state badge: ☁ cloud, ⬇ downloading (with progress), ● on this device.
 
 ### 4.3 Local storage
-- **FR-S1** Selecting a cloud book downloads, converts, and then plays it. Only one download runs at a time, with a queue.
+- **FR-S1** Selecting a cloud book downloads and converts it. It does not play on its own; once it is local, selecting it plays it. Only one download runs at a time, with a queue.
 - **FR-S2** "Remove from this device" is available on any local book, from the row menu and the full player.
 - **FR-S3** Removal deletes only local files. It never calls an Audible delete or return endpoint. Tests must enforce this.
 - **FR-S4** The drawer shows total local usage ("3 books · 780 MB") and a "Remove all downloads" action.

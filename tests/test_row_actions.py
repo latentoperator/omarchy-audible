@@ -46,7 +46,7 @@ def test_pick_acts_on_the_decision():
     assert "confirmAsin = asin" in body
     assert 'return "confirm"' in body
     assert "LibraryUi.PICK_DOWNLOAD || decision === LibraryUi.PICK_RETRY" in body
-    assert 'run("get", [asin], "autoplay")' in body
+    assert 'run("get", [asin], "download")' in body
     assert "LibraryUi.PICK_PLAY" in body
     assert "playPicked(asin, true)" in body
 
@@ -139,3 +139,12 @@ def test_the_question_scrolls_into_view():
     # after the delegate is complete arm the scroll.
     assert "Component.onCompleted: created = true" in library
     assert "onConfirmingChanged: if (created) revealQuestion = confirming" in library
+
+
+def test_finished_download_does_not_play():
+    # Chris, day of use: a download that started playing on its own was
+    # awkward. A download only downloads; the row turns into a play button.
+    service = read("Service.qml")
+    assert "autoplay" not in service
+    assert "latestPick" not in service
+    assert "autoplayAllowed" not in read("qml/lib/Drawer.js")

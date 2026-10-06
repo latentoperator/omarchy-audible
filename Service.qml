@@ -128,9 +128,6 @@ Item {
   readonly property bool confirmStillValid: LibraryUi.confirmValid(confirmAsin, library.rowFor(confirmAsin), syncFailure.offline)
   onConfirmStillValidChanged: if (!confirmStillValid) Qt.callLater(dropInvalidConfirm)
   property string reopenAsin: ""
-  // The last book the user chose to play; a finished download plays only
-  // if it is still this one.
-  property string latestPick: ""
   // Books to remove once the player has unloaded them.
   property var removeAfterUnload: []
   property real lastSyncAttemptAtMs: 0
@@ -512,11 +509,10 @@ Item {
 
   // Picking a Library row (FR-L6, ARCHITECTURE 6). `LibraryUi` decides what
   // the pick means; a local book resumes, starts over or asks.
-  // A new choice of book to play wins over every older one: an open
-  // question, a resume still reading its position, a pending removal of
-  // this book, and the download-then-play check (`latestPick`).
+  // A new choice of book wins over every older one: an open question, a
+  // resume still reading its position, and a pending removal of this book.
+  // A download only downloads; the user plays the book when they choose.
   function noteIntent(asin) {
-    latestPick = asin
     cancelCatchup()
     catchupNote = ""
     askAsin = ""
@@ -545,7 +541,7 @@ Item {
     }
     if (decision === LibraryUi.PICK_PLAY) return playPicked(asin, true)
     if (decision === LibraryUi.PICK_DOWNLOAD || decision === LibraryUi.PICK_RETRY) {
-      return run("get", [asin], "autoplay") ? "ok" : "error: refused"
+      return run("get", [asin], "download") ? "ok" : "error: refused"
     }
     return "error: nothing to do"
   }
@@ -974,7 +970,7 @@ Item {
     // Fake mode only: a download that fails with a `--fake-fail` mode.
     function fakeFailGet(asin: string, mode: string): string {
       if (!root.fake) return "error: fake mode only"
-      return root.run("get", [asin, "--fake-fail", mode], "autoplay") ? "ok" : "refused"
+      return root.run("get", [asin, "--fake-fail", mode], "download") ? "ok" : "refused"
     }
     function autoRemove(value: string): string { root.autoRemoveFinished = value === "on"; return "ok" }
     function pushState(): string { return JSON.stringify({ "queue": sync.queue, "flushing": sync.flushing, "last": sync.lastResult }) }
@@ -1084,10 +1080,6 @@ Item {
         remoteFile.reload()
       } else if (job.command === "get" || job.command === "remove") {
         root.refreshLocal()
-      }
-      if (job.command === "get" && job.purpose === "autoplay" && outcome.ok
-          && Drawer.autoplayAllowed(job.args[0], root.latestPick)) {
-        root.playPicked(job.args[0], false)
       }
     }
   }
