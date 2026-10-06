@@ -169,12 +169,6 @@ function removalAllowed(asin, busy) {
   return busy.indexOf(asin) < 0;
 }
 
-// Whether a finished download should play: only when it is still the last
-// book the user picked, so it never replaces a book picked since.
-function autoplayAllowed(asin, latestPick) {
-  return typeof asin === "string" && asin.length > 0 && asin === latestPick;
-}
-
 // Whether `asin` is being removed: waiting for the player to unload it, or
 // a `remove` job for it is queued or running.
 function removing(asin, waiting, pending, active) {
