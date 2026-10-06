@@ -24,7 +24,7 @@ var SORTS = [
 ];
 var FILTERS = [
   { "value": "all", "label": "All" },
-  { "value": "local", "label": "On this laptop" },
+  { "value": "local", "label": "On this device" },
   { "value": "in-progress", "label": "In progress" }
 ];
 
@@ -214,7 +214,7 @@ function errorText(row) {
 function removeAllQuestion(count) {
   var n = _p.number(count);
   if (n === null || n < 1) return "";
-  return n === 1 ? "Remove 1 download from this laptop?" : "Remove " + Math.floor(n) + " downloads from this laptop?";
+  return n === 1 ? "Remove 1 download from this device?" : "Remove " + Math.floor(n) + " downloads from this device?";
 }
 
 // The message for a `LibraryUi.listState` state other than `list`.

@@ -21,7 +21,7 @@ var BAD_PASTE = "That doesn't look like the Amazon page address";
 var EMPTY_PASTE = "Paste the address first";
 
 // The confirm question for Disconnect (FR-A3).
-var DISCONNECT_QUESTION = "Disconnect Audible? Downloaded books stay on this laptop.";
+var DISCONNECT_QUESTION = "Disconnect Audible? Downloaded books stay on this device.";
 
 // The default store (ARCHITECTURE 4.7).
 var DEFAULT_MARKETPLACE = "us";

@@ -175,7 +175,7 @@ _p.progressPercent = function (progress) {
 function badge(row, progress, offline) {
   var state = _p.rowState(row);
   if (state === BADGE_LOCAL) {
-    return { "kind": BADGE_LOCAL, "label": "On this laptop" };
+    return { "kind": BADGE_LOCAL, "label": "On this device" };
   }
   if (state === BADGE_QUEUED) {
     return { "kind": BADGE_QUEUED, "label": "Queued" };
@@ -358,7 +358,7 @@ function rowIcon(row, offline) {
     return { "glyph": ICON_PLAY, "tooltip": "Play" };
   }
   if (action === ACTION_DOWNLOAD) {
-    return { "glyph": ICON_DOWNLOAD, "tooltip": "Download to this laptop" };
+    return { "glyph": ICON_DOWNLOAD, "tooltip": "Download to this device" };
   }
   if (action === ACTION_RETRY) {
     return { "glyph": ICON_RETRY, "tooltip": "Retry download" };

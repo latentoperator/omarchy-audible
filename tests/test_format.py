@@ -193,8 +193,8 @@ def test_bytes_nan_and_infinity_give_empty(module: qjs.JsModule) -> None:
 @pytest.mark.parametrize(
     "count,total,expected",
     [
-        (0, 0, "No books on this laptop"),
-        (0, 999_999_999, "No books on this laptop"),
+        (0, 0, "No books on this device"),
+        (0, 999_999_999, "No books on this device"),
         (1, 12 * 1024 * 1024, "1 book \u00b7 12 MB"),
         (3, 780 * 1024 * 1024, "3 books \u00b7 780 MB"),
         (2, 5767168, "2 books \u00b7 5.5 MB"),
@@ -211,7 +211,7 @@ def test_storage_line(
 
 @pytest.mark.parametrize("count", [-1, None, "", "3"])
 def test_storage_line_plural_and_bad_count(module: qjs.JsModule, count) -> None:
-    assert module.call("storageLine", count, 123) == "No books on this laptop"
+    assert module.call("storageLine", count, 123) == "No books on this device"
 
 
 def test_storage_line_without_a_size(module: qjs.JsModule) -> None:

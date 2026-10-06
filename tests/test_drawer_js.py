@@ -161,8 +161,8 @@ def test_clamp_selection(drawer, selected, count, result):
 
 @pytest.mark.parametrize("count,text", [
     (0, ""), (None, ""), (-2, ""),
-    (1, "Remove 1 download from this laptop?"),
-    (3, "Remove 3 downloads from this laptop?"),
+    (1, "Remove 1 download from this device?"),
+    (3, "Remove 3 downloads from this device?"),
 ])
 def test_remove_all_question(drawer, count, text):
     assert drawer.call("removeAllQuestion", count) == text

@@ -77,7 +77,7 @@ STATE_BADGES = [
     ("queued", "queued", "Queued"),
     ("downloading", "downloading", "Downloading"),
     ("converting", "converting", "Converting"),
-    ("local", "local", "On this laptop"),
+    ("local", "local", "On this device"),
     ("error", "error", "Failed \u2014 Retry"),
 ]
 
@@ -608,7 +608,7 @@ STATES = ["cloud", "queued", "downloading", "converting", "local", "error"]
     [
         ("local", False, "\uf04b", "Play", "play"),
         ("local", True, "\uf04b", "Play", "play"),
-        ("cloud", False, "\uf019", "Download to this laptop", "confirm"),
+        ("cloud", False, "\uf019", "Download to this device", "confirm"),
         ("cloud", True, "", "", "none"),
         ("error", False, "\uf01e", "Retry download", "retry"),
         ("queued", False, "", "", "none"),

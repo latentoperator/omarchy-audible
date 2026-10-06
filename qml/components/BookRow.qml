@@ -180,7 +180,7 @@ Rectangle {
     PanelActionButton {
       visible: root.removable && !root.removing
       iconText: Drawer.GLYPH_REMOVE
-      tooltipText: "Remove from laptop"
+      tooltipText: "Remove from this device"
       hoverColor: Color.urgent
       onClicked: root.removeRequested()
     }
