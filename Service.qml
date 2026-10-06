@@ -309,30 +309,34 @@ Item {
   // listened to on the phone continues from there (SCOPE FR-P4); a second ⏯
   // while that read runs cancels the resume.
   function playPause() {
-    if (!player.loaded) return "error: nothing loaded"
-    if (player.playing) {
+    var asin = loadedAsin
+    var action = Catchup.pressAction({ "loaded": player.loaded, "playing": player.playing,
+      "waiting": catchupAsin.length > 0, "pendingResume": pendingResume.length > 0,
+      "needsRead": Catchup.needsRead(pausedAtMs, Date.now()),
+      "prefetchUsable": Catchup.prefetchUsable(prefetched, asin, Date.now()),
+      "reading": catchupReading === asin })
+    if (action === Catchup.PRESS_NONE) return "error: nothing loaded"
+    if (action === Catchup.PRESS_PAUSE) {
       cancelCatchup()
       player.pause()
       return "ok"
     }
-    if (catchupAsin.length > 0) {
+    if (action === Catchup.PRESS_CANCEL) {
       cancelCatchup()
       return "cancelled"
     }
-    // A Library pick is still reading its position; it decides where to play.
-    if (pendingResume.length > 0) return "busy"
-    var asin = loadedAsin
-    if (!Catchup.needsRead(pausedAtMs, Date.now())) {
+    if (action === Catchup.PRESS_BUSY) return "busy"
+    if (action === Catchup.PRESS_RESUME) {
       player.resume()
       return "ok"
     }
-    if (Catchup.prefetchUsable(prefetched, asin, Date.now())) {
+    if (action === Catchup.PRESS_PREFETCH) {
       resumeCaughtUp(asin, prefetched.remote)
       return "ok"
     }
     catchupAsin = asin
     catchupTimer.restart()
-    if (catchupReading !== asin && !readCatchup(asin)) resumeCaughtUp(asin, null)
+    if (action === Catchup.PRESS_READ && !readCatchup(asin)) resumeCaughtUp(asin, null)
     return "checking"
   }
 
@@ -362,9 +366,11 @@ Item {
   function resumeCaughtUp(asin, remote) {
     cancelCatchup()
     prefetched = null
-    if (!player.loaded || loadedAsin !== asin || player.playing) return
-    // An unread state.json is not "nothing saved here": stay put.
-    if (remote && store.loaded) {
+    // An unread state.json is not "nothing saved here": resume in place.
+    var action = Catchup.resumeAction({ "loaded": player.loaded, "sameBook": loadedAsin === asin,
+      "playing": player.playing, "storeLoaded": store.loaded, "hasRemote": !!remote })
+    if (action === "none") return
+    if (action === "compare") {
       var local = store.doc.books ? store.doc.books[asin] : null
       var own = [sync.lastPushed[asin], local ? local.ms : null]
       var target = Catchup.jumpTarget(player.positionMs,
@@ -994,7 +1000,7 @@ Item {
         var readAsin = job.args[0]
         if (root.catchupReading === readAsin) root.catchupReading = ""
         if (!outcome.ok) root.prefetched = null
-        if (root.catchupAsin === readAsin) {
+        if (Catchup.readResumes(root.catchupAsin, readAsin)) {
           root.resumeCaughtUp(readAsin, root.prefetched && root.prefetched.asin === readAsin ? root.prefetched.remote : null)
         }
       }

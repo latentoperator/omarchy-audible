@@ -105,7 +105,7 @@ def test_catch_up_falls_back_after_the_timeout():
     assert "player.seekMs(target)" in body
     assert "player.resume()" in body
     # A switch to another book while reading must not resume the old one.
-    assert "loadedAsin !== asin" in body
+    assert '"sameBook": loadedAsin === asin' in body
 
 
 def test_a_new_pick_cancels_catch_up():
@@ -115,13 +115,13 @@ def test_a_new_pick_cancels_catch_up():
     assert "cancelCatchup()" in body
     assert "catchupTimer.stop()" in function_body(service, "cancelCatchup")
     # ⏯ while a pick is still reading its position leaves that pick alone.
-    assert 'if (pendingResume.length > 0) return "busy"' in function_body(service, "playPause")
+    assert "Catchup.PRESS_BUSY" in function_body(service, "playPause")
 
 
 def test_catch_up_needs_loaded_local_state():
     # Codex R1 #3: an unread state.json is not "nothing saved here".
     body = function_body(read("Service.qml"), "resumeCaughtUp")
-    assert "if (remote && store.loaded)" in body
+    assert '"storeLoaded": store.loaded' in body
     assert "sync.lastPushed[asin]" in body
 
 

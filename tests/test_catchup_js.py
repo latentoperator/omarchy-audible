@@ -84,7 +84,7 @@ def test_jump_target_ignores_a_skip_while_paused(catchup):
     assert catchup.call("jumpTarget", 125_757, 2_000, 110_757, 1_500) == -1
 
 
-@pytest.mark.parametrize("own", [[110_757], [None, 110_757], [111_500], [110_757, 999]])
+@pytest.mark.parametrize("own", [[110_757], [None, 110_757], [110_757, 999]])
 def test_jump_target_ignores_the_laptops_own_push(catchup, own):
     # Codex R1 #2: the pause push gets the server's (later) timestamp, so the
     # account looks newer than the local entry. After a skip while paused it
@@ -95,3 +95,73 @@ def test_jump_target_ignores_the_laptops_own_push(catchup, own):
 def test_jump_target_other_device_still_wins_with_own_values(catchup):
     assert catchup.call("jumpTarget", 125_757, 1_000, 1_684_289, 2_000, [110_757]) == 1_684_289
     assert catchup.call("jumpTarget", 125_757, 1_000, 1_684_289, 2_000, "junk") == 1_684_289
+
+
+@pytest.mark.parametrize("current,remote,own,target", [
+    # Codex R2 #1: a genuine phone position near (not equal to) the laptop's
+    # saved one still wins; only the exact pushed value is the laptop's echo.
+    (115_000, 101_000, [None, 100_000], 101_000),
+    (115_000, 100_001, [100_000], 100_001),
+    (115_000, 98_500, [100_000, 100_000], 98_500),
+])
+def test_jump_target_own_match_is_exact(catchup, current, remote, own, target):
+    assert catchup.call("jumpTarget", current, 1_000, remote, 2_000, own) == target
+
+
+# ---- ⏯ decisions (Codex R2 #2: executable, not just wiring) ----
+
+def press(catchup, **over):
+    state = {"loaded": True, "playing": False, "waiting": False, "pendingResume": False,
+             "needsRead": True, "prefetchUsable": False, "reading": False}
+    state.update(over)
+    return catchup.call("pressAction", state)
+
+
+def test_press_actions(catchup):
+    assert catchup.evaluate("[PRESS_NONE, PRESS_PAUSE, PRESS_CANCEL, PRESS_BUSY, PRESS_RESUME, "
+                            "PRESS_PREFETCH, PRESS_READ, PRESS_WAIT]") == [
+        "none", "pause", "cancel", "busy", "resume", "prefetch", "read", "wait"]
+    assert press(catchup, loaded=False) == "none"
+    assert press(catchup, playing=True) == "pause"
+    assert press(catchup, playing=True, waiting=True) == "pause"
+    # A second ⏯ while waiting cancels the resume.
+    assert press(catchup, waiting=True) == "cancel"
+    # A Library pick still reading its position decides where to play.
+    assert press(catchup, pendingResume=True) == "busy"
+    assert press(catchup, needsRead=False) == "resume"
+    assert press(catchup, needsRead=False, pendingResume=True) == "busy"
+    assert press(catchup, prefetchUsable=True) == "prefetch"
+    assert press(catchup) == "read"
+    # The drawer's prefetch is already in flight: wait for it, don't read twice.
+    assert press(catchup, reading=True) == "wait"
+    assert press(catchup, loaded=None) == "none"
+    assert catchup.call("pressAction", None) == "none"
+
+
+@pytest.mark.parametrize("waiting,read,result", [
+    ("B1", "B1", True),
+    # Cancelled (second ⏯, a pause, or a new pick cleared the wait): a late
+    # read must not resume anything.
+    ("", "B1", False),
+    # A newer pick of another book: the old read never resumes the old book.
+    ("B2", "B1", False),
+    (None, "B1", False),
+])
+def test_read_done_resumes_only_the_waiting_book(catchup, waiting, read, result):
+    assert catchup.call("readResumes", waiting, read) is result
+
+
+@pytest.mark.parametrize("state,result", [
+    ({"loaded": True, "sameBook": True, "playing": False, "storeLoaded": True, "hasRemote": True}, "compare"),
+    # Unread state.json: resume in place, never compare (Codex R1 #3).
+    ({"loaded": True, "sameBook": True, "playing": False, "storeLoaded": False, "hasRemote": True}, "resume"),
+    # Timeout or failed read: resume in place.
+    ({"loaded": True, "sameBook": True, "playing": False, "storeLoaded": True, "hasRemote": False}, "resume"),
+    # The book changed or already plays: do nothing.
+    ({"loaded": True, "sameBook": False, "playing": False, "storeLoaded": True, "hasRemote": True}, "none"),
+    ({"loaded": True, "sameBook": True, "playing": True, "storeLoaded": True, "hasRemote": True}, "none"),
+    ({"loaded": False, "sameBook": True, "playing": False, "storeLoaded": True, "hasRemote": True}, "none"),
+    (None, "none"),
+])
+def test_resume_action(catchup, state, result):
+    assert catchup.call("resumeAction", state) == result

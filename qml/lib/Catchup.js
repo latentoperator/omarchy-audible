@@ -49,7 +49,9 @@ function prefetchUsable(prefetch, asin, nowMs) {
 // saved here). `ownMs` lists positions this laptop wrote (its last push, its
 // saved pause position): the account stamps a push with the server's later
 // clock, so without this a skip made while paused would be pulled back to the
-// laptop's own pause push.
+// laptop's own pause push. The account keeps a pushed value to the
+// millisecond, so only an exact match is the laptop's echo; a phone position
+// near it is still a phone position.
 function jumpTarget(currentMs, localKey, remoteMs, remoteKey, ownMs) {
   var remote = _number(remoteMs);
   var remoteAt = _number(remoteKey);
@@ -59,10 +61,49 @@ function jumpTarget(currentMs, localKey, remoteMs, remoteKey, ownMs) {
   if (Array.isArray(ownMs)) {
     for (var i = 0; i < ownMs.length; i++) {
       var own = _number(ownMs[i]);
-      if (own !== null && Math.abs(remote - own) < JUMP_MIN_MS) return -1;
+      if (own !== null && Math.round(own) === Math.round(remote)) return -1;
     }
   }
   var current = _number(currentMs);
   if (current !== null && Math.abs(remote - current) < JUMP_MIN_MS) return -1;
   return remote;
+}
+
+// What a ⏯ press does. `state`: {loaded, playing, waiting (a ⏯ already waits
+// on a read), pendingResume (a Library pick is reading its position),
+// needsRead, prefetchUsable, reading (a read for this book is in flight)}.
+var PRESS_NONE = "none";          // nothing loaded
+var PRESS_PAUSE = "pause";        // playing: pause, drop any wait
+var PRESS_CANCEL = "cancel";      // second press while waiting: stay paused
+var PRESS_BUSY = "busy";          // the pick decides where to play
+var PRESS_RESUME = "resume";      // short pause: resume at once
+var PRESS_PREFETCH = "prefetch";  // use the drawer's finished read
+var PRESS_READ = "read";          // start a read and wait
+var PRESS_WAIT = "wait";          // a read is in flight: wait for it
+
+function pressAction(state) {
+  if (!state || typeof state !== "object" || state.loaded !== true) return PRESS_NONE;
+  if (state.playing === true) return PRESS_PAUSE;
+  if (state.waiting === true) return PRESS_CANCEL;
+  if (state.pendingResume === true) return PRESS_BUSY;
+  if (state.needsRead !== true) return PRESS_RESUME;
+  if (state.prefetchUsable === true) return PRESS_PREFETCH;
+  return state.reading === true ? PRESS_WAIT : PRESS_READ;
+}
+
+// Whether a finished read of `readAsin` resumes playback: only while a ⏯ for
+// that same book still waits. A cancel, a pause or a newer pick clears the
+// wait, so a late read resumes nothing.
+function readResumes(waitingAsin, readAsin) {
+  return typeof waitingAsin === "string" && waitingAsin.length > 0 && waitingAsin === readAsin;
+}
+
+// What resuming after the wait does. `state`: {loaded, sameBook (the waiting
+// book is still the loaded one), playing, storeLoaded, hasRemote}. "compare"
+// runs `jumpTarget` first; "resume" resumes in place; "none" leaves the
+// player alone.
+function resumeAction(state) {
+  if (!state || typeof state !== "object") return "none";
+  if (state.loaded !== true || state.sameBook !== true || state.playing === true) return "none";
+  return state.hasRemote === true && state.storeLoaded === true ? "compare" : "resume";
 }
