@@ -1,13 +1,14 @@
-# Brief: M4 player views, laptop part (Claude Code / Codex on HMSP-OMARCHYXPS)
+# Brief: M4 player views, desktop part (Claude Code / Codex on HMSP-OMARCHYBEE)
 
-You are finishing the player UI for the Omarchy Audible plugin on Chris's laptop, inside the real Omarchy shell. Today the Mini view is the minimal U2a version and the Full view is a placeholder (`qml/views/FullView.qml`) that nothing opens. Chris has been using the plugin for real since G3 and has asked where the maximized player is. This brief is self-contained. Read it in full before you start.
+You are finishing the player UI for the Omarchy Audible plugin on Chris's desktop (HMSP-OMARCHYBEE), inside the real Omarchy shell. M4 moved here from the laptop (HMSP-OMARCHYXPS) on 2026-10-06; the M2/M3 briefs still say "laptop", and their rules apply here unchanged. Today the Mini view is the minimal U2a version and the Full view is a placeholder (`qml/views/FullView.qml`) that nothing opens. Chris has been using the plugin for real since G3 and has asked where the maximized player is. This brief is self-contained. Read it in full before you start.
 
 ## 0. Before you start
 
-1. `cd ~/Projects/omarchy-audible && git checkout main && git pull --ff-only`. This directory **is** the live plugin (`~/.config/omarchy/plugins/latentoperator.audible` links to it). Delete any leftover review worktrees under `~/Projects/oa-wt/`.
+1. `cd ~/.config/omarchy/plugins/latentoperator.audible && git checkout main && git pull --ff-only`. On BEE this folder is its own git checkout and **is** the live plugin (not a link; there is no `~/Projects/omarchy-audible` to work in). Put review worktrees under `~/Projects/oa-wt/`, never inside `~/.config/omarchy/plugins/`, where the shell would discover them as plugins. Delete leftovers from earlier sessions.
 2. Read `docs/STATE.md` and the M4 section of `docs/PLAN.md` (U5, U6, U7, G4). Check whether S7 or B11 (locked-file playback) has run or merged. They change how books are stored and where chapters come from, not the views. If B11 is in flight, bind chapters only through `PlayerController.chapters` and you won't conflict.
 3. Then read `AGENTS.md`, `docs/SCOPE.md` §3 (J3–J5), §4.4 (FR-P2, FR-P3), §4.5 (FR-U3–FR-U7) and §6, `docs/ARCHITECTURE.md` §4.8 and §6 (panel, views, keys), and `docs/briefs/M3-laptop.md` §2–§3. The hard rules and dev loop there still apply, and §2 below repeats the ones that matter most.
-4. Reference UI: `~/.config/omarchy/plugins/quickshell.spotify/` (closest analogue for a mini/full player), `/usr/share/omarchy/shell/Ui/` and `Commons/`. Copy patterns, not code blocks.
+4. Reference UI: `/usr/share/omarchy/shell/plugins/panels/audio/` (a themed panel with sliders and lists), `/usr/share/omarchy/shell/Ui/` and `Commons/`, and our own `LibraryView.qml`/`MiniView.qml`. `quickshell.spotify` isn't installed on BEE; don't install it. Copy patterns, not code blocks.
+5. **Display:** BEE has two 1920×1080 monitors at scale 1 (DP-4 at 0,0 and DP-5 at 1920,0), and the bar exists once per monitor. Take screenshots per output (`grim -o DP-4`), check elision at this width, and check that the panel opens on the monitor whose icon was clicked.
 
 ## 1. What you're building
 
@@ -68,7 +69,7 @@ The same as M3 §5. One CLI implements and the other reviews the exact head. Cod
 
 ## 6. G4 (Chris, with you driving)
 
-Only after U5 and U6 are merged and U7 is confirmed. Quit any fake playback, delete the dev flag, restart once, and confirm real mode (one bar, 91 books). With Chris doing all the clicking:
+Only after U5 and U6 are merged and U7 is confirmed. Runs on BEE. Quit any fake playback, delete the dev flag, restart once, and confirm real mode (one `quickshell`, one bar per monitor, 91 books). With Chris doing all the clicking:
 1. **J1–J7** from `docs/SCOPE.md` §3, recorded in a new `docs/MANUAL-TEST.md` (one line per journey: steps, result, date). J2 now means download, then a second Enter to play (PR #50).
 2. **J4/J5 on a long real book:** chapter popup, a chapter jump from the Full list, a sleep timer of 15 min that he cancels, speed changes, Remove from this device on a finished short book (and it's still in the phone app).
 3. **Themes:** with Chris's OK, one light and two dark themes plus a live switch with the Full view open. Note his theme first and restore it at the end.
