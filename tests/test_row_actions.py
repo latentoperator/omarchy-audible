@@ -135,4 +135,7 @@ def test_the_question_scrolls_into_view():
     # Codex R2: only a question just opened scrolls; a delegate recreated with
     # `confirming` already true starts with revealQuestion false.
     assert "property bool revealQuestion: false" in library
-    assert "onConfirmingChanged: revealQuestion = confirming" in library
+    # Codex R3: Qt reports the initial binding as a change, so only changes
+    # after the delegate is complete arm the scroll.
+    assert "Component.onCompleted: created = true" in library
+    assert "onConfirmingChanged: if (created) revealQuestion = confirming" in library

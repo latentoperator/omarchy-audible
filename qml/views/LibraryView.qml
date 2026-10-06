@@ -273,9 +273,13 @@ ColumnLayout {
         onRemoveRequested: root.service.removeBook(modelData.asin)
         // The question makes the row taller; keep all of it in view. Only for
         // a question just opened on this row: a row recreated while the user
-        // scrolls back to an open question must not move the list.
+        // scrolls back to an open question must not move the list. Qt also
+        // reports the initial `confirming` binding as a change, so changes
+        // count only once the delegate is complete.
         property bool revealQuestion: false
-        onConfirmingChanged: revealQuestion = confirming
+        property bool created: false
+        Component.onCompleted: created = true
+        onConfirmingChanged: if (created) revealQuestion = confirming
         onHeightChanged: if (revealQuestion && confirming) books.positionViewAtIndex(index, ListView.Contain)
         onConfirmRequested: root.service.confirmDownload()
         onCancelRequested: root.service.cancelConfirm()
