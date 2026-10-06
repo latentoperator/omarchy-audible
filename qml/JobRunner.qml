@@ -1,6 +1,7 @@
 import QtQuick
 
 import "lib/JobQueue.js" as JobQueue
+import "lib/Signin.js" as Signin
 
 // Spawns backend commands (ARCHITECTURE 4.8). Job commands go through the
 // queue one at a time; every other command bypasses it and runs at once.
@@ -28,6 +29,11 @@ Item {
   property int queued: 0
   readonly property bool running: activeJob !== null || bypassCount > 0
 
+  // Stdin text for queued jobs, by `job.inputId`, kept out of the job
+  // objects (which are listed in `pendingJobs`). Dropped when the job ends.
+  property var inputs: ({})
+  property int nextInputId: 1
+
   // Latest `progress` event of the running job, and the last failure.
   property var progress: null
   property var lastError: null
@@ -47,6 +53,23 @@ Item {
     } else {
       root.spawn(job, false)
     }
+  }
+
+  // A job command whose input goes to the process's stdin, never argv.
+  function runWithInput(command, args, purpose, input) {
+    var job = { "command": String(command), "args": args || [], "purpose": purpose || "" }
+    var queued = JobQueue.enqueue(root.queue, job)
+    if (!queued) return false
+    queued.purpose = job.purpose
+    queued.inputId = root.nextInputId++
+    root.inputs[queued.inputId] = String(input)
+    root.sync()
+    root.pump()
+    return true
+  }
+
+  function dropInput(job) {
+    if (job && job.inputId) delete root.inputs[job.inputId]
   }
 
   function cancel(asin) {
@@ -73,9 +96,20 @@ Item {
     if (!job) {
       return
     }
+    // A job whose stdin input was already handed to a process (a busy retry
+    // of login-finish) has nothing to send: fail it instead.
+    if (Signin.inputLost(job, root.inputs)) {
+      var lost = { "ok": false, "busy": false, "code": "busy", "message": "Audible was busy. Try again.", "hint": null }
+      JobQueue.complete(root.queue, lost)
+      root.sync()
+      root.jobFinished(job, lost)
+      root.pump()
+      return
+    }
     if (root.gate && !root.gate(job)) {
       var outcome = { "ok": false, "busy": false, "code": "skipped", "message": "skipped", "hint": null }
       JobQueue.complete(root.queue, outcome)
+      root.dropInput(job)
       root.sync()
       root.jobFinished(job, outcome)
       root.pump()
@@ -88,11 +122,16 @@ Item {
 
   function spawn(job, isJob) {
     var argv = [root.launcher, job.command].concat(job.args)
+    var hasInput = !!(job.inputId && root.inputs[job.inputId] !== undefined)
     var call = callComponent.createObject(root, {
       "command": argv,
       "environment": root.environment,
-      "job": job
+      "job": job,
+      "hasInput": hasInput,
+      "input": hasInput ? root.inputs[job.inputId] : ""
     })
+    // The process has its own copy now; drop this one at once.
+    root.dropInput(job)
     if (!isJob) {
       root.bypassCount += 1
     }
@@ -124,6 +163,7 @@ Item {
       retryTimer.restart()
       return
     }
+    root.dropInput(job)
     root.noteFailure(job, outcome)
     root.progress = null
     root.jobFinished(job, outcome)

@@ -7,9 +7,11 @@ import "qml/lib/EventLog.js" as EventLog
 import "qml/lib/Format.js" as Format
 import "qml/lib/Ipc.js" as Ipc
 import "qml/lib/LibraryUi.js" as LibraryUi
+import "qml/lib/Onboarding.js" as Onboarding
 import "qml/lib/Panel.js" as Panel
 import "qml/lib/Playback.js" as Playback
 import "qml/lib/Positions.js" as Positions
+import "qml/lib/Signin.js" as Signin
 
 // Headless singleton. Owns the backend, mpv and shared state in later tasks.
 // Bar widgets register as surfaces and are views only.
@@ -95,7 +97,7 @@ Item {
   readonly property var listState: LibraryUi.listState({
     "catalogLoaded": library.catalogLoaded, "syncing": syncing,
     "total": library.allRows.length, "shown": library.count,
-    "offline": syncFailure.offline, "errorCode": syncFailure.errorCode
+    "offline": syncFailure.offline, "errorCode": authFailed ? "auth_failed" : syncFailure.errorCode
   })
   // A downloaded book plays when its `get` finishes; a finished book far
   // from its end asks first (`askAsin`); a book picked from the drawer
@@ -114,6 +116,26 @@ Item {
     reopenOnMini()
     flushRemovals()
   }
+
+  // Onboarding (U3). `reconnecting` reopens Connect after `auth_failed`;
+  // `authFailed` drives the Library's reconnect banner. `loginSession` is
+  // the open sign-in session id (not a secret; the pasted text never lands
+  // in a property here). `onboardingError` is `Onboarding.errorText` output.
+  property bool reconnecting: false
+  property bool authFailed: false
+  property string loginSession: ""
+  property string marketplace: Signin.DEFAULT_MARKETPLACE
+  property var onboardingError: null
+  property string clipboardNotice: ""
+  property bool pasteRejected: false
+  readonly property string onboardingStep: Signin.effectiveStep(Onboarding.step(status), reconnecting)
+  readonly property string loginPhase: Signin.phase(loginSession, loginStarting,
+    Signin.jobPending("login-finish", runner.pendingJobs, runner.activeJob))
+  property bool loginStarting: false
+  readonly property bool settingUp: Signin.jobPending("setup", runner.pendingJobs, runner.activeJob)
+
+  onOnboardingStepChanged: view = Onboarding.view(onboardingStep, player.loaded,
+    Signin.requestAfterStep(view, clipboardNotice))
 
   readonly property string runtimeDir: status && status.runtime_dir ? String(status.runtime_dir) : ""
   readonly property string booksDir: status && status.books_dir ? String(status.books_dir) : ""
@@ -148,11 +170,96 @@ Item {
 
   // Called by a widget just before its panel opens.
   function viewForOpen() {
-    view = Panel.viewOnOpen(player.loaded)
+    view = Onboarding.view(onboardingStep, player.loaded, null)
   }
 
   function showView(name) {
-    if (Panel.VIEWS.indexOf(name) !== -1) view = name
+    if (Panel.VIEWS.indexOf(name) !== -1) view = Onboarding.view(onboardingStep, player.loaded, name)
+  }
+
+  // --- Onboarding (U3) -------------------------------------------------------
+  function checkStatus() {
+    run("status", [])
+  }
+
+  function startSetup() {
+    onboardingError = null
+    return run("setup", [], "setup") ? "ok" : "error: refused"
+  }
+
+  function startLogin(code) {
+    onboardingError = null
+    pasteRejected = false
+    loginSession = ""
+    marketplace = code
+    loginStarting = true
+    if (!run("login-start", ["--marketplace", code], "login")) {
+      loginStarting = false
+      return "error: refused"
+    }
+    return "ok"
+  }
+
+  // The pasted text goes straight to the backend's stdin (never argv, a log,
+  // an event or a property) and is dropped by the caller right after.
+  function finishLogin(pasted) {
+    if (loginSession.length === 0) return "error: no session"
+    if (!Onboarding.looksLikeRedirect(pasted)) {
+      pasteRejected = true
+      return "rejected"
+    }
+    pasteRejected = false
+    onboardingError = null
+    var sent = runner.runWithInput("login-finish", ["--session", loginSession], "login", pasted)
+    clearPaste()
+    return sent ? "ok" : "error: refused"
+  }
+
+  function cancelLogin() {
+    clearPaste()
+    loginSession = ""
+    pasteRejected = false
+    onboardingError = null
+  }
+
+  function importCliLogin() {
+    onboardingError = null
+    return run("login-import-cli", [], "login") ? "ok" : "error: refused"
+  }
+
+  function disconnect() {
+    return run("logout", [], "logout") ? "ok" : "error: refused"
+  }
+
+  function reconnect() {
+    reconnecting = true
+    cancelLogin()
+    showView(Panel.VIEW_ONBOARDING)
+  }
+
+  function openUrl(url) {
+    opener.command = ["xdg-open", url]
+    opener.running = true
+  }
+
+  // Clipboard I/O for the onboarding view: copy the install command, and read
+  // the clipboard for "Paste from clipboard" (the text goes back to the view
+  // through `clipboardRead` in chunks, never into a property). The view
+  // clears its field before calling `readClipboard` and appends each chunk.
+  // `target` is the view that asked, so another monitor's field never fills.
+  signal clipboardRead(var target, string text)
+  // Every view clears its paste field: the text was sent, or sign-in ended.
+  signal clearPaste()
+  property var clipboardTarget: null
+
+  function copyText(text) {
+    copier.text = String(text)
+    copier.running = true
+  }
+
+  function readClipboard(target) {
+    clipboardTarget = target
+    paster.running = true
   }
 
   // The book file for an ASIN, under the books dir from the `status` event.
@@ -415,6 +522,32 @@ Item {
   }
 
 
+  function onboardingFinished(job, outcome) {
+    if (job.command === "login-start") {
+      loginStarting = false
+      if (!outcome.ok) onboardingError = Onboarding.errorText(outcome.code, outcome.message, outcome.hint)
+      return
+    }
+    if (!outcome.ok && outcome.code !== "skipped") {
+      onboardingError = Onboarding.errorText(outcome.code, outcome.message, outcome.hint)
+      // An expired or used session can't be retried; start over.
+      if (job.command === "login-finish") loginSession = ""
+    }
+    if (outcome.ok && Signin.isSignIn(job.command)) {
+      loginSession = ""
+      reconnecting = false
+      authFailed = false
+      onboardingError = null
+      startSync("signin")
+    }
+    if (outcome.ok && job.command === "logout") {
+      clipboardNotice = ""
+      reconnecting = false
+      authFailed = false
+    }
+    if (Signin.refreshesStatus(job.command)) checkStatus()
+  }
+
   function refreshLocal() {
     run("local", [])
   }
@@ -495,6 +628,33 @@ Item {
     repeat: true
     running: player.playing
     onTriggered: root.savePosition(root.snapAsin, root.snapMs, false)
+  }
+
+  Process {
+    id: opener
+  }
+
+  Process {
+    id: copier
+    property string text: ""
+    stdinEnabled: true
+    onStarted: {
+      write(text)
+      text = ""
+      stdinEnabled = false
+    }
+    onExited: stdinEnabled = true
+    command: ["wl-copy"]
+  }
+
+  Process {
+    id: paster
+    command: ["wl-paste", "--no-newline"]
+    // Chunks go straight to the view's field; nothing here keeps them.
+    stdout: SplitParser {
+      splitMarker: ""
+      onRead: function(chunk) { root.clipboardRead(root.clipboardTarget, chunk) }
+    }
   }
 
   Timer {
@@ -598,6 +758,29 @@ Item {
         "syncing": root.syncing, "lastSyncCode": root.lastSyncCode, "count": library.count,
         "total": library.allRows.length, "storage": LibraryUi.storage(library.localBooks) })
     }
+    function onboardingState(): string {
+      var st = root.status || {}
+      return JSON.stringify({ "step": root.onboardingStep, "phase": root.loginPhase,
+        "reconnecting": root.reconnecting, "authFailed": root.authFailed, "error": root.onboardingError,
+        "pasteRejected": root.pasteRejected, "notice": root.clipboardNotice.length > 0,
+        "authenticated": st.authenticated === true, "venvReady": st.venv_ready, "missing": st.missing || [],
+        "account": st.account || null, "marketplace": st.marketplace || null, "view": root.view,
+        "heldInputs": Object.keys(runner.inputs).length })
+    }
+    // Onboarding actions for tests: fake mode only, so IPC can never sign in,
+    // sign out or set up the real account.
+    function fakeOnboarding(action: string, arg: string): string {
+      if (!root.fake) return "error: fake mode only"
+      if (action === "status") { root.checkStatus(); return "ok" }
+      if (action === "setup") return root.startSetup()
+      if (action === "login") return root.startLogin(arg.length > 0 ? arg : Signin.DEFAULT_MARKETPLACE)
+      if (action === "finish") return root.finishLogin(arg)
+      if (action === "import") return root.importCliLogin()
+      if (action === "logout") return root.disconnect()
+      if (action === "reconnect") { root.reconnect(); return "ok" }
+      if (action === "authfail") { root.authFailed = true; return "ok" }
+      return "error: unknown action"
+    }
     // Fake mode only: a download that fails with a `--fake-fail` mode.
     function fakeFailGet(asin: string, mode: string): string {
       if (!root.fake) return "error: fake mode only"
@@ -659,11 +842,24 @@ Item {
         root.resumeRemotes = remotes
       }
       sync.handleEvent(record, job)
-      root.logEvent(job.command, EventLog.summarize(record, 160))
+      if (job.command === "login-start" && record.type === "login_url") {
+        root.loginStarting = false
+        root.loginSession = String(record.session || "")
+        // Fake mode's link is a dummy Amazon address: don't open a browser.
+        if (root.fake) root.logEvent("login-start", "fake: browser not opened")
+        else root.openUrl(String(record.url || ""))
+      } else if (job.command === "login-finish" && record.type === "done") {
+        root.clipboardNotice = Onboarding.clipboardNotice(record)
+      }
+      root.logEvent(job.command, Signin.logText(job.command, record.type,
+        Signin.isOnboardingCommand(job.command) ? "" : EventLog.summarize(record, 160)))
     }
 
     onJobFinished: function(job, outcome) {
-      var text = outcome.ok ? "ok" : String(outcome.code) + ": " + String(outcome.message || "")
+      var text = outcome.ok ? "ok" : String(outcome.code) + (Signin.isOnboardingCommand(job.command)
+        ? "" : ": " + String(outcome.message || ""))
+      if (Signin.authFailed(outcome)) root.authFailed = true
+      if (Signin.isOnboardingCommand(job.command)) root.onboardingFinished(job, outcome)
       root.logEvent(job.command + " exit", text)
       root.failures = Playback.updateFailures(root.failures, job, outcome)
       sync.handleFinished(job, outcome)
