@@ -2,7 +2,7 @@
 
 Update this file in every PR that changes status. Newest first. See [WORKFLOW.md](WORKFLOW.md) for how work is run.
 
-**Last updated:** 2026-10-05 · **Phase:** M3 done; G3 findings 1–6 fixed; Chris's day of real use in progress · **Gate G3:** ✅ passed 2026-10-05 · **Gate G2:** ✅ passed 2026-10-05 · **Gate G1:** ✅ passed 2026-10-04 · **Gate G0:** ✅ passed 2026-10-04 · **M1:** ✅ B1–B7 merged
+**Last updated:** 2026-10-06 · **Phase:** M4 starting on the desktop (HMSP-OMARCHYBEE); M3 done, G3 follow-ups #49 #50 merged · **Gate G3:** ✅ passed 2026-10-05 · **Gate G2:** ✅ passed 2026-10-05 · **Gate G1:** ✅ passed 2026-10-04 · **Gate G0:** ✅ passed 2026-10-04 · **M1:** ✅ B1–B7 merged
 
 ## Where we are
 
@@ -43,7 +43,14 @@ Update this file in every PR that changes status. Newest first. See [WORKFLOW.md
 | Hopebox G3-3 (logic) | **Built 2026-10-05.** Chris chose to ask before every download (no size threshold). `LibraryUi.js`: `rowIcon(row, offline)` (▶ `ICON_PLAY` for a local book, ⤓ `ICON_DOWNLOAD` for a cloud book online, ↻ `ICON_RETRY` for a failed one, none otherwise; follows `primaryAction`), `pickDecision(row, offline, confirmAsin)` (`play`/`confirm`/`download`/`retry`/`none`: a cloud pick asks first, picking the same book again while its question is up downloads it, a retry never asks), `confirmValid(confirmAsin, row, offline)` (the question stays only while that book is still a downloadable cloud book), `estimatedBytes(row)` (runtime × `BYTES_PER_HOUR` = 57 MB/h, measured on the real account; catalog rows carry no download size). `Drawer.downloadQuestion(sizeText)` → "Download up to 734 MB?" (worded "up to" since #46: 57 MB/h is the top bitrate, so the estimate is an upper bound). **Laptop wiring still to do:** row icon in `BookRow`, `confirmAsin` in `Service.pick` (cleared by `noteIntent`, offline, and when `confirmValid` is false), and an in-row Download / Cancel question; Enter on the same row confirms. |
 | Player / UI | U1, U4, U2a, U2, U3 merged; G3 passed. **G3 findings 1–6 fixed and merged:** 1, 2, 5, 6 in #41 (own mpv scope per mode, failed-play notice, ⏯ catch-up with other devices, readable author names) plus #42 ("Continued from your other device" note); 4 in #43 (download size from `content_reference`); 3 in #44 (LibraryUi row icons and ask-before-download decisions), #45 (row icons and "Download … ?" question wired into the drawer; Library's search Space and now-playing ⏯ go through the catch-up too) and #46 ("up to", not "about"). Chris's day of real use is in progress on `main` (`4ed1ff2`); what he reports becomes G3 follow-ups. M4 waits until it's done. |
 
-## Environment (laptop, HMSP-OMARCHYXPS)
+## Environment (desktop, HMSP-OMARCHYBEE), active from M4
+
+- The live plugin is its own git checkout at `~/.config/omarchy/plugins/latentoperator.audible` (not a link), on `main` at `3d235a1` on 2026-10-06. Real mode, signed in; Chris listens on it.
+- Test venv `~/.cache/oa-venv` (built the same way as the laptop's): 1590 passed, 0 skipped at `3d235a1`. `make check-symlinks` and `omarchy plugin validate .` pass.
+- Two 1920×1080 monitors at scale 1 (DP-4, DP-5). `quickshell.spotify` isn't installed.
+- Dante reaches it over Tailscale SSH as `chrisgray@hmsp-omarchybee` (100.80.121.33).
+
+## Environment (laptop, HMSP-OMARCHYXPS), M0–M3
 
 - `audible-cli` 0.6.0 installed with `uv tool`; logged in (profile `chrisgray`, files in `~/.audible/`, 91 books).
 - Manual proof of the pipeline: downloaded one `.aax`, decrypted with `ffmpeg -activation_bytes … -c copy` to `.m4b` with chapters intact (a leftover test book is in `~/Audiobooks/`). Remote position read (`lastpositions`) works.
@@ -73,9 +80,9 @@ D1, D4, D5 were decided at G0 (see SCOPE §9).
 ## Next steps (in order)
 
 1. ~~A0, S1–S6, G0, M1, M2 (G2), M3 (G3) and G3 findings 1–6~~ Done.
-2. Chris's day of real use → G3 follow-ups.
-3. **2026-10-06: spike S7** on the laptop (play locked aaxc/aax in mpv, no decrypted copy; key never in argv). Go → B11 and decision D7.
-4. M4 (U5, U6, U7) on the laptop per [briefs/M4-laptop.md](briefs/M4-laptop.md) → G4, then M5 (R1–R7) and marketplace submission.
+2. ~~Chris's day of real use → G3 follow-ups.~~ Closed 2026-10-06 when Chris moved M4 to the desktop. Follow-ups from that use: copy says "this device" (#49); a finished download no longer plays by itself (#50).
+3. **Spike S7** (play locked aaxc/aax in mpv, no decrypted copy; key never in argv). Go → B11 and decision D7. Runs on the desktop (BEE), real mode, no shell restart; the laptop is offline. It doesn't block M4: the views read chapters only through `PlayerController`.
+4. M4 (U5, U6, U7) on the desktop (HMSP-OMARCHYBEE) per [briefs/M4-desktop.md](briefs/M4-desktop.md) → G4, then M5 (R1–R7) and marketplace submission.
 
 ## Known risks to keep in mind
 
