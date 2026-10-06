@@ -165,3 +165,20 @@ def test_read_done_resumes_only_the_waiting_book(catchup, waiting, read, result)
 ])
 def test_resume_action(catchup, state, result):
     assert catchup.call("resumeAction", state) == result
+
+
+# ---- the note after a jump (Chris, after the G3 hand check) ----
+
+def test_note_constants(catchup):
+    assert catchup.evaluate("NOTE_MS") == 5_000
+
+
+@pytest.mark.parametrize("was,text", [
+    ("16:24", "Continued from your other device (was 16:24)"),
+    ("1:02:03", "Continued from your other device (was 1:02:03)"),
+    ("", "Continued from your other device"),
+    (None, "Continued from your other device"),
+    (7, "Continued from your other device"),
+])
+def test_jump_note(catchup, was, text):
+    assert catchup.call("jumpNote", was) == text

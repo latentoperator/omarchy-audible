@@ -85,6 +85,9 @@ Item {
   // Results of catch-up reads still running, by ASIN (like `resumeRemotes`),
   // so overlapping reads of different books never touch each other's result.
   property var catchupResults: ({})
+  // The Mini line after a catch-up jump (Catchup.jumpNote), cleared after
+  // NOTE_MS or by a new pick.
+  property string catchupNote: ""
 
   // The book that is loaded and the last position seen for it. Kept so a
   // switch or a crash can still save where the old book stopped.
@@ -384,10 +387,16 @@ Item {
         remote.ms, Positions.parseUpdatedAt(remote.updated_at), own)
       if (target >= 0) {
         logEvent("catchup", "jump " + Math.round(player.positionMs) + " -> " + target)
+        showCatchupNote(Format.clock(player.positionMs))
         player.seekMs(target)
       }
     }
     player.resume()
+  }
+
+  function showCatchupNote(was) {
+    catchupNote = Catchup.jumpNote(was)
+    catchupNoteTimer.restart()
   }
 
   function notifyPlayFailed(message) {
@@ -503,6 +512,7 @@ Item {
   function noteIntent(asin) {
     latestPick = asin
     cancelCatchup()
+    catchupNote = ""
     askAsin = ""
     if (pendingResume !== asin) pendingResume = ""
     removeAfterUnload = removeAfterUnload.filter(function(a) { return a !== asin })
@@ -682,7 +692,8 @@ Item {
       "positionMs": player.positionMs, "durationMs": player.durationMs,
       "chapterIndex": player.chapterIndex, "chapters": player.chapters.length,
       "speed": player.speed, "volume": player.volume,
-      "sleep": player.sleepTimer ? player.sleepTimer.mode : null
+      "sleep": player.sleepTimer ? player.sleepTimer.mode : null,
+      "catchupNote": root.catchupNote
     })
   }
 
@@ -752,6 +763,13 @@ Item {
     function onConnectionChanged() {
       if (player.connection === "failed") Qt.callLater(function() { root.notifyPlayFailed(player.lastError) })
     }
+  }
+
+  Timer {
+    id: catchupNoteTimer
+    interval: Catchup.NOTE_MS
+    repeat: false
+    onTriggered: root.catchupNote = ""
   }
 
   Timer {

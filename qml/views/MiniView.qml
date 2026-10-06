@@ -92,6 +92,18 @@ ColumnLayout {
     }
   }
 
+  // Why the position just moved: a catch-up jump to another device's spot.
+  Text {
+    Layout.fillWidth: true
+    visible: text.length > 0
+    text: root.service ? root.service.catchupNote : ""
+    textFormat: Text.PlainText
+    wrapMode: Text.WordWrap
+    color: Qt.rgba(Color.popups.text.r, Color.popups.text.g, Color.popups.text.b, 0.75)
+    font.family: Style.font.family
+    font.pixelSize: Style.font.bodySmall
+  }
+
   // A play that never started (G3 finding 2).
   Text {
     Layout.fillWidth: true
