@@ -128,6 +128,7 @@ Item {
   property var onboardingError: null
   property string clipboardNotice: ""
   property bool pasteRejected: false
+  property bool pasteEmpty: false
   readonly property string onboardingStep: Signin.effectiveStep(Onboarding.step(status), reconnecting)
   readonly property string loginPhase: Signin.phase(loginSession, loginStarting,
     Signin.jobPending("login-finish", runner.pendingJobs, runner.activeJob))
@@ -204,7 +205,8 @@ Item {
   // an event or a property) and is dropped by the caller right after.
   function finishLogin(pasted) {
     if (loginSession.length === 0) return "error: no session"
-    if (!Onboarding.looksLikeRedirect(pasted)) {
+    pasteEmpty = !/\S/.test(pasted || "")
+    if (pasteEmpty || !Onboarding.looksLikeRedirect(pasted)) {
       pasteRejected = true
       return "rejected"
     }
@@ -762,7 +764,7 @@ Item {
       var st = root.status || {}
       return JSON.stringify({ "step": root.onboardingStep, "phase": root.loginPhase,
         "reconnecting": root.reconnecting, "authFailed": root.authFailed, "error": root.onboardingError,
-        "pasteRejected": root.pasteRejected, "notice": root.clipboardNotice.length > 0,
+        "pasteRejected": root.pasteRejected, "pasteEmpty": root.pasteEmpty, "notice": root.clipboardNotice.length > 0,
         "authenticated": st.authenticated === true, "venvReady": st.venv_ready, "missing": st.missing || [],
         "account": st.account || null, "marketplace": st.marketplace || null, "view": root.view,
         "heldInputs": Object.keys(runner.inputs).length })

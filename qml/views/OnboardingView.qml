@@ -205,7 +205,7 @@ ColumnLayout {
       Text {
         Layout.fillWidth: true
         visible: root.service ? root.service.pasteRejected : false
-        text: Signin.BAD_PASTE
+        text: Signin.pasteMessage(root.service ? root.service.pasteEmpty : false)
         textFormat: Text.PlainText
         wrapMode: Text.WordWrap
         color: Color.urgent
