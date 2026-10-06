@@ -165,6 +165,7 @@ ColumnLayout {
     positionMs: root.player ? root.player.positionMs : 0
     durationMs: root.player ? root.player.durationMs : 0
     chapters: root.chapters
+    restarts: root.player ? root.player.restarts : 0
     note: root.checking ? "Checking Audible…" : ""
     onSeekRequested: function(ms) { root.player.seekMs(ms) }
   }

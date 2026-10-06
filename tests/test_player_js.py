@@ -186,7 +186,7 @@ def test_nan_and_infinity(player):
     assert player.evaluate("speedLabel(Infinity)") == "1.0×"
     assert player.evaluate("fraction(NaN, 1000)") == 0
     assert player.evaluate("positionAt(0.5, Infinity)") == 0
-    assert player.evaluate("seekSettled(NaN, 1000)") is False
+    assert player.evaluate("seekSettled(NaN, 1000, 0, 1)") is False
 
 
 def test_tick_fractions(player):
@@ -243,46 +243,27 @@ def test_position_at(player, frac, dur, pos):
     assert player.call("positionAt", frac, dur) == pos
 
 
-@pytest.mark.parametrize("pos,target,settled", [
-    (100000, 100000, True),
-    (101500, 100000, True),
-    (98500, 100000, True),
-    (101501, 100000, False),
-    (8642562, 20000000, False),
-    (5000, -1, True),
-    (5000, None, True),
-    (None, 1000, False),
+@pytest.mark.parametrize("pos,target,at,now,settled", [
+    # No playback-restart since the release: never, however close.
+    (101000, 101000, 3, 3, False),
+    (100800, 101000, 3, 3, False),
+    (100000, 100200, 3, 3, False),
+    # Restart seen: near the target.
+    (101000, 101000, 3, 4, True),
+    (102500, 101000, 3, 4, True),
+    (99500, 101000, 3, 5, True),
+    (102501, 101000, 3, 4, False),
+    (8642562, 20000000, 3, 4, False),
+    # No target held.
+    (5000, -1, 3, 3, True),
+    (5000, None, 3, 3, True),
+    # Bad input.
+    (None, 1000, 3, 4, False),
+    (1000, 1000, None, 4, False),
+    (1000, 1000, 3, None, False),
 ])
-def test_seek_settled(player, pos, target, settled):
-    assert player.call("seekSettled", pos, target) == settled
-
-
-@pytest.mark.parametrize("pos,target,start,settled", [
-    # Seek forward 100000 → 101000: reports from before the seek are stale,
-    # even past the midpoint.
-    (100100, 101000, 100000, False),
-    (100600, 101000, 100000, False),
-    (100749, 101000, 100000, False),
-    (100750, 101000, 100000, True),
-    (101000, 101000, 100000, True),
-    (102500, 101000, 100000, True),
-    (102501, 101000, 100000, False),
-    # Seek back 200000 → 199000: stale reports are at or past 200000.
-    (200000, 199000, 200000, False),
-    (200300, 199000, 200000, False),
-    (199900, 199000, 200000, True),
-    (199100, 199000, 200000, True),
-    (198750, 199000, 200000, True),
-    (198749, 199000, 200000, False),
-    # A long seek: the old position is never within the settle window.
-    (20000000, 20000000, 8642562, True),
-    (8643000, 20000000, 8642562, False),
-    # Start unknown: proximity alone.
-    (100100, 101000, -1, True),
-    (100100, 101000, None, True),
-])
-def test_seek_settled_ignores_stale_reports(player, pos, target, start, settled):
-    assert player.call("seekSettled", pos, target, start) == settled
+def test_seek_settled(player, pos, target, at, now, settled):
+    assert player.call("seekSettled", pos, target, at, now) == settled
 
 
 def test_speed_presets(player):

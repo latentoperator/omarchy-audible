@@ -22,9 +22,6 @@ var MAX_TICKS = 40;
 // A seek has landed once the player reports a position this close to it.
 var SEEK_SETTLE_MS = 1500;
 
-// mpv can land a seek this far short of the target (audio frame boundaries).
-var SEEK_LAND_MS = 250;
-
 // Glyphs from the theme's icon font (Font Awesome, as the bar uses).
 var GLYPH_PREV_CHAPTER = "";
 var GLYPH_NEXT_CHAPTER = "";
@@ -138,18 +135,15 @@ function positionAt(fractionValue, durationMs) {
   return Math.round(Math.max(0, Math.min(1, fractionValue)) * durationMs);
 }
 
-// After a release the bar shows the seek target until the player reports a
-// position that can only come after the seek, so the handle doesn't jump
-// back to the old spot first. `fromMs` is where playback was when the drag
-// ended. Reports from before the seek keep counting up from `fromMs`, so:
-// after a seek forward only a report at (or just short of) the target
-// counts, and after a seek back only one below `fromMs`. Without `fromMs`,
-// nearness alone decides. ScrubBar also lets go after a few seconds.
-function seekSettled(positionMs, targetMs, fromMs) {
+// After a release the bar shows the seek target until the seek has landed,
+// so the handle doesn't jump back to the old spot first. A position report
+// alone can't prove that (one sent just before the seek can sit anywhere
+// near the target), so the bar waits for mpv's playback-restart after the
+// release (`restartsNow` > `restartsAtRelease`) and then for a position near
+// the target. ScrubBar also lets go after a few seconds.
+function seekSettled(positionMs, targetMs, restartsAtRelease, restartsNow) {
   if (!isNumber(targetMs) || targetMs < 0) return true;
-  if (!isNumber(positionMs)) return false;
-  if (Math.abs(positionMs - targetMs) > SEEK_SETTLE_MS) return false;
-  if (!isNumber(fromMs) || fromMs < 0) return true;
-  if (targetMs >= fromMs) return positionMs >= targetMs - SEEK_LAND_MS;
-  return positionMs < fromMs && positionMs >= targetMs - SEEK_LAND_MS;
+  if (!isNumber(positionMs) || !isNumber(restartsAtRelease) || !isNumber(restartsNow)) return false;
+  if (restartsNow <= restartsAtRelease) return false;
+  return Math.abs(positionMs - targetMs) <= SEEK_SETTLE_MS;
 }

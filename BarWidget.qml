@@ -37,7 +37,9 @@ BarWidget {
     opened = false
   }
   function toggle() { opened ? close() : open() }
+  // Another popout takes over: always close the whole panel.
   function closeForPopoutSwitch() {
+    if (service) service.chapterListOpen = false
     popoutSwitchClosing = true
     close()
     Qt.callLater(function() { root.popoutSwitchClosing = false })

@@ -18,6 +18,8 @@ ColumnLayout {
   property int positionMs: 0
   property int durationMs: 0
   property var chapters: []
+  // PlayerController.restarts: counts mpv's playback-restart events.
+  property int restarts: 0
   // Replaces the time-left text while set ("Checking Audible…").
   property string note: ""
 
@@ -26,8 +28,8 @@ ColumnLayout {
   property bool dragging: false
   property real dragFraction: 0
   property int pendingMs: -1
-  // Where playback was when the drag ended (see `Player.seekSettled`).
-  property int pendingFromMs: -1
+  // `restarts` when the drag ended (see `Player.seekSettled`).
+  property int pendingRestarts: 0
 
   readonly property int shownMs: dragging ? Player.positionAt(dragFraction, durationMs)
     : (pendingMs >= 0 ? pendingMs : positionMs)
@@ -36,7 +38,11 @@ ColumnLayout {
 
   spacing: Style.spacing.xxs
 
-  onPositionMsChanged: if (pendingMs >= 0 && Player.seekSettled(positionMs, pendingMs, pendingFromMs)) pendingMs = -1
+  function checkSettled() {
+    if (pendingMs >= 0 && Player.seekSettled(positionMs, pendingMs, pendingRestarts, restarts)) pendingMs = -1
+  }
+  onPositionMsChanged: checkSettled()
+  onRestartsChanged: checkSettled()
 
   // The player never reported the target (paused far away, or the seek was
   // refused): stop holding it.
@@ -123,7 +129,7 @@ ColumnLayout {
         if (!root.dragging) return
         root.dragFraction = fractionAt(event.x)
         var ms = Player.positionAt(root.dragFraction, root.durationMs)
-        root.pendingFromMs = root.positionMs
+        root.pendingRestarts = root.restarts
         root.pendingMs = ms
         root.dragging = false
         settleTimer.restart()
