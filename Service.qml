@@ -75,11 +75,12 @@ Item {
   // ⏯ catching up with other devices (Catchup.js). `pausedAtMs` is when the
   // player last paused (0 = unknown, e.g. after a shell restart);
   // `catchupAsin` is the book waiting on an account read before it resumes;
-  // `catchupReading` the book whose read is queued or running; `prefetched`
+  // `catchupReads` the books with a read queued or running (at most one per
+  // book, so overlapping reads never share a result); `prefetched`
   // the last finished read, `{asin, atMs, remote}`.
   property real pausedAtMs: 0
   property string catchupAsin: ""
-  property string catchupReading: ""
+  property var catchupReads: ({})
   property var prefetched: null
   // Results of catch-up reads still running, by ASIN (like `resumeRemotes`),
   // so overlapping reads of different books never touch each other's result.
@@ -317,7 +318,7 @@ Item {
       "waiting": catchupAsin.length > 0, "pendingResume": pendingResume.length > 0,
       "needsRead": Catchup.needsRead(pausedAtMs, Date.now()),
       "prefetchUsable": Catchup.prefetchUsable(prefetched, asin, Date.now()),
-      "reading": catchupReading === asin })
+      "reading": catchupReads[asin] === true })
     if (action === Catchup.PRESS_NONE) return "error: nothing loaded"
     if (action === Catchup.PRESS_PAUSE) {
       cancelCatchup()
@@ -352,7 +353,7 @@ Item {
   // Opening the drawer on a book paused long enough starts the read early,
   // so ⏯ usually finds it done.
   function prefetchCatchup() {
-    if (!player.loaded || player.playing || catchupReading.length > 0) return
+    if (!player.loaded || player.playing || catchupReads[loadedAsin] === true) return
     var asin = loadedAsin
     if (!Catchup.needsRead(pausedAtMs, Date.now()) || Catchup.prefetchUsable(prefetched, asin, Date.now())) return
     readCatchup(asin)
@@ -360,7 +361,9 @@ Item {
 
   function readCatchup(asin) {
     if (!run("position-get", [asin], "catchup")) return false
-    catchupReading = asin
+    var reads = catchupReads
+    reads[asin] = true
+    catchupReads = reads
     return true
   }
 
@@ -1003,7 +1006,9 @@ Item {
       sync.handleFinished(job, outcome)
       if (job.purpose === "catchup") {
         var readAsin = job.args[0]
-        if (root.catchupReading === readAsin) root.catchupReading = ""
+        var reads = root.catchupReads
+        delete reads[readAsin]
+        root.catchupReads = reads
         var result = outcome.ok ? (root.catchupResults[readAsin] || null) : null
         delete root.catchupResults[readAsin]
         // Only this read's own book: a failed read of A never clears B's.

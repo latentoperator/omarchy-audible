@@ -141,6 +141,16 @@ def test_overlapping_reads_keep_their_own_results():
     assert "if (!outcome.ok) root.prefetched = null" not in service
 
 
+def test_one_read_per_book():
+    # Codex R4: two reads of the same book (A -> B -> A) must not overlap.
+    service = read("Service.qml")
+    assert "catchupReading" not in service
+    assert '"reading": catchupReads[asin] === true' in function_body(service, "playPause")
+    assert "catchupReads[loadedAsin] === true" in function_body(service, "prefetchCatchup")
+    assert "reads[asin] = true" in function_body(service, "readCatchup")
+    assert "delete reads[readAsin]" in service
+
+
 def test_opening_the_drawer_prefetches():
     service = read("Service.qml")
     assert "prefetchCatchup()" in function_body(service, "viewForOpen")
