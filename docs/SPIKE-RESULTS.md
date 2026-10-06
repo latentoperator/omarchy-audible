@@ -8,6 +8,47 @@ Environment for S5 and S6: HMSP-OMARCHYXPS, Omarchy 4.0.4, quickshell 0.3.1, mpv
 
 ---
 
+## S7 — Play locked files, keep no decrypted copy ✅ (go)
+
+**Question.** Can mpv play the aaxc/aax file exactly as Audible sent it, unlocking it only in memory, so no DRM-free `.m4b` ever lands on disk, without the key ever appearing in a process's argv?
+
+**Method.** Run on HMSP-OMARCHYBEE on 2026-10-06 in real mode, without touching the shell or the running service. A throwaway script downloaded the shortest non-local book (145 min) twice into a `0700` cache directory, once `--aaxc` and once `--aax`, using the plugin's own login and audible-cli. A separate headless mpv 0.41.0 (`--no-config --ao=null`, its own `0600` socket) was used, not the plugin's player. **Only counts, timings and booleans left the machine.** No titles, ASINs, keys or audio were copied off it, and everything was deleted afterward.
+
+Two ways of passing the key were tried, and both work with the key never in argv:
+- **Per file over the IPC socket:** `loadfile <path> replace -1 {"demuxer-lavf-o": "audible_key=…,audible_iv=…", "chapters-file": "<ffmetadata>", "start": "<s>"}` (aax: `activation_bytes=…`). This fits `PlayerController` as it is: one long-lived mpv, a new key with each book.
+- **An owner-only `--include` file** containing `demuxer-lavf-o=…`, for one-shot runs.
+
+### Results
+
+| | aaxc (voucher key/iv) | aax (activation bytes) |
+|---|---|---|
+| Size on disk | 140 MB (unchanged; no second copy) | 140 MB |
+| Load → first audio | 35 ms | 48 ms |
+| Seek to 5 / 20 / 50 / 95 % | ≤ 1 ms each | ≤ 1 ms each |
+| Skip ±15 s, +30 s | ≤ 1 ms each | ≤ 1 ms each |
+| CPU at 1× / 3× speed | 0.8 % / 3.0 % | 0.6 % / 2.8 % |
+| Resume at a saved position (37 %) | exact (0.00 s off), 41 ms | exact, 47 ms |
+| Chapters via `chapters-file` built from `chapters.json` | 2 of 2, starts exact (0 ms) | 2 of 2, exact |
+| Key in any process's argv (`/proc/*/cmdline`), before and while playing | none | none |
+
+**The audio is really unlocked, not noise.** 20-second slices at 1 min and 67 min were decoded to PCM: aaxc and aax give **bit-identical** PCM with non-silent levels and zero decoder errors. Controls: aaxc with no key produced thousands of decoder errors and almost no audio; aax with wrong activation bytes is refused at open (`[aax] mismatch in checksums`). (A first pass that only checked `file-loaded` and `duration` wrongly suggested that no key was needed. The header opens without a key, but the audio doesn't decode. Use the PCM check, not `file-loaded`, in B11's tests.)
+
+**Not covered here:**
+- **Position push / `acr`:** not exercised, because the code doesn't change. `acr` comes from content metadata (cached in `meta.json`), not from the audio file.
+- **A book with 100+ chapters:** the test book had 2. `chapters-file` is ordinary ffmetadata, the same file `get` already builds, so no difference is expected. Check one long book during B11's acceptance.
+- **The real `PlayerController` in the shell:** this is B11's job.
+- **mpv logging:** the key travels as a loadfile option. The plugin's mpv has no log file today; B11 must keep it that way, or make sure no log level writes option values.
+
+**The key is readable over IPC** (`get_property demuxer-lavf-o`) by anyone who can open the socket. The socket is `0600` in the user's runtime dir, so that is the same user who can already read `~/.config/omarchy-audible/`. This is acceptable, and B11 should clear the option after load anyway.
+
+### Decision D7: go (Chris, 2026-10-06)
+
+Stop storing decrypted copies. B11: `get` keeps the locked file and writes the key material `0600` beside it (aaxc: key/iv from the voucher; aax: a reference to the account's activation bytes, not a copy). `get` writes the ffmetadata chapter file and drops the ffmpeg conversion, so the free-space check falls from ~2.1× to ~1.1×. `PlayerController` passes the key and chapter file as `loadfile` options over the socket, never argv. `remove` deletes the key file too. Existing `.m4b` books keep playing as they are, and only new downloads are locked (BEE has one local book).
+
+Chris accepted the listing risk knowingly. The marketplace has no written DRM rule (checked 2026-10-06: `SUBMISSION.md`, `SECURITY.md`, `NOTICE.md` and the issue templates), no listed plugin unlocks DRM, and a maintainer can still decline the plugin or act on a rights-holder's removal request.
+
+---
+
 ## S6 — Panel and bar-widget mechanics ✅
 
 **Question.** How does a third-party bar widget open its own anchored panel? How is the panel sized and closed, how does it read theme tokens and register IPC, how do settings appear, and what does the capability facade block?
