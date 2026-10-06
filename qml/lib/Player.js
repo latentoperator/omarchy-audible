@@ -247,8 +247,10 @@ function sleepText(timer, remainingMs) {
 }
 
 // Whether the chapter list should scroll itself to the current chapter: not
-// while the user scrolled it in the last USER_SCROLL_HOLD_MS.
-function followChapter(nowMs, userScrolledAtMs) {
+// while the user is scrolling it, nor within USER_SCROLL_HOLD_MS of the end
+// of their last scroll.
+function followChapter(nowMs, userScrolledAtMs, userMoving) {
+  if (userMoving === true) return false;
   if (!isNumber(userScrolledAtMs) || userScrolledAtMs <= 0) return true;
   if (!isNumber(nowMs)) return false;
   return nowMs - userScrolledAtMs >= USER_SCROLL_HOLD_MS;

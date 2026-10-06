@@ -15,13 +15,14 @@ ListView {
   // `Player.chapterRows` output.
   property var rows: []
   property int currentChapter: -1
+  // When the user last scrolled the list (start or end of the gesture).
   property real userScrolledAtMs: 0
 
   signal chosen(int index)
 
   function follow(force) {
     if (currentChapter < 0 || currentChapter >= count) return
-    if (force || Player.followChapter(Date.now(), userScrolledAtMs)) positionViewAtIndex(currentChapter, ListView.Center)
+    if (force || Player.followChapter(Date.now(), userScrolledAtMs, moving)) positionViewAtIndex(currentChapter, ListView.Center)
   }
 
   // Shown: a fresh look, so follow even after an old scroll.
@@ -37,7 +38,10 @@ ListView {
 
   onCurrentChapterChanged: follow(false)
   onCountChanged: Qt.callLater(function() { root.follow(false) })
+  // Only the user moves the list (positionViewAtIndex doesn't), so the
+  // hold counts from the end of their last scroll.
   onMovementStarted: userScrolledAtMs = Date.now()
+  onMovementEnded: userScrolledAtMs = Date.now()
 
   delegate: Rectangle {
     id: row

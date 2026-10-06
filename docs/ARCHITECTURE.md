@@ -270,7 +270,7 @@ The bar widget owns a `qs.Ui` `KeyboardPanel` anchored under the book icon (✅ 
 - Mini has a library button (→ Library) and a maximize button (→ Full). Full has a collapse button (→ Mini).
 - Onboarding view replaces Library when `status.authenticated` is false or setup is incomplete.
 
-Keyboard: search field focused on open; ↑/↓ move; Enter play; Esc close; Space play/pause when the search field is empty; ←/→ skip in Mini/Full.
+Keyboard: search field focused on open; ↑/↓ move; Enter play; Esc close; Space play/pause when the search field is empty; ←/→ skip in Mini/Full; Backspace in Full collapses to Mini. In the Mini chapter popup, ↑/↓ move, Enter jumps to the chapter and Esc closes only the popup.
 
 Shell IPC target `latentoperator.audible`, registered by an `IpcHandler` in `Service.qml` (a handler in the per-monitor widget would be ignored as a duplicate) ✅ S6:
 `toggle`, `playPause`, `skip <seconds>`, `nextChapter`, `prevChapter`, `openLibrary`. Arguments and return values are strings.

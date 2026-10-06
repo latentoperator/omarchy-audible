@@ -369,6 +369,20 @@ def test_follow_chapter(player, now, scrolled, follow):
     assert player.call("followChapter", now, scrolled) is follow
 
 
+@pytest.mark.parametrize("now,scrolled,moving,follow", [
+    # Mid-gesture: never, however old the gesture's start.
+    (100000, 1000, True, False),
+    (100000, 0, True, False),
+    # Scrolled for 5 s, released just now: the hold counts from the release.
+    (106000, 105500, False, False),
+    (109600, 105500, False, True),
+    (10000, 0, False, True),
+    (10000, 0, None, True),
+])
+def test_follow_chapter_gesture(player, now, scrolled, moving, follow):
+    assert player.call("followChapter", now, scrolled, moving) is follow
+
+
 @pytest.mark.parametrize("view,text,action", [
     ("full", "\b", "collapse"), ("mini", "\b", "none"), ("full", "x", "none"), ("full", None, "none"),
 ])
