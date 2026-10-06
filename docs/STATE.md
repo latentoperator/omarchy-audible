@@ -75,7 +75,7 @@ D1, D4, D5 were decided at G0 (see SCOPE §9).
 1. ~~A0, S1–S6, G0, M1, M2 (G2), M3 (G3) and G3 findings 1–6~~ Done.
 2. Chris's day of real use → G3 follow-ups.
 3. **2026-10-06: spike S7** on the laptop (play locked aaxc/aax in mpv, no decrypted copy; key never in argv). Go → B11 and decision D7.
-4. M4 (U5, U6, U7) → G4, then M5 (R1–R7) and marketplace submission.
+4. M4 (U5, U6, U7) on the laptop per [briefs/M4-laptop.md](briefs/M4-laptop.md) → G4, then M5 (R1–R7) and marketplace submission.
 
 ## Known risks to keep in mind
 
