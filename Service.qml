@@ -50,6 +50,9 @@ Item {
 
   // The panel's current view, shared by every monitor's widget.
   property string view: Panel.VIEW_LIBRARY
+  // The Mini view's chapter popup. Closed whenever the panel opens or the view
+  // changes.
+  property bool chapterListOpen: false
   readonly property string loadedAsin: player.loaded ? Playback.asinFromPath(player.path) : ""
   readonly property var loadedRow: loadedAsin.length > 0 ? library.rowFor(loadedAsin) : null
   readonly property string barGlyph: Panel.glyph(player.loaded, player.playing)
@@ -193,11 +196,14 @@ Item {
   // Called by a widget just before its panel opens.
   function viewForOpen() {
     view = Onboarding.view(onboardingStep, player.loaded, null)
+    chapterListOpen = false
     prefetchCatchup()
   }
 
   function showView(name) {
-    if (Panel.VIEWS.indexOf(name) !== -1) view = Onboarding.view(onboardingStep, player.loaded, name)
+    if (Panel.VIEWS.indexOf(name) === -1) return
+    chapterListOpen = false
+    view = Onboarding.view(onboardingStep, player.loaded, name)
   }
 
   // --- Onboarding (U3) -------------------------------------------------------
@@ -974,9 +980,26 @@ Item {
     }
     function autoRemove(value: string): string { root.autoRemoveFinished = value === "on"; return "ok" }
     function pushState(): string { return JSON.stringify({ "queue": sync.queue, "flushing": sync.flushing, "last": sync.lastResult }) }
+    // Opens the panel on a view (Onboarding.view still decides: Mini or Full
+    // with nothing loaded shows the Library). Returns the view shown.
+    function view(name: string): string {
+      if (Panel.VIEWS.indexOf(name) === -1) return "error: unknown view"
+      var surface = root.primarySurface()
+      if (!surface) return "error: no surface"
+      if (!surface.opened) surface.open()
+      root.showView(name)
+      return root.view
+    }
+    function chapterList(state: string): string {
+      if (state !== "open" && state !== "close") return "error: open or close"
+      if (state === "open" && (!player.loaded || player.chapters.length === 0)) return "error: no chapters"
+      root.chapterListOpen = state === "open"
+      return "ok"
+    }
     function panelState(): string {
       var open = root.surfaces.some(function(s) { return s.opened === true })
-      return JSON.stringify({ "open": open, "view": root.view, "glyph": root.barGlyph, "tooltip": root.tooltipText })
+      return JSON.stringify({ "open": open, "view": root.view, "chapterList": root.chapterListOpen,
+        "glyph": root.barGlyph, "tooltip": root.tooltipText })
     }
     function events(): string {
       return root.recentEvents.map(function(e) { return e.label + "  " + e.text }).join("\n")
