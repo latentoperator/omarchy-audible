@@ -232,3 +232,23 @@ def test_removing(drawer):
 ])
 def test_ask_text(drawer, row, text):
     assert drawer.call("askText", row) == text
+
+
+@pytest.mark.parametrize("size,text", [
+    ("770 MB", "Download about 770 MB?"),
+    (" 1.2 GB ", "Download about 1.2 GB?"),
+    ("", "Download this book?"),
+    (None, "Download this book?"),
+    (7, "Download this book?"),
+])
+def test_download_question(drawer, size, text):
+    assert drawer.call("downloadQuestion", size) == text
+
+
+def test_download_question_with_format_bytes(drawer):
+    fmt = qjs.load("Format")
+    ui = qjs.load("LibraryUi")
+    size = fmt.call("bytes", ui.call("estimatedBytes", {"runtimeMin": 810}))
+    assert drawer.call("downloadQuestion", size) == "Download about " + size + "?"
+    assert size == "734 MB"  # Format.bytes uses 1024-based units
+
