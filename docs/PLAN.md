@@ -221,7 +221,7 @@ Depends on S5/S6 results and the fake backend.
   Acceptance: J3, J4 pass; dragging the scrub bar doesn't fight position updates; text elides cleanly for long titles.
 
 - [ ] **U6 — Full view** (tier B; needs U5)
-  Large cover, chapter list (auto-scroll to current, click to jump), speed presets and fine control, sleep timer picker, details (narrator, runtime, % complete), Remove from laptop, collapse.
+  Large cover, chapter list (auto-scroll to current, click to jump), speed presets and fine control, sleep timer picker, details (narrator, runtime, % complete), Remove from this device, collapse.
   Acceptance: J5 passes; 100+ chapter books scroll smoothly.
 
 - [ ] **U7 — Now-playing strip in Library view** (tier A; needs U2, P2)
