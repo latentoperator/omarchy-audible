@@ -20,7 +20,7 @@ M0  S1 S2 S3 S4 S5 S6   (all independent, run in parallel)  ──▶ GATE G0
 M1  B1 → B2 → B3 → B4 ; B5, B6, B7 after B1                 ──▶ GATE G1
 M2  P1 → P2 → P3 ; P4 after P2                              ──▶ GATE G2
 M3  B9 → B10 ; L1 → L2 → L3 (Hopebox) ; U1 → U4 → U2a → U2 → U3 (laptop) ──▶ GATE G3  (first usable build)
-M4  U5, U6, U7 after G3                                     ──▶ GATE G4
+M4  U5, U6, U7 after G3 ; S7 (laptop spike) → B11 if it passes ──▶ GATE G4
 M5  R1 … R7                                                 ──▶ release v0.1.0
 ```
 M1 (backend) and M2/M3 (QML) can overlap after G0 because the fake backend freezes the protocol.
@@ -205,6 +205,16 @@ Depends on S5/S6 results and the fake backend.
 ---
 
 ## M4 — Player UI
+
+- [ ] **S7 — Play locked files, keep no decrypted copy** (tier S; laptop; scheduled 2026-10-06)
+  Question: can mpv play the file exactly as Audible sent it, unlocking it only in memory, so no DRM-free `.m4b` ever lands on disk? ffmpeg's mov demuxer has `-activation_bytes` (aax) and `-audible_key`/`-audible_iv` (aaxc); mpv uses the same demuxer through `--demuxer-lavf-o`. This matters for the marketplace listing (keeping a "clean copy" is the hardest thing to defend) and drops the ~2× free-space conversion step.
+  Method: with real-mode files on the laptop (no shell restart), play one locked aaxc and one locked aax book directly in mpv. Pass the key without putting it in mpv's argv (other users can read `/proc/<pid>/cmdline`): try an owner-only options file, mpv's IPC `set_property`, or an `--include` config. Check seek and skip latency (start, middle, near the end), chapter display from Audible's `chapters.json` (the locked file's embedded chapters can be coarser; feed a chapter file or keep the service's own list), resume at a saved position, and that `acr`/position push still work.
+  Done when: findings are in `SPIKE-RESULTS.md` with timings, the key-passing method that works, and a go/no-go. Keys and titles stay out of the repo, logs and argv.
+  *If it fails:* keep today's decrypt-to-m4b path and record why.
+
+- [ ] **B11 — Drop the decrypted copy** (tier B; needs S7 = go, and Chris's go on D7)
+  `get` keeps the original aaxc/aax plus its key material (`0600`) instead of converting; the free-space check falls to ~1×; `PlayerController` passes the key the S7 way; chapters come from `chapters.json`; `remove` deletes the key material too. Existing `.m4b` books keep playing (or are migrated; S7 decides). README and SCOPE §7 say no unlocked copy is stored.
+  Acceptance: fake and real-mode get → play → seek → chapter → resume → remove on the laptop; no key in any process's argv (`ps -eo args`), logs or `recentEvents`; contract tests updated.
 
 - [ ] **U5 — Mini view, complete** (tier B; needs G3, extends U2a)
   Per SCOPE FR-U3: cover, title/author, current chapter with a tap-to-open chapter popup, scrub bar (drag to seek, elapsed/remaining), ⏮ ⏪N ⏯ ⏩N ⏭, speed pill that cycles presets, maximize, library, dismiss.
