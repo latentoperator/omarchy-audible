@@ -416,14 +416,33 @@ def _real_content_metadata(asin: str, paths: Paths) -> dict[str, Any]:
         ) from exc
 
 
-def _content_size(metadata: dict[str, Any]) -> int:
-    content = metadata.get("content_metadata") or {}
-    size = content.get("content_size_in_bytes")
-    if not isinstance(size, int) or size <= 0:
-        size = (content.get("content_url") or {}).get("content_size_in_bytes")
-    if not isinstance(size, int) or size <= 0:
-        return 0  # unknown: let the download proceed rather than block it
-    return size
+# Larger than any audiobook; a bigger value is treated as unknown rather than
+# fed to the free-space arithmetic.
+_MAX_CONTENT_SIZE = 1 << 40
+
+
+def _content_size(metadata: Any) -> int:
+    """The aaxc download size from ``1.0/content/{asin}/metadata``, or 0.
+
+    Audible returns it as ``content_metadata.content_reference
+    .content_size_in_bytes`` (checked against the real account; the S4 spike
+    read the same field). The other two places are fallbacks for other
+    response shapes. It feeds the free-space pre-flight and the ``total`` of
+    the aaxc download's progress events. 0 means unknown, which skips the
+    pre-flight and lets the download proceed. Never raises.
+    """
+    content = metadata.get("content_metadata") if isinstance(metadata, dict) else None
+    if not isinstance(content, dict):
+        return 0
+    for source in (
+        content.get("content_reference"),
+        content,
+        content.get("content_url"),
+    ):
+        size = source.get("content_size_in_bytes") if isinstance(source, dict) else None
+        if isinstance(size, int) and not isinstance(size, bool) and 0 < size <= _MAX_CONTENT_SIZE:
+            return size
+    return 0  # unknown: let the download proceed rather than block it
 
 
 def _metadata_duration_ms(metadata: dict[str, Any]) -> int | None:
@@ -572,7 +591,10 @@ def _real_fetch(
         log(f"aaxc download failed ({exc.code}); retrying as aax")
     _rmtree(partial)
     partial.mkdir(parents=True, exist_ok=True)
-    _audible_download(cli, env, partial, asin, "aax", emit, children, total)
+    # The metadata size is the aaxc file's; the aax file's size is not known
+    # in advance, so its progress events carry no total (the UI then shows no
+    # percent rather than a wrong one).
+    _audible_download(cli, env, partial, asin, "aax", emit, children, 0)
     raw_path = _find_raw(partial, "aax")
     if raw_path is None:
         raise PipelineError(
