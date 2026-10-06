@@ -53,4 +53,17 @@ function barTitle(setting, vertical, loaded, title) {
 // chapter popup is open closes only the popup; the panel stays (U5).
 function dismissClosesPanel(view, chapterListOpen) {
   return !(view === VIEW_MINI && chapterListOpen === true);
+// The panel's content width and height cap per view, in unscaled units for
+// `Style.space`. The Full view grows the same drawer (ARCHITECTURE 6).
+var WIDTH = 420;
+var HEIGHT_CAP = 560;
+var FULL_WIDTH = 680;
+var FULL_HEIGHT_CAP = 760;
+
+function contentWidth(view) {
+  return view === VIEW_FULL ? FULL_WIDTH : WIDTH;
+}
+
+function heightCap(view) {
+  return view === VIEW_FULL ? FULL_HEIGHT_CAP : HEIGHT_CAP;
 }

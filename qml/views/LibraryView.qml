@@ -362,7 +362,7 @@ ColumnLayout {
     }
   }
 
-  // Now-playing strip (FR-U2): the loaded book, play/pause, and a click
+  // Now-playing strip (FR-U2, U7): the loaded book, ⏪ ⏯ ⏩, and a click
   // through to Mini.
   Rectangle {
     Layout.fillWidth: true
@@ -396,9 +396,21 @@ ColumnLayout {
       }
 
       PanelActionButton {
+        iconText: Mini.GLYPH_BACK
+        tooltipText: "Back " + Mini.SKIP_SECONDS + " s"
+        onClicked: if (root.service) root.service.player.skip(Mini.skipSeconds(Mini.ACTION_BACK))
+      }
+
+      PanelActionButton {
         iconText: Mini.playGlyph(root.service ? root.service.player.playing : false)
         tooltipText: "Play / pause"
         onClicked: if (root.service) root.service.playPause()
+      }
+
+      PanelActionButton {
+        iconText: Mini.GLYPH_FORWARD
+        tooltipText: "Forward " + Mini.SKIP_SECONDS + " s"
+        onClicked: if (root.service) root.service.player.skip(Mini.skipSeconds(Mini.ACTION_FORWARD))
       }
     }
   }
