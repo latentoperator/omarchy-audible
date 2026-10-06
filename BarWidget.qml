@@ -141,7 +141,11 @@ BarWidget {
           service: root.service
           onCloseRequested: root.close()
         }
-        MiniView { service: root.service }
+        MiniView {
+          service: root.service
+          onCloseRequested: root.close()
+          onKeysReleased: root.focusView()
+        }
         FullView { service: root.service }
       }
     }
