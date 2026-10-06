@@ -145,10 +145,43 @@ def test_free_space_preflight_requires_2_1x():
         ({"content_metadata": {"content_reference": None}}, 0),
         ({"content_metadata": {"content_reference": []}}, 0),
         ({}, 0),
+        ({"content_metadata": "x"}, 0),
+        ({"content_metadata": [1]}, 0),
+        ({"content_metadata": True}, 0),
+        ({"content_metadata": None}, 0),
+        ("x", 0),
+        (None, 0),
+        ([], 0),
+        ({"content_metadata": {"content_reference": {"content_size_in_bytes": 10**400}}}, 0),
+        ({"content_metadata": {"content_reference": {"content_size_in_bytes": -5}}}, 0),
+        ({"content_metadata": {"content_reference": {"content_size_in_bytes": 1.5e9}}}, 0),
     ],
 )
 def test_content_size_reads_content_reference(metadata, size):
     assert dl._content_size(metadata) == size
+
+
+def test_aax_fallback_progress_has_no_aaxc_total(monkeypatch, tmp_path):
+    """The aaxc size must not become the aax download's progress total."""
+    totals: list[tuple[str, int]] = []
+
+    def fake_download(cli, env, partial, asin, fmt, emit, children, total):
+        totals.append((fmt, total))
+        if fmt == "aax":
+            (partial / f"{asin}.aax").write_bytes(b"x")
+
+    monkeypatch.setattr(dl, "_audible_cli", lambda paths: "audible")
+    monkeypatch.setattr(dl, "_audible_env", lambda paths: {})
+    monkeypatch.setattr(dl, "_audible_download", fake_download)
+    monkeypatch.setattr(dl, "_find_raw", lambda partial, fmt: (partial / "x.aax") if fmt == "aax" else None)
+    monkeypatch.setattr(dl, "_find_voucher", lambda partial: None)
+    monkeypatch.setattr(dl, "_read_chapters", lambda partial, asin: [])
+    monkeypatch.setattr(dl, "_activation_bytes", lambda paths, cli, env: "deadbeef")
+    partial = tmp_path / ".partial"
+    partial.mkdir()
+    raw = dl._real_fetch("B0FAKE0001", partial, None, lambda *a, **k: None, None, 779090696)
+    assert raw.container == "aax"
+    assert totals == [("aaxc", 779090696), ("aax", 0)]
 
 
 def test_get_novoucher_falls_back_to_aax(
