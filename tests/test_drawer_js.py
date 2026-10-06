@@ -235,8 +235,8 @@ def test_ask_text(drawer, row, text):
 
 
 @pytest.mark.parametrize("size,text", [
-    ("770 MB", "Download about 770 MB?"),
-    (" 1.2 GB ", "Download about 1.2 GB?"),
+    ("770 MB", "Download up to 770 MB?"),
+    (" 1.2 GB ", "Download up to 1.2 GB?"),
     ("", "Download this book?"),
     (None, "Download this book?"),
     (7, "Download this book?"),
@@ -249,6 +249,6 @@ def test_download_question_with_format_bytes(drawer):
     fmt = qjs.load("Format")
     ui = qjs.load("LibraryUi")
     size = fmt.call("bytes", ui.call("estimatedBytes", {"runtimeMin": 810}))
-    assert drawer.call("downloadQuestion", size) == "Download about " + size + "?"
+    assert drawer.call("downloadQuestion", size) == "Download up to " + size + "?"
     assert size == "734 MB"  # Format.bytes uses 1024-based units
 
