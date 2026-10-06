@@ -189,6 +189,8 @@ Write ✅ S3: `PUT 1.0/lastpositions/{asin}` with `{acr, asin, position_ms}`; `a
 
 Merge rule: take the entry with the newest `updated_at` between local `state.json` and remote. If remote is newer, resume there (the user listened elsewhere).
 
+When the rule runs: a Library pick always reads the account (`position-get`, purpose `resume`) before loading. ⏯ on a book already loaded and paused (Mini, Space, middle-click, IPC `playPause`, all through `Service.playPause`) reads it only after a pause of 30 s or more, or when the pause time is unknown after a shell restart; opening the drawer on such a book starts the read early (purpose `catchup`, a result is used for 60 s). ⏯ waits up to 3 s for it, showing "Checking Audible…", then resumes locally. It seeks only when the account entry is newer than the local one, at least 2 s from the player, and not exactly a position this laptop wrote (its last push or its saved pause position: the account stamps the laptop's own push with the server's later clock and keeps the value to the millisecond), so a skip made while paused is kept. A second ⏯ while it waits cancels the resume. The thresholds live in `qml/lib/Catchup.js` (G3 finding 5).
+
 Fake mode keeps its own positions in its own tree: `position-push --fake` writes `{ms, updated_at}` (`updated_at` is the `--at` value, else now) to `<fake data dir>/fake-account-positions.json`, and `position-get --fake` and `sync --fake` read it back, so the stale check and resume-from-the-account can be exercised with no account; real mode is unchanged and the file never exists in the real tree.
 
 "Recently listened" sort key = `max(local last_played_at, remote last_updated)`. Fetch remote positions for all catalog asins in batches during `sync` and cache them in `state.json`.
@@ -235,7 +237,7 @@ mpv --no-config --no-video --idle=yes --keep-open=yes --no-terminal --audio-disp
     --input-ipc-server=$XDG_RUNTIME_DIR/omarchy-audible/mpv.sock \
     --force-window=no --volume=<saved> --speed=<default>
 ```
-Launched as `systemd-run --user --scope --quiet --collect --unit=omarchy-audible-mpv mpv …` through `Quickshell.execDetached` ✅ S5 (own cgroup, survives `omarchy-restart-shell`; the fixed unit name refuses a second mpv). Fall back to plain `execDetached` if `systemd-run` is missing. Never use `Process`, whose child dies with the shell. P2 must handle the pitfalls listed in SPIKE-RESULTS S5.
+Launched as `systemd-run --user --scope --quiet --collect --unit=omarchy-audible-mpv mpv …` (fake mode: `--unit=omarchy-audible-fake-mpv`, so a fake player never blocks the real one; real mode stops a leftover fake scope when it starts, fake mode never touches the real one) through `Quickshell.execDetached` ✅ S5 (own cgroup, survives `omarchy-restart-shell`; the fixed unit name refuses a second mpv). A player that fails to start shows a desktop notification ("Couldn't start playback") and a line in Mini. Fall back to plain `execDetached` if `systemd-run` is missing. Never use `Process`, whose child dies with the shell. P2 must handle the pitfalls listed in SPIKE-RESULTS S5.
 
 The service connects with Quickshell's unix-socket client (`Quickshell.Io` `Socket`) and speaks mpv's JSON IPC (`{"command":[…],"request_id":n}`; events as JSON lines). Observed properties: `time-pos`, `duration`, `pause`, `speed`, `chapter`, `chapter-list`, `path`, `idle-active`, `eof-reached`, `volume`.
 

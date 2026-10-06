@@ -121,6 +121,20 @@ ColumnLayout {
 
   }
 
+  // A pick whose player never started (G3 finding 2). The drawer reopens on
+  // Library then, since nothing is loaded for Mini.
+  Text {
+    Layout.fillWidth: true
+    visible: root.service && root.service.player ? root.service.player.connection === "failed"
+      && root.service.player.lastError.length > 0 : false
+    text: "Couldn't start playback: " + (root.service && root.service.player ? root.service.player.lastError : "")
+    textFormat: Text.PlainText
+    wrapMode: Text.WordWrap
+    color: Color.urgent
+    font.family: Style.font.family
+    font.pixelSize: Style.font.bodySmall
+  }
+
   RowLayout {
     Layout.fillWidth: true
     visible: banner.text.length > 0

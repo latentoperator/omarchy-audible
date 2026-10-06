@@ -17,6 +17,9 @@ Item {
   // $XDG_RUNTIME_DIR/omarchy-audible[-fake]/mpv.sock, from the `status` event.
   property string socketPath: ""
   property int initialVolume: 100
+  // The systemd scope mpv runs in. The fixed name refuses a second mpv; each
+  // mode has its own, so a fake-mode mpv never blocks the real one.
+  property string unitName: "omarchy-audible-mpv"
 
   // A book is supposed to be loaded. Reconnects happen only while this (or a
   // bounded startup attach) holds, so an absent mpv costs nothing.
@@ -170,7 +173,7 @@ Item {
       "--volume=" + initialVolume, "--input-ipc-server=" + socketPath]
     var command = useScope
       ? ["systemd-run", "--user", "--scope", "--quiet", "--collect",
-         "--unit=omarchy-audible-mpv"].concat(mpv)
+         "--unit=" + unitName].concat(mpv)
       : mpv
     var dir = socketPath.replace(/\/[^\/]*$/, "")
     // mkdir and launch in one shell so mpv never starts before its directory.
@@ -336,7 +339,7 @@ Item {
 
   Process {
     id: scopeActive
-    command: ["systemctl", "--user", "is-active", "--quiet", "omarchy-audible-mpv.scope"]
+    command: ["systemctl", "--user", "is-active", "--quiet", root.unitName + ".scope"]
     onExited: function(code, status) {
       var gone = code !== 0
       root.scopeChecks += 1

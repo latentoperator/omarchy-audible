@@ -22,6 +22,8 @@ ColumnLayout {
   readonly property string asin: service ? service.loadedAsin : ""
   readonly property int positionMs: player ? player.positionMs : 0
   readonly property int durationMs: player ? player.durationMs : 0
+  // ⏯ is reading the account before it resumes.
+  readonly property bool checking: service ? service.catchupAsin.length > 0 : false
 
   spacing: Style.spacing.panelGap
 
@@ -58,7 +60,8 @@ ColumnLayout {
         text: Format.names(names)
         textFormat: Text.PlainText
         elide: Text.ElideRight
-        color: Color.muted
+        // Muted is too faint for names on most themes (G3).
+        color: Qt.rgba(Color.popups.text.r, Color.popups.text.g, Color.popups.text.b, 0.75)
         font.family: Style.font.family
         font.pixelSize: Style.font.body
       }
@@ -80,12 +83,25 @@ ColumnLayout {
     Item { Layout.fillWidth: true }
 
     Text {
-      text: "−" + Format.clock(Mini.remainingMs(root.positionMs, root.durationMs))
+      text: root.checking ? "Checking Audible\u2026"
+        : "−" + Format.clock(Mini.remainingMs(root.positionMs, root.durationMs))
       textFormat: Text.PlainText
       color: Color.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.bodySmall
     }
+  }
+
+  // A play that never started (G3 finding 2).
+  Text {
+    Layout.fillWidth: true
+    visible: root.player ? root.player.connection === "failed" && root.player.lastError.length > 0 : false
+    text: "Couldn't start playback: " + (root.player ? root.player.lastError : "")
+    textFormat: Text.PlainText
+    wrapMode: Text.WordWrap
+    color: Color.urgent
+    font.family: Style.font.family
+    font.pixelSize: Style.font.bodySmall
   }
 
   RowLayout {
@@ -104,7 +120,7 @@ ColumnLayout {
       enabled: root.loaded
       iconText: Mini.playGlyph(root.player ? root.player.playing : false)
       tooltipText: "Play / pause (Space)"
-      onClicked: root.player.toggle()
+      onClicked: root.service.playPause()
     }
 
     Button {
