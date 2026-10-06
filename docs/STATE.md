@@ -66,15 +66,16 @@ Update this file in every PR that changes status. Newest first. See [WORKFLOW.md
 | ID | Question | Notes |
 |----|----------|-------|
 | D6 | Encrypt auth file | No for v1. |
+| D7 | Stop storing decrypted copies (play locked files, unlock in memory) | Proposed 2026-10-05 for the marketplace listing. Spike S7 on the laptop 2026-10-06 decides feasibility; B11 implements if go. |
 
 D1, D4, D5 were decided at G0 (see SCOPE §9).
 
 ## Next steps (in order)
 
-1. ~~Finish A0~~ Done. ~~All spikes S1–S6 and the S3 phone check~~ Done.
-2. ~~Gate G0~~ Passed.
-3. M1 backend on the Kanban lane (Hopebox, fake mode only). Real-account checks for B3/B5/B6 run on the laptop by Dante.
-4. M2 QML (P1, P2) can start in parallel once B1 merges; it needs the laptop.
+1. ~~A0, S1–S6, G0, M1, M2 (G2), M3 (G3) and G3 findings 1–6~~ Done.
+2. Chris's day of real use → G3 follow-ups.
+3. **2026-10-06: spike S7** on the laptop (play locked aaxc/aax in mpv, no decrypted copy; key never in argv). Go → B11 and decision D7.
+4. M4 (U5, U6, U7) → G4, then M5 (R1–R7) and marketplace submission.
 
 ## Known risks to keep in mind
 
