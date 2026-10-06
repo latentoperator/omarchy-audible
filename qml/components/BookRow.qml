@@ -74,7 +74,8 @@ Rectangle {
           text: Format.names(Drawer.authors(root.row))
           textFormat: Text.PlainText
           elide: Text.ElideRight
-          color: Color.muted
+          // Muted is too faint for names on most themes (G3).
+          color: Qt.rgba(Color.popups.text.r, Color.popups.text.g, Color.popups.text.b, 0.75)
           font.family: Style.font.family
           font.pixelSize: Style.font.bodySmall
         }

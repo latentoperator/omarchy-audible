@@ -38,7 +38,7 @@ BarWidget {
   function panelKey(kind, dx) {
     if (!service || !player) return
     var action = Mini.keyAction(service.view, player.loaded, kind, dx)
-    if (action === Mini.ACTION_TOGGLE) player.toggle()
+    if (action === Mini.ACTION_TOGGLE) service.playPause()
     else if (action !== Mini.ACTION_NONE) player.skip(Mini.skipSeconds(action))
   }
 
@@ -61,7 +61,7 @@ BarWidget {
 
   function press(mouseButton) {
     if (mouseButton === Qt.MiddleButton) {
-      if (player && player.loaded) player.toggle()
+      if (service && player && player.loaded) service.playPause()
     } else if (mouseButton === Qt.LeftButton) {
       toggle()
     }

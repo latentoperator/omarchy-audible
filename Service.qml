@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "qml"
+import "qml/lib/Catchup.js" as Catchup
 import "qml/lib/Drawer.js" as Drawer
 import "qml/lib/EventLog.js" as EventLog
 import "qml/lib/Format.js" as Format
@@ -70,6 +71,16 @@ Item {
   property string pendingResume: ""
   property string removeCandidate: ""
   property var resumeRemotes: ({})
+
+  // ⏯ catching up with other devices (Catchup.js). `pausedAtMs` is when the
+  // player last paused (0 = unknown, e.g. after a shell restart);
+  // `catchupAsin` is the book waiting on an account read before it resumes;
+  // `catchupReading` the book whose read is queued or running; `prefetched`
+  // the last finished read, `{asin, atMs, remote}`.
+  property real pausedAtMs: 0
+  property string catchupAsin: ""
+  property string catchupReading: ""
+  property var prefetched: null
 
   // The book that is loaded and the last position seen for it. Kept so a
   // switch or a crash can still save where the old book stopped.
@@ -172,6 +183,7 @@ Item {
   // Called by a widget just before its panel opens.
   function viewForOpen() {
     view = Onboarding.view(onboardingStep, player.loaded, null)
+    prefetchCatchup()
   }
 
   function showView(name) {
@@ -287,7 +299,90 @@ Item {
   }
 
   function playNow(asin, startSec) {
-    return player.play(booksDir + "/" + asin + "/book.m4b", startSec) ? "ok" : "error: " + player.lastError
+    if (player.play(booksDir + "/" + asin + "/book.m4b", startSec)) return "ok"
+    notifyPlayFailed(player.lastError)
+    return "error: " + player.lastError
+  }
+
+  // Every ⏯ (Mini, Space, middle-click, the `playPause` hotkey). Pausing is
+  // immediate. Resuming after a long pause first reads the account, so a book
+  // listened to on the phone continues from there (SCOPE FR-P4); a second ⏯
+  // while that read runs cancels the resume.
+  function playPause() {
+    if (!player.loaded) return "error: nothing loaded"
+    if (player.playing) {
+      catchupAsin = ""
+      catchupTimer.stop()
+      player.pause()
+      return "ok"
+    }
+    if (catchupAsin.length > 0) {
+      catchupAsin = ""
+      catchupTimer.stop()
+      return "cancelled"
+    }
+    var asin = loadedAsin
+    if (!Catchup.needsRead(pausedAtMs, Date.now())) {
+      player.resume()
+      return "ok"
+    }
+    if (Catchup.prefetchUsable(prefetched, asin, Date.now())) {
+      resumeCaughtUp(asin, prefetched.remote)
+      return "ok"
+    }
+    catchupAsin = asin
+    catchupTimer.restart()
+    if (catchupReading !== asin && !readCatchup(asin)) resumeCaughtUp(asin, null)
+    return "checking"
+  }
+
+  // Opening the drawer on a book paused long enough starts the read early,
+  // so ⏯ usually finds it done.
+  function prefetchCatchup() {
+    if (!player.loaded || player.playing || catchupReading.length > 0) return
+    var asin = loadedAsin
+    if (!Catchup.needsRead(pausedAtMs, Date.now()) || Catchup.prefetchUsable(prefetched, asin, Date.now())) return
+    readCatchup(asin)
+  }
+
+  function readCatchup(asin) {
+    if (!run("position-get", [asin], "catchup")) return false
+    catchupReading = asin
+    return true
+  }
+
+  // Resume `asin`, first jumping to `remote` (an account entry, or null)
+  // when it is newer than the position saved here.
+  function resumeCaughtUp(asin, remote) {
+    catchupAsin = ""
+    catchupTimer.stop()
+    prefetched = null
+    if (!player.loaded || loadedAsin !== asin || player.playing) return
+    if (remote) {
+      var local = store.doc.books ? store.doc.books[asin] : null
+      var target = Catchup.jumpTarget(player.positionMs,
+        local ? Positions.parseUpdatedAt(local.updated_at) : null,
+        remote.ms, Positions.parseUpdatedAt(remote.updated_at))
+      if (target >= 0) {
+        logEvent("catchup", "jump " + Math.round(player.positionMs) + " -> " + target)
+        player.seekMs(target)
+      }
+    }
+    player.resume()
+  }
+
+  function notifyPlayFailed(message) {
+    var text = String(message || "").length > 0 ? String(message) : "the player did not start"
+    logEvent("player", "failed: " + text)
+    Quickshell.execDetached(["notify-send", "--app-name=Omarchy Audible",
+      "Couldn't start playback", text])
+  }
+
+  // A fake-mode mpv must not outlive a switch to real mode (G3 finding 1).
+  // Never the other way round: fake mode leaves a real player alone.
+  function stopOtherModePlayer() {
+    if (root.fake) return
+    Quickshell.execDetached(["systemctl", "--user", "stop", "omarchy-audible-fake-mpv.scope"])
   }
 
   function finishResume(asin, remoteEntry) {
@@ -581,8 +676,12 @@ Item {
     socketPath: root.runtimeDir.length > 0 ? root.runtimeDir + "/mpv.sock" : ""
     // Low in fake mode: the fake book is a sine wave.
     initialVolume: root.fake ? 15 : 100
+    unitName: root.fake ? "omarchy-audible-fake-mpv" : "omarchy-audible-mpv"
     // Reattach once the paths are known.
-    onSocketPathChanged: if (socketPath.length > 0) attach()
+    onSocketPathChanged: if (socketPath.length > 0) {
+      root.stopOtherModePlayer()
+      attach()
+    }
   }
 
   LibraryModel {
@@ -620,9 +719,26 @@ Item {
 
     // Pause, stop or a crash: save where the book stopped.
     function onPlayingChanged() {
-      if (!player.playing) root.savePosition(root.snapAsin, root.snapMs, true)
-      else root.reopenOnMini()
+      if (!player.playing) {
+        root.pausedAtMs = Date.now()
+        root.savePosition(root.snapAsin, root.snapMs, true)
+      } else {
+        root.reopenOnMini()
+      }
     }
+
+    // A play that never started says so (G3 finding 2). lastError is set
+    // after the connection changes, so read it a moment later.
+    function onConnectionChanged() {
+      if (player.connection === "failed") Qt.callLater(function() { root.notifyPlayFailed(player.lastError) })
+    }
+  }
+
+  Timer {
+    id: catchupTimer
+    interval: Catchup.READ_TIMEOUT_MS
+    repeat: false
+    onTriggered: root.resumeCaughtUp(root.catchupAsin, null)
   }
 
   Timer {
@@ -710,9 +826,7 @@ Item {
     }
 
     function playPause(): string {
-      if (!player.loaded) return "error: nothing loaded"
-      player.toggle()
-      return "ok"
+      return root.playPause()
     }
 
     function skip(seconds: string): string {
@@ -837,6 +951,9 @@ Item {
         root.refreshLocal()
       } else if (record.type === "local") {
         library.localBooks = record.books
+      } else if (record.type === "positions" && job.purpose === "catchup") {
+        var read = job.args[0]
+        root.prefetched = { "asin": read, "atMs": Date.now(), "remote": record.items[read] || null }
       } else if (record.type === "positions" && job.purpose === "resume") {
         var resumed = job.args[0]
         var remotes = root.resumeRemotes
@@ -865,6 +982,14 @@ Item {
       root.logEvent(job.command + " exit", text)
       root.failures = Playback.updateFailures(root.failures, job, outcome)
       sync.handleFinished(job, outcome)
+      if (job.purpose === "catchup") {
+        var readAsin = job.args[0]
+        if (root.catchupReading === readAsin) root.catchupReading = ""
+        if (!outcome.ok) root.prefetched = null
+        if (root.catchupAsin === readAsin) {
+          root.resumeCaughtUp(readAsin, root.prefetched && root.prefetched.asin === readAsin ? root.prefetched.remote : null)
+        }
+      }
       if (job.purpose === "resume") {
         var resumedAsin = job.args[0]
         var remote = outcome.ok ? (root.resumeRemotes[resumedAsin] || null) : null
