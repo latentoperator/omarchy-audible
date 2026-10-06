@@ -133,16 +133,16 @@ function bytes(n) {
   return number + " " + _p.BYTE_UNITS[unit];
 }
 
-// "No books on this laptop", "1 book \u00b7 12 MB", "3 books \u00b7 780 MB".
+// "No books on this device", "1 book \u00b7 12 MB", "3 books \u00b7 780 MB".
 // A missing size leaves just the count, e.g. "1 book".
 function storageLine(count, totalBytes) {
   var books = _p.amount(count);
   if (books === null) {
-    return "No books on this laptop";
+    return "No books on this device";
   }
   books = Math.floor(books);
   if (books === 0) {
-    return "No books on this laptop";
+    return "No books on this device";
   }
   var label = books === 1 ? "1 book" : books + " books";
   var size = bytes(totalBytes);

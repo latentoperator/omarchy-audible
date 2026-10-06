@@ -40,13 +40,13 @@ The user is an Omarchy user with an Audible account who works at the computer an
 - **FR-L1** Catalog sync pulls the full library metadata (title, authors, narrators, series, runtime, cover, date added, progress) into a local cache. Covers are cached as thumbnails.
 - **FR-L2** The catalog is available offline from cache. Sync runs at most once per N hours when the drawer opens, plus a manual refresh.
 - **FR-L3** Sorts: **Recently listened** (default), Recently added, Title, Author.
-- **FR-L4** Filters: All · On this laptop · In progress.
+- **FR-L4** Filters: All · On this device · In progress.
 - **FR-L5** Search is instant and case-insensitive across title, author, narrator, and series. The search field has focus when the drawer opens.
-- **FR-L6** Each row shows cover, title, author, runtime, a progress bar, and a state badge: ☁ cloud, ⬇ downloading (with progress), ● on this laptop.
+- **FR-L6** Each row shows cover, title, author, runtime, a progress bar, and a state badge: ☁ cloud, ⬇ downloading (with progress), ● on this device.
 
 ### 4.3 Local storage
 - **FR-S1** Selecting a cloud book downloads, converts, and then plays it. Only one download runs at a time, with a queue.
-- **FR-S2** "Remove from this laptop" is available on any local book, from the row menu and the full player.
+- **FR-S2** "Remove from this device" is available on any local book, from the row menu and the full player.
 - **FR-S3** Removal deletes only local files. It never calls an Audible delete or return endpoint. Tests must enforce this.
 - **FR-S4** The drawer shows total local usage ("3 books · 780 MB") and a "Remove all downloads" action.
 - **FR-S5** Setting **Auto-remove finished books**, default **Off**. When on, a book is removed after it is finished (position within 30s of the end, or EOF).
@@ -65,7 +65,7 @@ The user is an Omarchy user with an Audible account who works at the computer an
 - **FR-U1 Bar widget:** a book icon. It shows play/pause state when a book is loaded, and an optional title (setting). The tooltip shows "Title — Author · 3h 12m left". Left click opens the panel: the Mini view if a book is loaded, the Library view if not. Middle click toggles play/pause.
 - **FR-U2 Library view (drawer):** search, sort, filter, storage line, and the book list. Enter plays the highlighted row. Arrow keys navigate. Esc closes. A now-playing strip is pinned at the bottom when a book is loaded.
 - **FR-U3 Mini view:** cover thumbnail, title, author, current chapter (tap for the chapter list), scrub bar with elapsed and remaining time, ⏮ ⏪15 ⏯ ⏩15 ⏭, speed pill, a maximize button, a library button, and a dismiss ✕.
-- **FR-U4 Full view:** large cover, chapter list (current highlighted, click to jump), speed presets, sleep timer, book details (narrator, runtime, % complete), Remove from laptop, and a collapse button.
+- **FR-U4 Full view:** large cover, chapter list (current highlighted, click to jump), speed presets, sleep timer, book details (narrator, runtime, % complete), Remove from this device, and a collapse button.
 - **FR-U5 Dismissing** (✕, Esc, click-away) hides the panel and never stops playback.
 - **FR-U6 Theme:** every color, font, radius, and border comes from the shell's `Style`/theme singletons. No hard-coded colors. It must be checked against at least three Omarchy themes (one light, two dark) and a live theme switch while open.
 - **FR-U7 States:** every view has designed empty, loading, offline, and error states (see §6).

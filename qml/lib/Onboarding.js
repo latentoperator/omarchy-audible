@@ -101,7 +101,7 @@ _p.ERROR_TEXT = {
   },
   "disk_space": {
     "title": "Not enough disk space",
-    "body": "Free up some space on this laptop, then try again.",
+    "body": "Free up some space on this device, then try again.",
     "reconnect": false
   },
   "network": {
@@ -135,7 +135,7 @@ _p.ERROR_TEXT = {
     "reconnect": false
   },
   "not_local": {
-    "title": "Not on this laptop",
+    "title": "Not on this device",
     "body": "That book has not been downloaded.",
     "reconnect": false
   },
