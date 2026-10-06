@@ -271,8 +271,12 @@ ColumnLayout {
         questionText: confirming ? root.questionText(modelData) : ""
         onPicked: root.pickAt(index)
         onRemoveRequested: root.service.removeBook(modelData.asin)
-        // The question makes the row taller; keep all of it in view.
-        onHeightChanged: if (confirming) books.positionViewAtIndex(index, ListView.Contain)
+        // The question makes the row taller; keep all of it in view. Only for
+        // a question just opened on this row: a row recreated while the user
+        // scrolls back to an open question must not move the list.
+        property bool revealQuestion: false
+        onConfirmingChanged: revealQuestion = confirming
+        onHeightChanged: if (revealQuestion && confirming) books.positionViewAtIndex(index, ListView.Contain)
         onConfirmRequested: root.service.confirmDownload()
         onCancelRequested: root.service.cancelConfirm()
       }

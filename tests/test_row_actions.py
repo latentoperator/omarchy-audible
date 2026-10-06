@@ -131,4 +131,8 @@ def test_the_question_scrolls_into_view():
     # Codex R1 #1: a row at the bottom grows past the clipped list; Enter
     # again must never confirm a question the user can't fully see.
     library = read("qml/views/LibraryView.qml")
-    assert "onHeightChanged: if (confirming) books.positionViewAtIndex(index, ListView.Contain)" in library
+    assert "onHeightChanged: if (revealQuestion && confirming) books.positionViewAtIndex(index, ListView.Contain)" in library
+    # Codex R2: only a question just opened scrolls; a delegate recreated with
+    # `confirming` already true starts with revealQuestion false.
+    assert "property bool revealQuestion: false" in library
+    assert "onConfirmingChanged: revealQuestion = confirming" in library
