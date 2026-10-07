@@ -214,7 +214,7 @@ Depends on S5/S6 results and the fake backend.
 
 - [ ] **B11 — Drop the decrypted copy** (tier B; S7 = go and D7 = go, both 2026-10-06; design in SPIKE-RESULTS S7 → D7. Split: backend `get`/`remove`/`local` on Hopebox Kanban, `PlayerController` load path on the desktop)
   `get` keeps the original aaxc/aax plus its key material (`0600`) instead of converting; the free-space check falls to ~1×; `PlayerController` passes the key the S7 way; chapters come from `chapters.json`; `remove` deletes the key material too. Existing `.m4b` books keep playing as they are; only new downloads are locked. README and SCOPE §7 say no unlocked copy is stored.
-  Acceptance: fake and real-mode get → play → seek → chapter → resume → remove on the desktop, including one 100+ chapter book; a PCM-decode test (not just `file-loaded`) proves the unlock; no key in any process's argv (`ps -eo args`), logs or `recentEvents`; contract tests updated.
+  Acceptance: fake and real-mode get → play → seek → chapter → resume → remove on the desktop, including one 100+ chapter book; a PCM-decode test (not just `file-loaded`) proves the unlock; no key in any process's argv (`ps -eo args`), logs or `recentEvents`; contract tests updated; J6 in full in real mode (finish a book → Remove from this device → download it again → it resumes where Audible says, including the finished-book Resume / Start over prompt), carried over from G4.
 
 - [x] **U5 — Mini view, complete** (tier B; needs G3, extends U2a)
   Per SCOPE FR-U3: cover, title/author, current chapter with a tap-to-open chapter popup, scrub bar (drag to seek, elapsed/remaining), ⏮ ⏪N ⏯ ⏩N ⏭, speed pill that cycles presets, maximize, library, dismiss.
@@ -228,7 +228,14 @@ Depends on S5/S6 results and the fake backend.
   A compact pinned strip showing title, play/pause, and ⏪/⏩, tapping it opens Mini.
   Acceptance: visible only when a book is loaded; no layout jump when it appears.
 
+- [ ] **U8 — Library button in the Full view** (tier A; Chris, G4) — Full has collapse, ✕ and Backspace but no way to reach the Library directly; add the same library button Mini has (FR-U3), and add it to FR-U4.
+  Acceptance: one click from Full opens Library with playback untouched; the now-playing strip still leads back to Mini.
+
+- [ ] **U9 — Pause lag check** (tier B; G4 finding) — audio carries on for about a second after ⏯. The plugin sends one `set pause` over IPC, so first measure the gap (IPC send → `pause` property change → silence) and try mpv's `--audio-buffer` and PipeWire latency. Change something only if the cause is in our hands and the fix doesn't cause dropouts.
+  Acceptance: a measured cause is written down; pause is clearly faster, or the reason it can't be is written down.
+
 **GATE G4** — all journeys J1–J7 pass in `docs/MANUAL-TEST.md` under three themes (one light, two dark) plus a live theme switch while the panel is open.
+  *Passed 2026-10-06 (Dante's ruling on #56):* the journeys ran under one theme, and each of the three themes was checked across Mini, Full and Library with a real book loaded. That meets the gate: themes only change colours (theme tokens, DoD 4), not journey logic, and every view was seen under each theme, including a live switch with Full open. J6's re-download-and-resume half was not run at G4. The same path (download a cloud book, resume from Audible's position) passed in J2, and B11 rewrites `get`/`remove`, so that check is now part of B11's acceptance.
 
 ---
 
@@ -239,7 +246,7 @@ Depends on S5/S6 results and the fake backend.
 - [ ] **R3 — MPRIS (optional)** (tier B) — detect `mpv-mpris`; if installed, pass `--script=`; confirm media keys and the stock media widget. Document the optional package. Never required.
 - [ ] **R4 — Idle-cost audit** (tier B) — verify no timers/polling when nothing plays, and measure memory (target < 100 MB excluding mpv). Fix offenders.
 - [ ] **R5 — Clean-install test** (tier B) — on a fresh Omarchy install (VM or a spare user account): `omarchy plugin add <repo-url> --enable --yes`, then J1 → J7 using only the UI. Record time to first audio (target ≤ 5 min).
-- [ ] **R6 — Docs and release assets** (tier A) — README with screenshots/GIF, install, hotkeys, FAQ ("Does removing a book delete it from Audible?" → no), the legal/ToS statement from SCOPE §7, a **"What setup installs" section** documenting the first-run venv and `pip install` (what is downloaded, from where, where it is written, how to remove it) as the marketplace asks, CHANGELOG, LICENSE (AGPL-3.0-only, added at G0), `docs/RELEASING.md` (including `omarchy plugin validate .`), tag `v0.1.0`.
+- [ ] **R6 — Docs and release assets** (tier A) — README with screenshots/GIF, install, hotkeys, FAQ ("Does removing a book delete it from Audible?" → no), the legal/ToS statement from SCOPE §7, a **"What setup installs" section** documenting the first-run venv and `pip install` (what is downloaded, from where, where it is written, how to remove it) as the marketplace asks, CHANGELOG, LICENSE (AGPL-3.0-only, added at G0), `docs/RELEASING.md` (including `omarchy plugin validate .`), tag `v0.1.0`. For the test IPC methods R6 keeps or removes: `libraryQuery` sets the drawer's live sort, filter and search (G4 finding), so it must not be documented as a read. Use `libraryState` to read counts, or make `libraryQuery` side-effect-free.
 - [ ] **R7 — Marketplace submission** (tier maintainer) — repo must be public with `manifest.json`, README, and license. Read https://plugins.omarchy.org/publish.html first, then submit via its issue form with a category and 1–3 tags. Expect automated validation of the exact commit and a maintainer decision; a maintainer may decline a plugin that decrypts DRM, so be ready to rely on `omarchy plugin add <git-url>` instead.
 
 ---
@@ -255,4 +262,4 @@ Depends on S5/S6 results and the fake backend.
 
 ## Suggested order for a single agent working alone
 
-A0 → S6 → S5 → S1 → S2 → S4 → S3 → (G0) → B1 → B7 → B5 → B4 → B2 → B3 → B6 → (G1) → P1 → P2 → P3 → P5 → P4 → (G2) → U4 → U1 → U2a → U2 → U3 → (G3) → U5 → U6 → U7 → (G4) → R1 … R7.
+A0 → S6 → S5 → S1 → S2 → S4 → S3 → (G0) → B1 → B7 → B5 → B4 → B2 → B3 → B6 → (G1) → P1 → P2 → P3 → P5 → P4 → (G2) → U4 → U1 → U2a → U2 → U3 → (G3) → U5 → U6 → U7 → (G4) → B11 → U8 → U9 → R1 … R7.
