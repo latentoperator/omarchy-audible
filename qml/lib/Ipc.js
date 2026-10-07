@@ -29,3 +29,20 @@ function parseSeconds(text) {
   }
   return value;
 }
+
+// What a test-only method returns outside fake mode (H1 F27).
+var DEV_ONLY = "error: dev only";
+
+// Methods anyone may call in real mode: the documented controls (README
+// "Hotkeys and IPC", ARCHITECTURE 6) that keybindings use.
+var PUBLIC_METHODS = ["toggle", "openLibrary", "playPause", "skip", "nextChapter", "prevChapter"];
+
+// Methods that only read state. They stay in real mode so a session can
+// confirm which mode the shell is in and that the service is attached
+// (FOLLOWUPS-desktop §0 and §5); none of them changes anything.
+var STATUS_METHODS = ["playerStatus", "libraryState", "onboardingState", "panelState", "pushState", "events"];
+
+// Every other method is test-only: it works only in fake mode.
+function isRealModeMethod(name) {
+  return PUBLIC_METHODS.indexOf(name) !== -1 || STATUS_METHODS.indexOf(name) !== -1;
+}

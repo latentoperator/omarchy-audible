@@ -657,3 +657,11 @@ function searchRows(rows, text) {
     return true;
   });
 }
+
+// The rows the drawer shows for a sort, filter and search: sorted, then
+// filtered, then searched. A new array; `rows` is never changed. The drawer's
+// own list and the dev `libraryQuery` both use it, so a query computes the
+// same rows without touching the drawer's settings (U10a).
+function queryRows(rows, sortKey, filterKey, searchText) {
+  return searchRows(filterRows(sortRows(rows, sortKey), filterKey), searchText);
+}

@@ -299,6 +299,11 @@ Shell IPC target `latentoperator.audible`, registered by an `IpcHandler` in `Ser
 `toggle`, `playPause`, `skip <seconds>`, `nextChapter`, `prevChapter`, `openLibrary`. Arguments and return values are strings.
 Call syntax ✅: `omarchy-shell latentoperator.audible toggle`. Example Hyprland binding: `bind = SUPER, A, exec, omarchy-shell latentoperator.audible toggle`.
 
+Which methods work in real mode (H1 F27) is listed in `qml/lib/Ipc.js`, and a test checks `Service.qml` against it:
+- **Public**, for keybindings and users: the six above.
+- **Status**, read-only, kept so a session can confirm the mode and that the service is attached: `playerStatus`, `libraryState`, `onboardingState`, `panelState`, `pushState`, `events`.
+- **Test-only**, everything else (`play`, `pause`, `quitPlayer`, `removeBook`, `syncNow`, `libraryQuery`, `view`, …): each returns `error: dev only` unless the dev-fake flag was present when the service loaded. `libraryQuery` computes its rows from a copy (`Library.queryRows`) and never changes the drawer's sort, filter or search.
+
 ## 7. Media keys / MPRIS (optional, M5)
 mpv does not export MPRIS by itself. The AUR/Arch package `mpv-mpris` provides it, which would make hardware media keys, `playerctl`, and Omarchy's stock media widget see the book. Make it **optional**: if the script is installed, pass it to mpv with `--script=`; otherwise skip. Do not make it a hard dependency.
 

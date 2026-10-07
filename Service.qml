@@ -7,6 +7,7 @@ import "qml/lib/Drawer.js" as Drawer
 import "qml/lib/EventLog.js" as EventLog
 import "qml/lib/Format.js" as Format
 import "qml/lib/Ipc.js" as Ipc
+import "qml/lib/Library.js" as Library
 import "qml/lib/LibraryUi.js" as LibraryUi
 import "qml/lib/Onboarding.js" as Onboarding
 import "qml/lib/Panel.js" as Panel
@@ -516,12 +517,11 @@ Item {
     return local && typeof local.ms === "number" ? local.ms / 1000 : 0
   }
 
-  // One line per visible row, for IPC checks (a test method, see below).
+  // One line per row for a sort, filter and search, for IPC checks (a test
+  // method, see below). The rows come from a copy: the drawer's own sort,
+  // filter and search are left as they are (U10a).
   function libraryQuery(sort, filter, search) {
-    library.sortKey = sort
-    library.filterKey = filter
-    library.searchText = search
-    return library.rows.map(function(row) {
+    return Library.queryRows(library.allRows, sort, filter, search).map(function(row) {
       return row.asin + "|" + row.title + "|" + row.state + "|" + Math.round(row.percent) + "%|" + row.positionMs
     }).join("\n")
   }
@@ -982,28 +982,29 @@ Item {
       return "ok"
     }
 
-    // Test methods so agents can drive the service without input. They stay
-    // through M3; R6 documents or removes them.
-    function play(asin: string): string { root.noteIntent(asin); return root.playBook(asin, -1) }
-    function playAt(asin: string, startSec: string): string { root.noteIntent(asin); return root.playBook(asin, Number(startSec) || 0) }
-    function pause(): string { player.pause(); return "ok" }
-    function resume(): string { player.resume(); return "ok" }
-    function chapter(index: string): string { player.setChapter(Number(index) || 0); return "ok" }
-    function speed(value: string): string { player.setSpeed(Number(value)); return "ok" }
-    function volume(value: string): string { player.setVolume(Number(value)); return "ok" }
-    function sleepMinutes(minutes: string): string { player.setSleepTimer(Number(minutes) || 0); return "ok" }
-    function sleepChapter(): string { player.setSleepEndOfChapter(); return "ok" }
-    function sleepCancel(): string { player.cancelSleep(); return "ok" }
-    function quitPlayer(): string { root.quitPlayer(); return "ok" }
+    // Test methods so agents can drive the service without input. Each one
+    // works only in fake mode and returns Ipc.DEV_ONLY otherwise (H1 F27);
+    // Ipc.js lists the public and read-only status methods that stay.
+    function play(asin: string): string { if (!root.fake) return Ipc.DEV_ONLY; root.noteIntent(asin); return root.playBook(asin, -1) }
+    function playAt(asin: string, startSec: string): string { if (!root.fake) return Ipc.DEV_ONLY; root.noteIntent(asin); return root.playBook(asin, Number(startSec) || 0) }
+    function pause(): string { if (!root.fake) return Ipc.DEV_ONLY; player.pause(); return "ok" }
+    function resume(): string { if (!root.fake) return Ipc.DEV_ONLY; player.resume(); return "ok" }
+    function chapter(index: string): string { if (!root.fake) return Ipc.DEV_ONLY; player.setChapter(Number(index) || 0); return "ok" }
+    function speed(value: string): string { if (!root.fake) return Ipc.DEV_ONLY; player.setSpeed(Number(value)); return "ok" }
+    function volume(value: string): string { if (!root.fake) return Ipc.DEV_ONLY; player.setVolume(Number(value)); return "ok" }
+    function sleepMinutes(minutes: string): string { if (!root.fake) return Ipc.DEV_ONLY; player.setSleepTimer(Number(minutes) || 0); return "ok" }
+    function sleepChapter(): string { if (!root.fake) return Ipc.DEV_ONLY; player.setSleepEndOfChapter(); return "ok" }
+    function sleepCancel(): string { if (!root.fake) return Ipc.DEV_ONLY; player.cancelSleep(); return "ok" }
+    function quitPlayer(): string { if (!root.fake) return Ipc.DEV_ONLY; root.quitPlayer(); return "ok" }
     function playerStatus(): string { return root.playerSummary() }
-    function libraryQuery(sort: string, filter: string, search: string): string { return root.libraryQuery(sort, filter, search) }
-    function flushState(): string { store.flush(); return "ok" }
-    function syncNow(): string { return root.run("sync", [], "ipc") ? "ok" : "refused" }
-    function pick(asin: string): string { return root.pick(asin) }
-    function answer(choice: string): string { return root.answerAsk(choice === "resume") }
-    function confirmDownload(): string { return root.confirmDownload() }
-    function cancelConfirm(): string { return root.cancelConfirm() }
-    function removeBook(asin: string): string { return root.removeBook(asin) }
+    function libraryQuery(sort: string, filter: string, search: string): string { if (!root.fake) return Ipc.DEV_ONLY; return root.libraryQuery(sort, filter, search) }
+    function flushState(): string { if (!root.fake) return Ipc.DEV_ONLY; store.flush(); return "ok" }
+    function syncNow(): string { if (!root.fake) return Ipc.DEV_ONLY; return root.run("sync", [], "ipc") ? "ok" : "refused" }
+    function pick(asin: string): string { if (!root.fake) return Ipc.DEV_ONLY; return root.pick(asin) }
+    function answer(choice: string): string { if (!root.fake) return Ipc.DEV_ONLY; return root.answerAsk(choice === "resume") }
+    function confirmDownload(): string { if (!root.fake) return Ipc.DEV_ONLY; return root.confirmDownload() }
+    function cancelConfirm(): string { if (!root.fake) return Ipc.DEV_ONLY; return root.cancelConfirm() }
+    function removeBook(asin: string): string { if (!root.fake) return Ipc.DEV_ONLY; return root.removeBook(asin) }
     function libraryState(): string {
       return JSON.stringify({ "list": root.listState, "ask": root.askAsin, "confirm": root.confirmAsin, "reopen": root.reopenAsin,
         "syncing": root.syncing, "lastSyncCode": root.lastSyncCode, "count": library.count,
@@ -1021,7 +1022,7 @@ Item {
     // Onboarding actions for tests: fake mode only, so IPC can never sign in,
     // sign out or set up the real account.
     function fakeOnboarding(action: string, arg: string): string {
-      if (!root.fake) return "error: fake mode only"
+      if (!root.fake) return Ipc.DEV_ONLY
       if (action === "status") { root.checkStatus(); return "ok" }
       if (action === "setup") return root.startSetup()
       if (action === "login") return root.startLogin(arg.length > 0 ? arg : Signin.DEFAULT_MARKETPLACE)
@@ -1034,17 +1035,17 @@ Item {
     }
     // Fake mode only: a download that fails with a `--fake-fail` mode.
     function fakeFailGet(asin: string, mode: string): string {
-      if (!root.fake) return "error: fake mode only"
+      if (!root.fake) return Ipc.DEV_ONLY
       return root.run("get", [asin, "--fake-fail", mode], "download") ? "ok" : "refused"
     }
-    function autoRemove(value: string): string { root.autoRemoveFinished = value === "on"; return "ok" }
+    function autoRemove(value: string): string { if (!root.fake) return Ipc.DEV_ONLY; root.autoRemoveFinished = value === "on"; return "ok" }
     function pushState(): string { return JSON.stringify({ "queue": sync.queue, "flushing": sync.flushing, "last": sync.lastResult,
       "staleCount": sync.consecutiveStale, "staleNotice": sync.staleNotice }) }
     // Opens the panel on a view (Onboarding.view still decides: Mini or Full
     // with nothing loaded shows the Library). Returns the view shown. Fake
     // mode only: opening the panel can read positions or start a sync.
     function view(name: string): string {
-      if (!root.fake) return "error: fake mode only"
+      if (!root.fake) return Ipc.DEV_ONLY
       if (Panel.VIEWS.indexOf(name) === -1) return "error: unknown view"
       var surface = root.primarySurface()
       if (!surface) return "error: no surface"
@@ -1053,6 +1054,7 @@ Item {
       return root.view
     }
     function chapterList(state: string): string {
+      if (!root.fake) return Ipc.DEV_ONLY
       if (state !== "open" && state !== "close") return "error: open or close"
       if (state === "open" && (!player.loaded || player.chapters.length === 0)) return "error: no chapters"
       root.chapterListOpen = state === "open"
