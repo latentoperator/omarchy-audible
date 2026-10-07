@@ -845,6 +845,8 @@ Item {
         root.pausedAtMs = Date.now()
         root.savePosition(root.snapAsin, root.snapMs, true)
       } else {
+        // Something plays again: an earlier play-info failure is old news.
+        root.playError = ""
         root.reopenOnMini()
       }
     }

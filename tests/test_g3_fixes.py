@@ -70,7 +70,10 @@ def test_mini_shows_the_player_error():
     # playFailure (Player.playFailure), which still includes the player's own.
     mini = read("qml/views/MiniView.qml")
     assert "root.service.playFailure" in mini
-    assert "Player.playFailure(player.connection, player.lastError, playError)" in read("Service.qml")
+    service = read("Service.qml")
+    assert "Player.playFailure(player.connection, player.lastError, playError)" in service
+    # The line goes away once a book plays again, not only on the next play attempt.
+    assert 'root.playError = ""' in function_body(service, "onPlayingChanged")
 
 
 # ---- 5: every play/pause goes through the service ----
