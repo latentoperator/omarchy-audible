@@ -167,3 +167,32 @@ def test_finished_download_does_not_play():
     assert "autoplay" not in service
     assert "latestPick" not in service
     assert "autoplayAllowed" not in read("qml/lib/Drawer.js")
+
+
+def test_u10b_the_question_is_on_the_row():
+    library = read("qml/views/LibraryView.qml")
+    row = read("qml/components/BookRow.qml")
+    service = read("Service.qml")
+    # The row knows its question is up and offers both answers.
+    assert (
+        "asking: root.service ? root.service.askAsin === modelData.asin : false"
+        in library
+    )
+    assert "onResumeRequested: root.service.answerAsk(true)" in library
+    assert "onStartOverRequested: root.service.answerAsk(false)" in library
+    assert "visible: root.asking" in row
+    assert "text: Drawer.ROW_ASK_TEXT" in row
+    assert 'text: "Resume"\n          onClicked: root.resumeRequested()' in row
+    assert 'text: "Start over"\n          onClicked: root.startOverRequested()' in row
+    # ▶ stays while the question is up, and picking the row answers Resume.
+    assert "visible: root.iconGlyph.length > 0 && !root.confirming" in row
+    pick = service[service.index("function pick(asin)") :]
+    pick = pick[: pick.index("LibraryUi.pickDecision(")]
+    assert "if (LibraryUi.pickAnswersAsk(row, askAsin)) return answerAsk(true)" in pick
+
+
+def test_f37_stop_clears_the_play_error():
+    service = read("Service.qml")
+    quit_ = service[service.index("function quitPlayer()") :]
+    quit_ = quit_[: quit_.index("player.quit()")]
+    assert 'playError = ""' in quit_

@@ -53,6 +53,7 @@ EXPECTED_API = {
     "estimatedBytes",
     "listState",
     "moveSelection",
+    "pickAnswersAsk",
     "pickDecision",
     "primaryAction",
     "resumeChoice",
@@ -704,3 +705,23 @@ def test_confirm_stays_only_for_a_downloadable_cloud_book(ui, library, catalog) 
     assert ui.call("confirmValid", "", cloud, False) is False
     assert ui.call("confirmValid", None, cloud, False) is False
     assert ui.call("confirmValid", cloud["asin"], None, False) is False
+
+
+# --- U10b: picking the asked book answers Resume -----------------------------
+def test_pick_answers_the_question_for_the_same_book(ui, library, catalog) -> None:
+    local = row_in_state(library, catalog, "local")
+    assert ui.call("pickAnswersAsk", local, local["asin"]) is True
+    # A different book asks (or plays) as usual.
+    assert ui.call("pickAnswersAsk", local, "B0FAKE9999") is False
+    # No question up.
+    assert ui.call("pickAnswersAsk", local, "") is False
+    assert ui.call("pickAnswersAsk", local, None) is False
+
+
+def test_pick_of_an_asked_book_that_cannot_play_goes_on_as_usual(
+    ui, library, catalog
+) -> None:
+    for state in ("cloud", "error", "downloading"):
+        row = row_in_state(library, catalog, state)
+        assert ui.call("pickAnswersAsk", row, row["asin"]) is False
+    assert ui.call("pickAnswersAsk", None, "B0FAKE0001") is False

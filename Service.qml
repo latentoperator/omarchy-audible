@@ -599,7 +599,7 @@ Item {
     if (!row) return "error: unknown book"
     // Picking the book whose Resume / Start over question is up answers it
     // with the default, Resume (U10b), instead of asking again.
-    if (askAsin === asin) return answerAsk(true)
+    if (LibraryUi.pickAnswersAsk(row, askAsin)) return answerAsk(true)
     // Decide first: noteIntent clears confirmAsin, and a second pick of the
     // book whose question is up is what confirms it.
     var decision = LibraryUi.pickDecision(row, syncFailure.offline, confirmAsin)
