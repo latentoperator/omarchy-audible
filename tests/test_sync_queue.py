@@ -55,3 +55,27 @@ def test_sendable_waits_for_a_fresh_read(sync):
     assert sync.call("sendable", send, ["A", "B"]) == [entry("A")]
     assert sync.call("sendable", send, None) == []
     assert sync.call("sendable", None, ["A"]) == []
+
+
+# --- staleNotice (P6, F1: a run of refused pushes is worth a line) -----------
+def test_stale_notice_is_silent_below_two(sync):
+    assert sync.call("staleNotice", 0) == ""
+    assert sync.call("staleNotice", 1) == ""
+
+
+def test_stale_notice_tells_the_user_after_two(sync):
+    line = sync.call("staleNotice", 2)
+    assert line != ""
+    assert "Audible" in line
+    assert "clock" in line
+    assert "\n" not in line
+    assert sync.call("staleNotice", 5) == line
+
+
+def test_stale_notice_never_throws_on_bad_input(sync):
+    for value in (None, "2", -1, True, [], {}):
+        assert sync.call("staleNotice", value) == ""
+
+
+def test_stale_notice_threshold_is_two(sync):
+    assert sync.evaluate("STALE_NOTICE_AFTER") == 2

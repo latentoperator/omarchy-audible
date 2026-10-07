@@ -87,17 +87,21 @@ def test_push_then_get_returns_the_pushed_position(
         run_cli("position-get", ASIN, fake=True), expect_last="done"
     )
     items = next(event for event in fetched if event["type"] == "positions")["items"]
-    assert items[ASIN] == {"ms": 1200, "updated_at": NEWER}
+    # The exact ms match with our own push is marked as our echo (P6, F1).
+    assert items[ASIN] == {"ms": 1200, "updated_at": NEWER, "own": True}
 
+    # `own` is a protocol marker only: remote.json keeps the plain entry.
     remote = json.loads(fake_paths.remote_file.read_text(encoding="utf-8"))
     assert remote[ASIN] == {"ms": 1200, "updated_at": NEWER}
 
 
-def test_push_without_at_stamps_now(run_cli, fake_paths: Paths):
-    assert run_cli("position-push", ASIN, "77", fake=True).returncode == 0
-    stored = _read_store(fake_paths)[ASIN]
-    assert stored["ms"] == 77
-    assert positions.parse_updated_at(stored["updated_at"]) is not None
+def test_push_without_at_is_refused(run_cli, validate_stream, fake_paths: Paths):
+    """F3: the old "default to now" made the stale check a no-op."""
+    result = run_cli("position-push", ASIN, "77", fake=True)
+    assert result.returncode == protocol.EXIT_USAGE
+    parsed = validate_stream(result, expect_last="error")
+    assert parsed[-1]["code"] == protocol.ErrorCode.INVALID_ARGS
+    assert not _store(fake_paths).exists()
 
 
 def test_push_keeps_the_other_stored_books(run_cli, fake_paths: Paths):
@@ -119,6 +123,11 @@ def test_a_push_older_than_the_stored_one_is_refused_as_stale(
     assert (
         run_cli("position-push", ASIN, "5000", "--at", NEWER, fake=True).returncode == 0
     )
+    # Another device moves further on: a different ms with a newer stamp, so it
+    # is not this device's own echo (F1).
+    _store(fake_paths).write_text(
+        json.dumps({ASIN: {"ms": 9000, "updated_at": NEWER}}), encoding="utf-8"
+    )
 
     stale = run_cli("position-push", ASIN, "1000", "--at", OLDER, fake=True)
     assert stale.returncode == protocol.EXIT_ERROR
@@ -126,7 +135,95 @@ def test_a_push_older_than_the_stored_one_is_refused_as_stale(
     assert parsed[-1]["code"] == protocol.ErrorCode.STALE
 
     # The refused push left the stored position alone.
-    assert _read_store(fake_paths)[ASIN] == {"ms": 5000, "updated_at": NEWER}
+    assert _read_store(fake_paths)[ASIN] == {"ms": 9000, "updated_at": NEWER}
+
+
+def test_our_own_echo_does_not_lock_us_out(run_cli, validate_stream, fake_paths: Paths):
+    """F1: with the server's clock ahead, our previous push looks newer."""
+    assert (
+        run_cli("position-push", ASIN, "1000", "--at", NEWER, fake=True).returncode == 0
+    )
+    # The account keeps our pushed ms but stamps it with a clock ahead of us.
+    ahead = "2026-03-01T11:00:00Z"
+    stored = _read_store(fake_paths)
+    stored[ASIN] = {"ms": 1000, "updated_at": ahead}
+    _store(fake_paths).write_text(json.dumps(stored), encoding="utf-8")
+
+    again = run_cli("position-push", ASIN, "2000", "--at", NEWER, fake=True)
+    assert again.returncode == 0, again.stderr
+    validate_stream(again, expect_last="done")
+    assert _read_store(fake_paths)[ASIN]["ms"] == 2000
+
+
+# --- pushed.json remembers our own writes (P6, F1) ---------------------------
+def test_pushed_json_survives_across_cli_processes(run_cli, fake_paths: Paths):
+    assert (
+        run_cli("position-push", ASIN, "1200", "--at", NEWER, fake=True).returncode == 0
+    )
+    pushed = fake_paths.pushed_file
+    assert json.loads(pushed.read_text(encoding="utf-8")) == {
+        ASIN: {"ms": 1200, "at": NEWER}
+    }
+
+    # A second, separate process (a `position-get`) reads the same record back.
+    fetched = run_cli("position-get", ASIN, fake=True)
+    assert fetched.returncode == 0, fetched.stderr
+    items = json.loads(fetched.stdout.splitlines()[0])["items"]
+    assert items[ASIN]["own"] is True
+    # ...and the record is still exactly what the first process wrote.
+    assert json.loads(pushed.read_text(encoding="utf-8")) == {
+        ASIN: {"ms": 1200, "at": NEWER}
+    }
+
+
+def test_a_failed_push_does_not_update_pushed_json(
+    run_cli, validate_stream, fake_paths: Paths
+):
+    assert (
+        run_cli("position-push", ASIN, "5000", "--at", NEWER, fake=True).returncode == 0
+    )
+    before = fake_paths.pushed_file.read_text(encoding="utf-8")
+
+    # Another device moves further on: a different ms with a newer stamp, so
+    # the push is refused as stale.
+    _store(fake_paths).write_text(
+        json.dumps({ASIN: {"ms": 9000, "updated_at": NEWER}}), encoding="utf-8"
+    )
+    stale = run_cli(
+        "position-push", ASIN, "1000", "--at", "2026-01-01T00:00:00Z", fake=True
+    )
+    assert stale.returncode == protocol.EXIT_ERROR
+    assert validate_stream(stale, expect_last="error")[-1]["code"] == (
+        protocol.ErrorCode.STALE
+    )
+    assert fake_paths.pushed_file.read_text(encoding="utf-8") == before
+
+
+def test_position_get_marks_own_only_for_an_exact_ms_match(
+    run_cli, validate_stream, fake_paths: Paths
+):
+    assert (
+        run_cli("position-push", ASIN, "1200", "--at", NEWER, fake=True).returncode == 0
+    )
+    # The account holds our push and, for the other book, a phone position.
+    _store(fake_paths).write_text(
+        json.dumps(
+            {
+                ASIN: {"ms": 1200, "updated_at": NEWER},
+                OTHER: {"ms": 1201, "updated_at": NEWER},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    parsed = validate_stream(
+        run_cli("position-get", ASIN, OTHER, fake=True), expect_last="done"
+    )
+    items = next(event for event in parsed if event["type"] == "positions")["items"]
+    assert items[ASIN] == {"ms": 1200, "updated_at": NEWER, "own": True}
+    # One millisecond off is not our echo, and a never-pushed book is not either.
+    assert items[OTHER] == {"ms": 1201, "updated_at": NEWER}
+    assert "own" not in items[OTHER]
 
 
 def test_sync_fake_writes_the_stored_positions_into_remote_json(
@@ -154,6 +251,9 @@ def test_the_store_lives_only_in_the_fake_tree(run_cli, env, fake_paths: Paths):
     real = Paths.from_env(env)
     assert _store(fake_paths).is_file()
     assert not (real.data_dir / FAKE_FILE).exists()
+    # Our own-push record stays in the fake tree too (P6).
+    assert fake_paths.pushed_file.is_file()
+    assert not real.pushed_file.exists()
 
 
 # --- real mode is unchanged --------------------------------------------------
@@ -183,6 +283,10 @@ def test_real_mode_push_uses_the_real_port_and_no_fake_store(
     assert port.pushed == [(ASIN, "METAACR", 2000)]
     assert port.updated_at == NEWER
     assert not (paths.data_dir / FAKE_FILE).exists()
+    # Real mode records its own successful push in its own data dir (P6, F1).
+    assert json.loads(paths.pushed_file.read_text(encoding="utf-8")) == {
+        ASIN: {"ms": 2000, "at": NEWER}
+    }
 
 
 # --- the port directly -------------------------------------------------------

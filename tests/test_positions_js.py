@@ -18,6 +18,7 @@ VECTORS_PATH = Path(__file__).resolve().parent / "fixtures" / "position-vectors.
 VECTORS = json.loads(VECTORS_PATH.read_text(encoding="utf-8"))
 PARSE_CASES = VECTORS["parse_updated_at"]
 MERGE_CASES = VECTORS["merge"]
+PUSH_CASES = VECTORS["push_decision"]
 
 ASIN = "B00FAKE01"
 OTHER = "B00FAKE02"
@@ -250,6 +251,71 @@ def test_flush_plan_without_a_remote_keeps_everything(module: qjs.JsModule) -> N
     assert plan["drop"] == []
     assert len(plan["send"]) == 1
     assert module.call("flushPlan", None, None) == {"send": [], "drop": []}
+
+
+# --- flushPlan and the own echo (P6, F1) ------------------------------------
+def test_flush_plan_keeps_a_push_whose_remote_item_is_our_own_echo(
+    module: qjs.JsModule,
+) -> None:
+    """The account stamps our push with its later clock; that is not newer."""
+    queue = [push(ASIN, 2000, "2026-02-01T12:00:00Z")]
+    remote = {
+        ASIN: {"ms": 1000, "updated_at": "2026-02-01 12:10:00.0", "own": True},
+    }
+    plan = module.call("flushPlan", queue, remote)
+    assert plan["drop"] == []
+    assert plan["send"] == [{"asin": ASIN, "ms": 2000, "at": "2026-02-01T12:00:00Z"}]
+
+
+def test_flush_plan_still_drops_a_phone_position_with_a_newer_stamp(
+    module: qjs.JsModule,
+) -> None:
+    queue = [push(ASIN, 2000, "2026-02-01T12:00:00Z")]
+    remote = {ASIN: {"ms": 5000, "updated_at": "2026-02-01 12:10:00.0"}}
+    plan = module.call("flushPlan", queue, remote)
+    assert plan["send"] == []
+    assert plan["drop"] == [{"asin": ASIN, "ms": 2000, "at": "2026-02-01T12:00:00Z"}]
+
+
+def test_flush_plan_drops_a_queued_push_with_no_listening_time(
+    module: qjs.JsModule,
+) -> None:
+    """`--at` is required (F3), so a queue entry without one can never send."""
+    queue = [push(ASIN, 1000, None)]
+    remote = {ASIN: {"ms": 0, "updated_at": None}}
+    plan = module.call("flushPlan", queue, remote)
+    assert plan["send"] == []
+    assert plan["drop"] == [{"asin": ASIN, "ms": 1000, "at": None}]
+    assert module.call("flushPlan", [push(ASIN, 1000, "")], remote)["drop"] == [
+        {"asin": ASIN, "ms": 1000, "at": None}
+    ]
+
+
+def _remote_for_vector(case: dict):
+    """The `positions` item the backend would emit for a decision vector.
+
+    An exact ms match with the recorded push is the only thing that becomes
+    `own: true` (the backend annotation `mark_own_echoes`).
+    """
+    remote = case["remote"]
+    if not isinstance(remote, dict):
+        return remote
+    item = {"ms": remote["ms"], "updated_at": remote["updated_at"]}
+    if case["pushed_ms"] is not None and remote["ms"] == case["pushed_ms"]:
+        item["own"] = True
+    return item
+
+
+@pytest.mark.parametrize("case", PUSH_CASES, ids=[case["name"] for case in PUSH_CASES])
+def test_flush_plan_matches_the_push_decision_vector(
+    module: qjs.JsModule, case: dict
+) -> None:
+    """The shared P6 vectors decide flushPlan exactly as the Python rule does."""
+    entry = push(ASIN, 111, case["at"])
+    item = _remote_for_vector(case)
+    plan = module.call("flushPlan", [entry], {} if item is None else {ASIN: item})
+    assert len(plan["drop"]) == (1 if case["stale"] else 0)
+    assert len(plan["send"]) == (0 if case["stale"] else 1)
 
 
 # --- isFinished (ARCHITECTURE 5.2) -------------------------------------------
