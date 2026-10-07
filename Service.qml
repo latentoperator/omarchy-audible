@@ -11,6 +11,7 @@ import "qml/lib/LibraryUi.js" as LibraryUi
 import "qml/lib/Onboarding.js" as Onboarding
 import "qml/lib/Panel.js" as Panel
 import "qml/lib/Playback.js" as Playback
+import "qml/lib/Player.js" as Player
 import "qml/lib/Positions.js" as Positions
 import "qml/lib/Signin.js" as Signin
 
@@ -72,6 +73,13 @@ Item {
   // Failed downloads by ASIN, shown as the row's error state until retried.
   property var failures: ({})
   property string pendingResume: ""
+  // The book a `play-info` is being read for (B11): {asin, startSec}, or
+  // null. Only the newest request plays; a reply for an older one is dropped.
+  property var playRequest: null
+  // Why the last `play-info` failed. With the player's own failure, the
+  // views' "Couldn't start playback" line.
+  property string playError: ""
+  readonly property string playFailure: Player.playFailure(player.connection, player.lastError, playError)
   property string removeCandidate: ""
   property var resumeRemotes: ({})
 
@@ -314,10 +322,37 @@ Item {
     return "ok"
   }
 
+  // Every way into playback ends here. The backend says which file to load
+  // and with which key (`play-info`, B11); startPlayInfo does the load.
   function playNow(asin, startSec) {
-    if (player.play(booksDir + "/" + asin + "/book.m4b", startSec)) return "ok"
-    notifyPlayFailed(player.lastError)
-    return "error: " + player.lastError
+    playError = ""
+    playRequest = { "asin": asin, "startSec": startSec }
+    if (run("play-info", [asin], "play")) return "ok"
+    playRequest = null
+    return failPlay("the backend is not ready")
+  }
+
+  // `record` is the play_info event. Its `lavf_options` is the book's key: it
+  // goes straight to the player and is kept nowhere here.
+  function startPlayInfo(asin, record) {
+    if (!playRequest || playRequest.asin !== asin) return
+    var startSec = playRequest.startSec
+    playRequest = null
+    if (!player.play(String(record.path || ""), startSec,
+        { "lavf": record.lavf_options, "chaptersFile": record.chapters_file })) failPlay(player.lastError)
+  }
+
+  // play-info ended without giving this request a file to play.
+  function finishPlayInfo(asin, outcome) {
+    if (!playRequest || playRequest.asin !== asin) return
+    playRequest = null
+    failPlay(outcome.ok ? "the backend sent no book to play" : String(outcome.message || outcome.code || "unknown error"))
+  }
+
+  function failPlay(message) {
+    playError = message
+    notifyPlayFailed(message)
+    return "error: " + message
   }
 
   // Every ⏯ (Mini, Space, middle-click, the `playPause` hotkey). Pausing is
@@ -724,7 +759,7 @@ Item {
 
   function playerSummary() {
     return JSON.stringify({
-      "connection": player.connection, "error": player.lastError,
+      "connection": player.connection, "error": player.lastError, "playError": root.playError,
       "loaded": player.loaded, "playing": player.playing,
       "positionMs": player.positionMs, "durationMs": player.durationMs,
       "chapterIndex": player.chapterIndex, "chapters": player.chapters.length,
@@ -1052,6 +1087,8 @@ Item {
         var results = root.catchupResults
         results[read] = { "asin": read, "atMs": Date.now(), "remote": record.items[read] || null }
         root.catchupResults = results
+      } else if (record.type === "play_info" && job.purpose === "play") {
+        root.startPlayInfo(job.args[0], record)
       } else if (record.type === "positions" && job.purpose === "resume") {
         var resumed = job.args[0]
         var remotes = root.resumeRemotes
@@ -1092,6 +1129,7 @@ Item {
         else if (root.prefetched && root.prefetched.asin === readAsin) root.prefetched = null
         if (Catchup.readResumes(root.catchupAsin, readAsin)) root.resumeCaughtUp(readAsin, result ? result.remote : null)
       }
+      if (job.command === "play-info" && job.purpose === "play") root.finishPlayInfo(job.args[0], outcome)
       if (job.purpose === "resume") {
         var resumedAsin = job.args[0]
         var remote = outcome.ok ? (root.resumeRemotes[resumedAsin] || null) : null

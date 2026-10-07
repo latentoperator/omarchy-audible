@@ -148,6 +148,21 @@ function loadCommand(path, startSec, options) {
   return ["loadfile", String(path), "replace", -1, map];
 }
 
+// The `loadCommand` options for a book from `play-info`'s {lavf, chaptersFile},
+// or null when both are empty (an old `.m4b`), so that book keeps the plain
+// loadfile form it has always used.
+function loadOptions(options) {
+  if (isNull(options) || typeof options !== "object") {
+    return null;
+  }
+  var lavf = typeof options.lavf === "string" ? options.lavf : "";
+  var chaptersFile = typeof options.chaptersFile === "string" ? options.chaptersFile : "";
+  if (lavf.length === 0 && chaptersFile.length === 0) {
+    return null;
+  }
+  return { "lavf": lavf, "chaptersFile": chaptersFile };
+}
+
 // Drop the key material from mpv's options after the file is loaded: the key is
 // readable over the socket while `demuxer-lavf-o` is set (SPIKE-RESULTS S7).
 function clearKeyCommand() {

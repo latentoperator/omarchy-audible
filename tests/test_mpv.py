@@ -209,3 +209,24 @@ def test_sleep_remaining(mpv):
     assert mpv.call("sleepRemainingMs", None, 0, 0, 1) == -1
     assert mpv.call("sleepRemainingMs", {"mode": "x"}, 0, 0, 1) == -1
     assert mpv.call("sleepRemainingMs", {"mode": "chapter"}, 0, 0, 1) == -1
+
+
+@pytest.mark.parametrize("options", [None, {}, {"lavf": "", "chaptersFile": None}, {"lavf": None, "chaptersFile": ""}, "k", 3])
+def test_load_options_empty_keeps_the_plain_form(mpv, options):
+    # An old .m4b: play-info sends "" and null, and the load stays the plain one.
+    assert mpv.call("loadOptions", options) is None
+    assert mpv.call("loadCommand", "/b/book.m4b", 7, mpv.call("loadOptions", options)) == [
+        "loadfile", "/b/book.m4b", "replace", 0, "start=7"]
+
+
+def test_load_options_locked_book(mpv):
+    options = mpv.call("loadOptions", {"lavf": "k=1", "chaptersFile": "/b/chapters.txt", "extra": "x"})
+    assert options == {"lavf": "k=1", "chaptersFile": "/b/chapters.txt"}
+    assert mpv.call("loadCommand", "/b/book.aaxc", 5, options) == [
+        "loadfile", "/b/book.aaxc", "replace", -1,
+        {"start": "5", "demuxer-lavf-o": "k=1", "chapters-file": "/b/chapters.txt"}]
+
+
+def test_load_options_chapters_only(mpv):
+    assert mpv.call("loadOptions", {"lavf": "", "chaptersFile": "/b/chapters.txt"}) == {
+        "lavf": "", "chaptersFile": "/b/chapters.txt"}
