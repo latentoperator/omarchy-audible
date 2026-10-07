@@ -337,7 +337,7 @@ Item {
     playRequest = request
     if (run(PlayRequest.COMMAND, [asin], request.purpose)) return "ok"
     playRequest = null
-    return failPlay("the backend is not ready")
+    return failPlay(asin, "", "the backend is not ready")
   }
 
   // `record` is the play_info event. Its `lavf_options` is the book's key: it
@@ -345,19 +345,25 @@ Item {
   function startPlayInfo(job, record) {
     if (!PlayRequest.matches(playRequest, job)) return
     var startSec = playRequest.startSec
+    var asin = playRequest.asin
     playRequest = null
     if (!player.play(String(record.path || ""), startSec,
-        { "lavf": record.lavf_options, "chaptersFile": record.chapters_file })) failPlay(player.lastError)
+        { "lavf": record.lavf_options, "chaptersFile": record.chapters_file })) failPlay(asin, "", player.lastError)
   }
 
   // play-info ended without giving this request a file to play.
   function finishPlayInfo(job, outcome) {
     if (!PlayRequest.matches(playRequest, job)) return
+    var asin = playRequest.asin
     playRequest = null
-    failPlay(outcome.ok ? "the backend sent no book to play" : String(outcome.message || outcome.code || "unknown error"))
+    if (outcome.ok) failPlay(asin, "", "the backend sent no book to play")
+    else failPlay(asin, String(outcome.code || ""), String(outcome.message || outcome.code || "unknown error"))
   }
 
-  function failPlay(message) {
+  // The message names the book by its title from the catalog (U10c).
+  function failPlay(asin, code, text) {
+    var row = library.rowFor(asin)
+    var message = Player.playErrorText(code, text, asin, row ? row.title : "")
     playError = message
     notifyPlayFailed(message)
     return "error: " + message
@@ -583,12 +589,17 @@ Item {
   function quitPlayer() {
     pendingResume = ""
     playRequest = null
+    // Nothing is pending after Stop, so an old play failure is gone too (F37).
+    playError = ""
     player.quit()
   }
 
   function pick(asin) {
     var row = library.rowFor(asin)
     if (!row) return "error: unknown book"
+    // Picking the book whose Resume / Start over question is up answers it
+    // with the default, Resume (U10b), instead of asking again.
+    if (LibraryUi.pickAnswersAsk(row, askAsin)) return answerAsk(true)
     // Decide first: noteIntent clears confirmAsin, and a second pick of the
     // book whose question is up is what confirms it.
     var decision = LibraryUi.pickDecision(row, syncFailure.offline, confirmAsin)

@@ -533,3 +533,49 @@ def test_sleep_minutes(player):
 )
 def test_play_failure(player, connection, last_error, play_error, expected):
     assert player.call("playFailure", connection, last_error, play_error) == expected
+
+
+# --- playErrorText (U10c) -----------------------------------------------------
+@pytest.mark.parametrize(
+    "code,message,asin,title,expected",
+    [
+        # not_local names the book by its title, never by the ASIN.
+        (
+            "not_local",
+            "no local book for B0FAKE0001",
+            "B0FAKE0001",
+            "Winter Tales",
+            "Winter Tales isn't downloaded on this device",
+        ),
+        # No catalog row: fall back to the ASIN.
+        (
+            "not_local",
+            "no local book for B0FAKE0001",
+            "B0FAKE0001",
+            "",
+            "B0FAKE0001 isn't downloaded on this device",
+        ),
+        # Any other message: the ASIN in it becomes the title.
+        (
+            "decrypt",
+            "could not open B0FAKE0001",
+            "B0FAKE0001",
+            " Winter Tales ",
+            "could not open Winter Tales",
+        ),
+        # A message without the ASIN gets the title in front.
+        (
+            "",
+            "the backend is not ready",
+            "B0FAKE0001",
+            "Winter Tales",
+            "Winter Tales: the backend is not ready",
+        ),
+        ("", "", "B0FAKE0001", "Winter Tales", "Winter Tales: unknown error"),
+        ("", "the backend is not ready", "", "", "the backend is not ready"),
+        ("not_local", None, None, None, "this book isn't downloaded on this device"),
+        ("x", 5, 7, 9, "unknown error"),
+    ],
+)
+def test_play_error_text(player, code, message, asin, title, expected):
+    assert player.call("playErrorText", code, message, asin, title) == expected

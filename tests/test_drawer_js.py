@@ -379,3 +379,9 @@ def test_download_question_with_format_bytes(drawer):
     size = fmt.call("bytes", ui.call("estimatedBytes", {"runtimeMin": 810}))
     assert drawer.call("downloadQuestion", size) == "Download up to " + size + "?"
     assert size == "734 MB"  # Format.bytes uses 1024-based units
+
+
+def test_row_ask_text_does_not_repeat_the_title(drawer):
+    text = drawer.evaluate("ROW_ASK_TEXT")
+    assert "Resume" in text and "start over" in text
+    assert "this book" in text

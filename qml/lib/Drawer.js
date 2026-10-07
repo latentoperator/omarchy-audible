@@ -189,6 +189,10 @@ function askText(row) {
   return "You finished " + title + ".";
 }
 
+// The Resume / Start over question on a finished book's own row (U10b). The
+// row already shows the title, so the question doesn't repeat it.
+var ROW_ASK_TEXT = "You finished this book. Resume, or start over?";
+
 // The download question in a cloud book's row (G3 finding 3). The view
 // passes `Format.bytes(LibraryUi.estimatedBytes(row))`, or "" when the
 // estimate is 0 (no runtime); without a size, the question gives none.

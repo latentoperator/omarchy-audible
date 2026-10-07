@@ -401,6 +401,17 @@ function pickDecision(row, offline, confirmAsin) {
   return PICK_NONE;
 }
 
+// Whether picking `row` answers the finished-book question that is up for it
+// (`askAsin`) with the default, Resume, instead of asking again (U10b). Only
+// for that book, and only while it can still play here; otherwise the pick
+// goes on as usual.
+function pickAnswersAsk(row, askAsin) {
+  if (typeof askAsin !== "string" || askAsin.length === 0 || !_p.isObject(row)) {
+    return false;
+  }
+  return row.asin === askAsin && primaryAction(row, false) === ACTION_PLAY;
+}
+
 // Whether a confirm question for `confirmAsin` should stay up: only while that
 // book is still a cloud book that can be downloaded now. It goes away when the
 // row is gone, the book was downloaded some other way, or the laptop went

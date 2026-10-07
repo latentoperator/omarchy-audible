@@ -27,11 +27,15 @@ Rectangle {
   property string iconTooltip: ""
   property bool confirming: false
   property string questionText: ""
+  // A finished book's Resume / Start over question is up for this row (U10b).
+  property bool asking: false
 
   signal picked()
   signal removeRequested()
   signal confirmRequested()
   signal cancelRequested()
+  signal resumeRequested()
+  signal startOverRequested()
 
   implicitHeight: content.implicitHeight + Style.spacing.md * 2
   radius: Style.cornerRadius
@@ -120,6 +124,36 @@ Rectangle {
         Button {
           text: "Cancel"
           onClicked: root.cancelRequested()
+        }
+      }
+
+      // "You finished this book. Resume, or start over?" (U10b): the same
+      // question as the banner, on the row it is about. ▶ stays and answers
+      // Resume.
+      // The text has a line of its own and the answers sit under it, so the
+      // question stays readable beside ▶ and Remove.
+      Text {
+        Layout.fillWidth: true
+        visible: root.asking
+        text: Drawer.ROW_ASK_TEXT
+        textFormat: Text.PlainText
+        wrapMode: Text.WordWrap
+        color: Color.popups.text
+        font.family: Style.font.family
+        font.pixelSize: Style.font.bodySmall
+      }
+
+      RowLayout {
+        visible: root.asking
+        spacing: Style.spacing.md
+
+        Button {
+          text: "Resume"
+          onClicked: root.resumeRequested()
+        }
+        Button {
+          text: "Start over"
+          onClicked: root.startOverRequested()
         }
       }
 
