@@ -8,10 +8,19 @@ license-files = ["LICENSE"]
 authors = [{ name = "latentoperator" }]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "ruff", "jsonschema", "PySide6-Essentials"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 88
+# Throwaway prototypes under spikes/ are not maintained to the lint standard, so
+# they are excluded rather than reformatted.
+extend-exclude = ["spikes"]
+# The launcher has no .py suffix, so it must be named to be picked up by
+# `ruff check .` / `ruff format .` without being listed on the command line.
+extend-include = ["bin/omarchy-audible"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["qjs", "omarchy_audible"]

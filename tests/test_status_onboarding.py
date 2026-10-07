@@ -20,9 +20,10 @@ import json
 from pathlib import Path
 
 import pytest
+from test_auth import ACCOUNT, URL, FakeAudible, _make_cli_login
+
 from omarchy_audible import auth, bootstrap
 from omarchy_audible.paths import Paths
-from test_auth import ACCOUNT, URL, FakeAudible, _make_cli_login
 
 FAKE_STATUS_FILENAME = "fake-status.json"
 SIGNED_OUT_MARKER = "fake-signed-out"

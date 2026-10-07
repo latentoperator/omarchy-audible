@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+
 from omarchy_audible import positions
 
 VECTORS_PATH = Path(__file__).resolve().parent / "fixtures" / "position-vectors.json"

@@ -2,10 +2,11 @@
 
 The ``qml/lib`` files are pure ECMAScript (``.pragma library``, no Qt imports),
 so the same V4 engine that runs them in the shell can load the file from disk
-and call its functions. PySide6 is an optional test dependency: this module
-skips itself with ``pytest.importorskip`` when it is missing, so the Python
-suite still runs on a machine without it. Where it is installed these tests
-run — they must not skip (P1a).
+and call its functions. PySide6 is a ``dev`` dependency and the JS tests must
+not vanish silently when it is missing: importing this module **fails** without
+it, so the suite goes red instead of skipping. Only an explicit
+``OMARCHY_AUDIBLE_ALLOW_SKIP_QJS=1`` turns them back into skips, for a machine
+that deliberately runs the Python backend alone.
 
 Values cross the boundary as JSON. Python arguments are encoded with
 ``json.dumps`` and rebuilt in JS with ``JSON.parse``; return values come back
@@ -23,16 +24,26 @@ loader hands the library at runtime.
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-pytest.importorskip("PySide6")
+if os.environ.get("OMARCHY_AUDIBLE_ALLOW_SKIP_QJS") == "1":
+    pytest.importorskip("PySide6")
 
-from PySide6.QtCore import QCoreApplication  # noqa: E402
-from PySide6.QtQml import QJSEngine  # noqa: E402
+try:
+    from PySide6.QtCore import QCoreApplication
+    from PySide6.QtQml import QJSEngine
+except ImportError as exc:  # pragma: no cover - exercised only without PySide6
+    raise ImportError(
+        "PySide6 is required for the qml/lib JS test suite; install it with "
+        "`pip install -e '.[dev]'`, or set OMARCHY_AUDIBLE_ALLOW_SKIP_QJS=1 to "
+        "skip these tests on purpose. They fail rather than skip so a missing "
+        "engine can never pass the suite silently."
+    ) from exc
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LIB_DIR = REPO_ROOT / "qml" / "lib"

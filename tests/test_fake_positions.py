@@ -19,10 +19,11 @@ import json
 from pathlib import Path
 
 import pytest
+from test_sync import FIXTURE_ASINS
+
 from omarchy_audible import commands, positions, protocol
 from omarchy_audible.errors import PipelineError
 from omarchy_audible.paths import Paths
-from test_sync import FIXTURE_ASINS
 
 ASIN = "B0FAKE0001"  # a fixture ASIN, so ``sync`` asks for it too
 OTHER = "B0FAKE0002"

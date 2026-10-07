@@ -13,9 +13,9 @@ from __future__ import annotations
 import json
 
 import pytest
+from test_contract import CASE_IDS, COMMAND_CASES
 
 import qjs
-from test_contract import CASE_IDS, COMMAND_CASES
 
 # Deliberately uneven, including single characters, so lines are split at
 # arbitrary points.
