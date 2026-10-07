@@ -130,3 +130,13 @@ def test_the_readme_documents_exactly_the_public_methods(ipc):
     section = readme.split("## Hotkeys and IPC", 1)[1].split("\n## ", 1)[0]
     documented = re.findall(r"^\| `(\w+)", section, re.MULTILINE)
     assert documented == ipc.evaluate("PUBLIC_METHODS")
+
+
+def test_library_query_leaves_the_drawer_alone():
+    # U10a: the query used to set the drawer's sort, filter and search.
+    text = (REPO / "Service.qml").read_text(encoding="utf-8")
+    start = text.index("  function libraryQuery(sort, filter, search) {")
+    body = text[start : text.index("\n  }\n", start)]
+    assert "Library.queryRows(library.allRows, sort, filter, search)" in body
+    for name in ("sortKey", "filterKey", "searchText"):
+        assert f"library.{name} =" not in body

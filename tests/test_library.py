@@ -1026,9 +1026,9 @@ def test_query_rows_is_sort_then_filter_then_search(
 def test_query_rows_leaves_its_input_alone(
     library: qjs.JsModule, fixture_rows: list[dict]
 ) -> None:
-    before = [dict(row) for row in fixture_rows]
-    assert asins(library.call("queryRows", fixture_rows, "title", "all", "winter")) == [
-        A3
-    ]
-    assert fixture_rows == before
+    # Keep the rows inside the engine, so a change made by JS would show.
+    held = library.hold("(function (rows) { return rows; })", fixture_rows)
+    query = library.call("queryRows", held, "title", "all", "winter")
+    assert asins(query) == [A3]
+    assert library.read(held) == fixture_rows
     assert library.call("queryRows", None, "title", "all", "x") == []
