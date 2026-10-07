@@ -240,6 +240,23 @@ Depends on S5/S6 results and the fake backend.
 
 ---
 
+## Review follow-ups (whole-repo review 2026-10-06, [briefs/REVIEW-2026-10-06.md](briefs/REVIEW-2026-10-06.md))
+
+Placed by Dante. Order: B14 lands on `b11` before it merges, then the rest in this order, after `b11` is in `main` (B12 and P6 touch the same files as B11). Finding numbers (F1–F33) are the brief's.
+
+- [ ] **B14 — Re-download keeps the working copy until the new one is ready** (tier B; Hopebox, **on `b11`**, before `b11` merges; F7, F10). Stage `key.json`, `chapters.txt` and the audio in `.partial/`, verify there, and only then clear the old files and move the new ones in. The free-space check counts the space the old copy will free.
+  Acceptance: a failed or cancelled re-download of a local book (every fake-fail mode) leaves the old book playable and unchanged; a successful one leaves only the new layout.
+- [ ] **P6 — Clock-skew lockout** (tier B; Hopebox JS + backend, then a desktop wiring touch; F1, F3). A remote entry whose `ms` equals this device's last pushed `ms` is our own echo, not newer (the rule `Catchup.js` already uses). `position-push` without `--at` is `invalid_args`. A repeated `stale` shows a line in Mini instead of being dropped silently.
+  Acceptance: a test with the device clock behind the server by more than the push interval keeps pushing; vectors shared by Python and JS.
+- [ ] **B15 — Confirm `last_updated` is UTC** (maintainer; F2). Folded into B11's desktop acceptance (one real push read back against the wall clock); record the result in SPIKE-RESULTS S3.
+- [ ] **B12 — Backend hardening** (tier B; Hopebox; F3 if not in P6, F4, F6, F8, F9, F13, F14). Tests first.
+- [ ] **B13 — Login saves before fetching activation bytes** (tier A; Hopebox; F5). No orphan device registration when the activation-bytes fetch fails.
+- [ ] **P7 — Finished flag and one merge** (tier B; Hopebox JS; F16, F20). Start over clears `finished`; `Library.js` has one timestamp merge. Vectors.
+- [ ] **P8 — Service and player fixes** (tier B; desktop; F17, F18, F19, F21, F22, F23). F17 must land with or before R1.
+- [ ] **H1 — Hygiene** (tier A; Hopebox; F24–F27, F30–F33). Includes adding `ruff check` to `make lint`, the `dev` extra, and the `conftest.py` ffmpeg path. **Ruff format is policy** (Dante, 2026-10-06): one mechanical `ruff format` PR after `b11` merges, with nothing else in it.
+- [ ] **P9 — Service split and orchestration reducers** (tier B, incremental; desktop + Hopebox JS; F28, F29). After U8/U9; one child object per PR.
+- F15 goes on R2's sweep list.
+
 ## M5 — Polish and release
 
 - [ ] **R1 — Settings schema** (tier A) — manifest `schema` for all keys in SCOPE §4.6; each setting is wired and takes effect without restart.
@@ -263,4 +280,4 @@ Depends on S5/S6 results and the fake backend.
 
 ## Suggested order for a single agent working alone
 
-A0 → S6 → S5 → S1 → S2 → S4 → S3 → (G0) → B1 → B7 → B5 → B4 → B2 → B3 → B6 → (G1) → P1 → P2 → P3 → P5 → P4 → (G2) → U4 → U1 → U2a → U2 → U3 → (G3) → U5 → U6 → U7 → (G4) → B11 → U8 → U9 → R1 … R7.
+A0 → S6 → S5 → S1 → S2 → S4 → S3 → (G0) → B1 → B7 → B5 → B4 → B2 → B3 → B6 → (G1) → P1 → P2 → P3 → P5 → P4 → (G2) → U4 → U1 → U2a → U2 → U3 → (G3) → U5 → U6 → U7 → (G4) → B11 (+B14) → P6 → B12 → B13 → P7 → H1 → U8 → U9 → P8 → P9 → R1 … R7.

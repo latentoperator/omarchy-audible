@@ -88,7 +88,7 @@ D1, D4, D5 were decided at G0 (see SCOPE §9).
 2. ~~Chris's day of real use → G3 follow-ups.~~ Closed 2026-10-06 when Chris moved M4 to the desktop. Follow-ups from that use: copy says "this device" (#49); a finished download no longer plays by itself (#50).
 3. ~~Spike S7~~ **Go** (2026-10-06, SPIKE-RESULTS S7); D7 decided. **B11** next: backend half on Hopebox Kanban, `PlayerController` half on the desktop. It doesn't block M4: the views read chapters only through `PlayerController`.
 4. ~~M4 (U5, U6, U7) on the desktop (HMSP-OMARCHYBEE) per [briefs/M4-desktop.md](briefs/M4-desktop.md) → G4~~ Done 2026-10-06 (#53, #55, G4 in MANUAL-TEST.md). G4 follow-ups added to PLAN: U8 (Library button in Full, Chris's request), U9 (pause lag check), the J6 re-download check in B11's acceptance, and a note in R6 that `libraryQuery` changes what the drawer shows.
-5. B11 (locked-file playback, including J6 in full) on the `b11` integration branch: the backend half on Hopebox Kanban, then the desktop half per [briefs/B11-desktop.md](briefs/B11-desktop.md). Then U8, U9, M5 (R1–R7) and the marketplace submission.
+5. B11 (locked-file playback, including J6 in full) on the `b11` integration branch: the backend half on Hopebox Kanban, then the desktop half per [briefs/B11-desktop.md](briefs/B11-desktop.md). B14 (re-download keeps the old copy, F7) lands on `b11` before it merges. Then the review follow-ups in PLAN order (P6, B12, B13, P7, H1), U8, U9, P8, P9, M5 (R1–R7) and the marketplace submission. Whole-repo review 2026-10-06: [briefs/REVIEW-2026-10-06.md](briefs/REVIEW-2026-10-06.md).
 
 ## Known risks to keep in mind
 
