@@ -66,9 +66,14 @@ def test_failed_play_notifies():
 
 
 def test_mini_shows_the_player_error():
+    # B11: the line covers a failed play-info too, through the service's
+    # playFailure (Player.playFailure), which still includes the player's own.
     mini = read("qml/views/MiniView.qml")
-    assert 'root.player.connection === "failed"' in mini
-    assert "root.player.lastError" in mini
+    assert "root.service.playFailure" in mini
+    service = read("Service.qml")
+    assert "Player.playFailure(player.connection, player.lastError, playError)" in service
+    # The line goes away once a book plays again, not only on the next play attempt.
+    assert 'root.playError = ""' in function_body(service, "onPlayingChanged")
 
 
 # ---- 5: every play/pause goes through the service ----
@@ -132,7 +137,7 @@ def test_catch_up_needs_loaded_local_state():
 def test_library_shows_the_player_error():
     # Codex R1 #4: a failed pick reopens on Library, not Mini.
     library = read("qml/views/LibraryView.qml")
-    assert 'root.service.player.connection === "failed"' in library
+    assert "root.service.playFailure" in library
     assert "Couldn't start playback: " in library
 
 
