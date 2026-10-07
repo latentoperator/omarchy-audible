@@ -85,3 +85,24 @@ def test_f23_pause_holds_and_resume_restarts_the_timer():
     assert "Mpv.minutesSleepTimer(minutes, Date.now(), playing)" in function_body(
         player, "setSleepTimer"
     )
+
+
+def test_f23_pausing_in_the_fade_keeps_the_timer():
+    # Codex review of 172fd97: pausing in the last seconds cancelled it.
+    player = read("qml/PlayerController.qml")
+    handler = player[player.index("onPlayingChanged: {") :]
+    handler = handler[: handler.index("\n  }\n")]
+    assert "cancelSleep()" not in handler
+    assert handler.index("endFade()") < handler.index("Mpv.holdSleepTimer(")
+    end = function_body(player, "endFade")
+    assert "setVolume(fadeBaseVolume)" in end and "fadeBaseVolume = -1" in end
+
+
+def test_f21_pending_settings_are_saved_before_quit_and_play():
+    # Codex review of 172fd97: a change within the debounce, then quit and
+    # play again, started mpv with the old settings.
+    service = read("Service.qml")
+    quit_ = function_body(service, "quitPlayer")
+    assert quit_.index("saveSettings()") < quit_.index("player.quit()")
+    play = function_body(service, "playNow")
+    assert play.index("saveSettings()") < play.index("run(PlayRequest.COMMAND")

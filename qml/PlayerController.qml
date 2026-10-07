@@ -298,11 +298,16 @@ Item {
   }
 
   function cancelSleep() {
+    endFade()
+    sleepTimer = null
+  }
+
+  // A fade in progress stops and the volume goes back to where it was.
+  function endFade() {
     if (fadeBaseVolume >= 0) {
       setVolume(fadeBaseVolume)
       fadeBaseVolume = -1
     }
-    sleepTimer = null
   }
 
   function sleepTick() {
@@ -316,20 +321,22 @@ Item {
     if (remaining < Mpv.FADE_MS) {
       if (fadeBaseVolume < 0) fadeBaseVolume = volume
       setVolume(Mpv.fadeVolume(fadeBaseVolume, remaining, Mpv.FADE_MS))
-    } else if (fadeBaseVolume >= 0) {
+    } else {
       // Seeked back out of the fade window: bring the volume back.
-      setVolume(fadeBaseVolume)
-      fadeBaseVolume = -1
+      endFade()
     }
   }
 
-  // Paused or gone: end a fade in progress and put the volume back. A
-  // minutes timer stops counting while paused and goes on from where it was
-  // on resume (F23).
+  // Paused or gone: end a fade in progress and put the volume back, but keep
+  // the timer. A minutes timer stops counting while paused and goes on from
+  // where it was on resume (F23); the fade starts again near its end.
   onPlayingChanged: {
-    if (!playing && sleepTimer !== null && fadeBaseVolume >= 0) cancelSleep()
-    else if (!playing) sleepTimer = Mpv.holdSleepTimer(sleepTimer, Date.now())
-    else sleepTimer = Mpv.resumeSleepTimer(sleepTimer, Date.now())
+    if (!playing) {
+      endFade()
+      sleepTimer = Mpv.holdSleepTimer(sleepTimer, Date.now())
+    } else {
+      sleepTimer = Mpv.resumeSleepTimer(sleepTimer, Date.now())
+    }
   }
 
   Timer {

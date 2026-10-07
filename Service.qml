@@ -338,6 +338,9 @@ Item {
   // Every way into playback ends here. The backend says which file to load
   // and with which key (`play-info`, B11); startPlayInfo does the load.
   function playNow(asin, startSec) {
+    // Settings still waiting for the debounce are saved first: an mpv this
+    // play launches starts from them (F21).
+    saveSettings()
     playError = ""
     playSerial += 1
     var request = PlayRequest.create(asin, startSec, playSerial)
@@ -602,6 +605,9 @@ Item {
     playRequest = null
     // Nothing is pending after Stop, so an old play failure is gone too (F37).
     playError = ""
+    // A volume or speed changed just now is saved before mpv goes, so the
+    // next one starts with it (F21).
+    saveSettings()
     player.quit()
   }
 
