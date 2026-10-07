@@ -140,5 +140,5 @@ def test_fake_get_writes_only_into_the_fake_books_dir(env, run_cli, ffmpeg_bin):
     assert result.returncode == 0, result.stderr
 
     fake = Paths.from_env(env, fake=True)
-    assert (fake.books_dir / "B00FAKE01" / "book.m4b").is_file()
+    assert (fake.books_dir / "B00FAKE01" / "book.aaxc").is_file()
     assert _snapshot(roots) == before

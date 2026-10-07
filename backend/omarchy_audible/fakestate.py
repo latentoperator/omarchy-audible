@@ -20,6 +20,18 @@ from .paths import Paths
 SIGNED_OUT_MARKER = "fake-signed-out"
 # Optional override written by a tester: {"missing": [...], "venv_ready": bool}.
 STATUS_OVERRIDES_FILE = "fake-status.json"
+# Fake account-wide legacy AAX key, written ``0600`` into the fake config dir so
+# fake ``play-info`` on a ``book.aax`` book has something to read (B11). It is
+# obviously fake hex and never leaves the fake tree.
+FAKE_ACTIVATION_BYTES = "0011aabb2233cc44"
+
+
+def ensure_activation_bytes(paths: Paths) -> None:
+    """Create the fake ``activation_bytes`` file if it is missing (B11)."""
+    path = paths.activation_bytes_file
+    if path.is_file():
+        return
+    fsutil.write_private_text(path, FAKE_ACTIVATION_BYTES)
 
 
 def marker_path(paths: Paths) -> Path:

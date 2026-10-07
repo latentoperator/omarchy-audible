@@ -15,6 +15,14 @@ _SECRET_KEYS = (
     "access_token",
     "refresh_token",
     "activation_bytes",
+    # The mpv option that carries a key, and the aaxc key/iv names. ``key`` and
+    # ``iv`` alone do not match inside ``audible_key``/``audible_iv`` because
+    # there is no word boundary after the underscore, so they are listed too
+    # (B11).
+    "lavf_options",
+    "demuxer-lavf-o",
+    "audible_key",
+    "audible_iv",
     "password",
     "passwd",
     "secret",

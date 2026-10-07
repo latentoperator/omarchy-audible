@@ -41,3 +41,25 @@ def test_scrub_redacts_dict_repr_secrets():
 
 def test_scrub_leaves_plain_text_alone():
     assert scrub("syncing library page 2 of 3") == "syncing library page 2 of 3"
+
+
+# ---- B11: the mpv option that carries a key ----
+
+
+def test_scrub_redacts_the_lavf_option_shapes():
+    lines = [
+        # A loadfile option map, an mpv option, a JSON record and the legacy key.
+        "loadfile /b/book.aaxc replace -1 {demuxer-lavf-o=audible_key=0011223344556677,audible_iv=aabbccdd00112233}",
+        "audible_key=0011223344556677 audible_iv=aabbccdd00112233",
+        '{"lavf_options": "audible_key=0011223344556677,audible_iv=aabbccdd00112233"}',
+        "activation_bytes=0011223344556677",
+    ]
+    for line in lines:
+        scrubbed = scrub(line)
+        assert "0011223344556677" not in scrubbed, line
+        assert "aabbccdd00112233" not in scrubbed, line
+
+
+def test_scrub_keeps_the_option_name_without_a_value():
+    # The clear command carries no value, so the option name stays readable.
+    assert scrub("set_property demuxer-lavf-o") == "set_property demuxer-lavf-o"

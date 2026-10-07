@@ -51,6 +51,7 @@ KNOWN_COMMANDS = frozenset(
         "get",
         "remove",
         "local",
+        "play-info",
         "login-start",
         "login-finish",
         "login-import-cli",

@@ -29,6 +29,7 @@ DOCUMENTED_EVENT_TYPES = frozenset(
         "error",
         "local",
         "login_url",
+        "play_info",
         "positions",
         "progress",
         "status",
@@ -47,6 +48,7 @@ COMMAND_CASES: tuple[tuple[str, tuple[str, ...], str | None], ...] = (
     ("cancel", ("B00FAKE01",), None),
     ("remove", ("B00FAKE01",), None),
     ("local", (), None),
+    ("play-info", ("B00FAKE01",), None),
     ("login-start", ("--marketplace", "us"), None),
     ("login-finish", ("--session", "fake-session"), ""),
     ("login-import-cli", (), None),
@@ -143,3 +145,44 @@ def test_positions_schema_requires_an_entry_per_asin(validate_event):
     )
     with pytest.raises(jsonschema.ValidationError):
         validate_event({"type": "positions", "items": {"B00FAKE01": {"ms": 1000}}})
+
+
+def test_play_info_schema_requires_all_three_fields(validate_event):
+    jsonschema = pytest.importorskip("jsonschema")
+    validate_event(
+        {
+            "type": "play_info",
+            "path": "/books/B00FAKE01/book.aaxc",
+            "chapters_file": "/books/B00FAKE01/chapters.txt",
+            "lavf_options": "audible_key=00,audible_iv=00",
+        }
+    )
+    # An old book: no chapter file and no key material.
+    validate_event(
+        {
+            "type": "play_info",
+            "path": "/books/B00FAKE01/book.m4b",
+            "chapters_file": None,
+            "lavf_options": "",
+        }
+    )
+    for missing in ("path", "chapters_file", "lavf_options"):
+        payload = {
+            "type": "play_info",
+            "path": "/x/book.m4b",
+            "chapters_file": None,
+            "lavf_options": "",
+        }
+        del payload[missing]
+        with pytest.raises(jsonschema.ValidationError):
+            validate_event(payload)
+    with pytest.raises(jsonschema.ValidationError):
+        validate_event(
+            {
+                "type": "play_info",
+                "path": "/x/book.m4b",
+                "chapters_file": None,
+                "lavf_options": "",
+                "extra": 1,
+            }
+        )

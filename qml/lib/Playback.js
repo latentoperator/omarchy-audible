@@ -8,13 +8,14 @@
 // Pure ECMAScript for the Qt JS engine: no imports, no Qt types, and nothing
 // here throws on bad input.
 
-// The ASIN of the book mpv has loaded: the directory above `book.m4b`.
+// The ASIN of the book mpv has loaded: the directory above the audio file,
+// whether it is an old `book.m4b` or a locked `book.aaxc`/`book.aax` (B11).
 // Returns "" for anything else.
 function asinFromPath(path) {
   if (typeof path !== "string") {
     return "";
   }
-  var match = /\/([A-Za-z0-9]+)\/book\.m4b$/.exec(path);
+  var match = /\/([A-Za-z0-9]+)\/book\.(?:m4b|aaxc|aax)$/.exec(path);
   return match === null ? "" : match[1];
 }
 
