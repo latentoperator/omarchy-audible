@@ -106,3 +106,10 @@ def test_f21_pending_settings_are_saved_before_quit_and_play():
     assert quit_.index("saveSettings()") < quit_.index("player.quit()")
     play = function_body(service, "playNow")
     assert play.index("saveSettings()") < play.index("run(PlayRequest.COMMAND")
+
+
+def test_f18_push_state_reports_the_backoff_beside_the_stale_run():
+    # The F18 evidence fields join P6's; the rebase onto P6 must keep both.
+    push = function_body(read("Service.qml"), "pushState")
+    for field in ('"staleCount"', '"staleNotice"', '"failedFlushes"', '"retryMs"'):
+        assert field in push, field
