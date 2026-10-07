@@ -1,9 +1,10 @@
 """U9: measure mpv pause → silence on a PipeWire sink.
 # Needs sine.wav next to it: ffmpeg -f lavfi -i "sine=frequency=440:duration=120" -ac 2 -ar 48000 sine.wav
 
-Starts a standalone mpv with the plugin's launch args (plus extra args), plays
-a sine, and five times: resume, wait, send `set pause yes`, note when mpv
-reports pause=true, and find when the sink monitor goes silent.
+Starts a standalone mpv with the plugin's launch args as of P8 (--volume and
+--speed; extra args come last and override), plays a sine, and five times:
+resume, wait, send `set pause yes`, note when mpv reports pause=true, and find
+when the sink monitor goes silent.
 Usage: measure.py <sink node.name> <label> [extra mpv args...]
 """
 import json, os, socket, subprocess, sys, threading, time, struct, math
@@ -13,7 +14,7 @@ here = os.path.dirname(os.path.abspath(__file__))
 sock = os.path.join(here, f"mpv-{os.getpid()}.sock")
 RATE = 48000
 args = ["mpv", "--no-config", "--no-video", "--idle=yes", "--keep-open=yes", "--no-terminal",
-        "--audio-display=no", "--force-window=no", "--volume=30", f"--input-ipc-server={sock}",
+        "--audio-display=no", "--force-window=no", "--volume=30", "--speed=1", f"--input-ipc-server={sock}",
         f"--audio-device=pipewire/{sink}", f"--log-file={here}/mpv-{label}.log", "--msg-level=ao=v"] + extra
 mpv = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 for _ in range(100):

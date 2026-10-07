@@ -12,20 +12,23 @@ Environment for S5 and S6: HMSP-OMARCHYXPS, Omarchy 4.0.4, quickshell 0.3.1, mpv
 
 **Question.** Chris hears about a second of audio after ⏯. Is any of it in the plugin or in how we start mpv?
 
-**Method.** HMSP-OMARCHYBEE, mpv 0.41.0 on PipeWire (`ao=pipewire`, quantum 1024 at 48 kHz), 2026-10-07, in fake mode. Two parts, each five times (scripts in `spikes/u9_*.py`):
-1. *The plugin's part:* time the public `omarchy-shell latentoperator.audible playPause` call against mpv's `pause` property-change event, read by a second client on the fake mpv's socket.
-2. *mpv and PipeWire:* a standalone mpv with the plugin's exact launch arguments (`PlayerController.launchMpv`) playing a 440 Hz sine into a temporary null sink (`pactl load-module module-null-sink`, removed afterwards; the default sink was never changed). `parec` records the sink's monitor in 10 ms blocks stamped on arrival; the gap is from the `set pause yes` send to the last block with any signal. Repeated with `--audio-buffer=0.05` (default 0.2 s) and `--pipewire-buffer=20` (default `native`).
+**Method.** HMSP-OMARCHYBEE, mpv 0.41.0 on PipeWire 1.6.8 (`ao=pipewire`, quantum 1024 at 48 kHz), 2026-10-07, in fake mode, with `launchMpv` as of P8 (`--volume`, `--speed`). Two parts, each five times (scripts in `spikes/u9_*.py`):
+1. *The plugin's path end to end:* with the fake book playing, time the public `omarchy-shell latentoperator.audible playPause` call, mpv's `pause` property-change event (read by a second client on the fake mpv's socket), and the last 10 ms block with any signal on the default sink's monitor (`parec`, blocks stamped on arrival; the monitor reads exactly 0 when paused).
+2. *mpv and PipeWire alone:* a standalone mpv with the plugin's exact launch arguments playing a 440 Hz sine into a temporary null sink (`pactl load-module module-null-sink`, removed afterwards; the default sink was never changed), from the `set pause yes` send to the last block with signal. Repeated with `--audio-buffer=0.05` (default 0.2 s), `--pipewire-buffer=20` (default `native`) and `--speed=3`. Then three minutes of play each at 1× and 3× into the null sink, checking mpv's log for underruns.
 
 **Result.**
 
 | Gap | Median | Range |
 |---|---|---|
-| IPC `playPause` call → mpv reports `pause` (includes the `omarchy-shell` CLI's own start-up) | 31 ms | 31–32 ms |
-| `set pause yes` → silence, default arguments | 10 ms | 10–15 ms |
-| same, `--audio-buffer=0.05` | 10 ms | 7–15 ms |
-| same, `--pipewire-buffer=20` | 10 ms | 9–15 ms |
+| `playPause` call → mpv reports `pause` (includes the `omarchy-shell` CLI's own start-up) | 32 ms | 31–39 ms |
+| mpv reports `pause` → last sample at the sink | 10 ms | 3–13 ms |
+| `playPause` call → last sample at the sink, end to end | 41 ms | 34–49 ms |
+| `set pause yes` → silence, standalone, default arguments | 11 ms | 6–12 ms |
+| same, `--audio-buffer=0.05` | 9 ms | 7–15 ms |
+| same, `--pipewire-buffer=20` | 9 ms | 8–14 ms |
+| same, `--speed=3` | 9 ms | 9–15 ms |
 
-mpv does not play out its audio buffer on pause, so neither option changes anything, and no underrun was logged in any run. Everything between ⏯ and the sound card's input is about 45 ms.
+mpv does not play out its audio buffer on pause, so neither option changes anything. No underrun was logged in any run or in the three-minute plays at 1× and 3×. Everything between ⏯ and the sound card's input is about 40 ms. `PULSE_LATENCY_MSEC` does not apply: mpv uses its native PipeWire output, not Pulse.
 
 **What's left is past PipeWire's graph:** the line-out sink (Realtek ALC897 on `snd_hda_intel`, `alsa_output.pci-0000_04_00.6.HiFi__Line2__sink`) and whatever is attached to it. A monitor recording can't see that buffer, and measuring it needs a loopback cable or ears. A plain PipeWire ALSA sink buffers tens of milliseconds, not a second, so the likely place for most of the second is the speakers themselves, for example powered speakers with their own processing.
 
