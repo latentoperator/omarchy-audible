@@ -1,6 +1,6 @@
 # Omarchy Audible
 
-> **Status: backend built, drawer not yet.** The command-line backend works against a real Audible account; the bar icon, drawer and player come next. See [docs/STATE.md](docs/STATE.md).
+> **Status: backend built, drawer not yet.** The command-line backend works against a real Audible account and keeps books locked as Audible sends them; the bar icon, drawer and player come next. See [docs/STATE.md](docs/STATE.md).
 
 A book icon in the [Omarchy](https://omarchy.org) bar. Click it to browse your Audible library in a themed drawer, pick a book, and a mini player takes over. Dismiss it and the book keeps playing. Only the books you're listening to live on your laptop. Removing one never touches your Audible account.
 
@@ -23,6 +23,8 @@ Exit codes: `0` ok, `1` failed, `2` bad arguments, `3` busy (another job is runn
 Add `--fake` (or set `OMARCHY_AUDIBLE_FAKE=1`) to any command to run against a built-in fake library with no network and no account. Real paths follow XDG: login in `~/.config/omarchy-audible/`, catalog and covers in `~/.local/share/omarchy-audible/`, books in `~/Audiobooks/Audible/` (override with `OMARCHY_AUDIBLE_BOOKS_DIR`). Fake mode uses a separate tree (`~/.config/omarchy-audible-fake/`, `~/.local/share/omarchy-audible-fake/`, books in `~/.local/share/omarchy-audible-fake/books`) so it never reads or writes the real login, catalog or books, and ignores `OMARCHY_AUDIBLE_BOOKS_DIR`.
 
 Fake mode also carries its own onboarding state, so the sign-in and setup screens can be tested without an account. A fresh fake tree starts signed in; `logout --fake` signs the fake account out and `login-finish --fake` / `login-import-cli --fake` sign it back in (fake `login-finish` accepts any pasted text containing `openid.oa2.authorization_code=`). To preview the missing-tools or setup screen, write `~/.config/omarchy-audible-fake/fake-status.json` — `{"missing": ["mpv"]}` or `{"venv_ready": false}` (both keys optional) — and delete it afterward; `setup --fake` clears the `venv_ready` override again. Real mode reads neither the marker nor `fake-status.json`.
+
+To exercise the player against a long book, fake `get <asin> --fake-chapters 120` (or `OMARCHY_AUDIBLE_FAKE_CHAPTERS=120`) writes 120 evenly spaced chapters instead of the default 5; the range is 1–500, and real mode ignores it. Fake `get` also fakes the failures that matter: `--fake-fail disk` (the volume is treated as nearly full), `network` (the download breaks part-way), `decrypt` (the voucher arrives without key/iv) and `novoucher` (no aaxc voucher, so the aax fallback runs).
 
 **Setup and health**
 
@@ -50,13 +52,14 @@ Login files are written `0600`. If the copied link is still in Omarchy's clipboa
 
 ```sh
 omarchy-audible sync [--full]       # refresh the catalog, missing covers and Audible's positions; never sends positions
-omarchy-audible get <asin>          # download, decrypt (aaxc, falls back to aax), rebuild chapters → {"type":"done","path":"…/book.m4b"}
+omarchy-audible get <asin>          # download the locked original (aaxc, falls back to aax) → {"type":"done","path":"…/book.aaxc"}
+omarchy-audible play-info <asin>    # how to play a local book: {"type":"play_info","path":"…","chapters_file":"…"|null,"lavf_options":"…"}
 omarchy-audible cancel <asin>       # stop a running get and clean up its partial files
 omarchy-audible local               # {"type":"local","books":[{"asin":"…","size":…,"downloaded_at":"…"}]}
 omarchy-audible remove <asin>       # delete the book from this computer only → {"type":"done","freed_bytes":…}
 ```
 
-`get` checks free space first, reports `progress` lines while it works, and refuses anything that isn't a plain ASIN (`error` code `bad_asin`). `remove` never touches your Audible account or library.
+`get` checks free space first, reports `progress` lines while it works, and refuses anything that isn't a plain ASIN (`error` code `bad_asin`). **It does not store a decrypted copy**: the book directory keeps the file exactly as Audible sent it (`book.aaxc` or `book.aax`), the key material in a `0600` `key.json`, the chapter list in `chapters.txt` and the metadata in `meta.json`. No `.m4b` is written, and the download needs about 1.1× the book's size free rather than twice it. `play-info` then hands the player the audio path, the chapter file and the ready-made mpv option that unlocks it in memory; those key options are a secret, are never logged, and are not part of any command line. Old `book.m4b` downloads keep playing as before. `remove` never touches your Audible account or library.
 
 **Listening positions**
 
