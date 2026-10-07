@@ -55,6 +55,13 @@ function dismissClosesPanel(view, chapterListOpen) {
   return !(view === VIEW_MINI && chapterListOpen === true);
 }
 
+// Whether a Mini view shows the chapter popup: the shared flag is set and that
+// view's own panel is open (H1 F25). Every monitor has a Mini view; a closed
+// panel's must never open its modal popup.
+function chapterPopupShown(chapterListOpen, panelOpen) {
+  return chapterListOpen === true && panelOpen === true;
+}
+
 // The panel's content width and height cap per view, in unscaled units for
 // `Style.space`. The Full view grows the same drawer (ARCHITECTURE 6).
 var WIDTH = 420;

@@ -161,6 +161,7 @@ BarWidget {
         }
         MiniView {
           service: root.service
+          panelOpen: root.opened
           onCloseRequested: root.close()
           onKeysReleased: root.focusView()
         }

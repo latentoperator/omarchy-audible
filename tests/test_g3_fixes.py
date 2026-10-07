@@ -186,13 +186,17 @@ def test_author_names_are_not_muted():
     for rel in ("qml/components/BookRow.qml", "qml/views/MiniView.qml"):
         source = read(rel)
         block = source[: source.index("Format.names(")]
-        block = source[block.rindex("Text {") :]
+        block = source[block.rindex("Text {") - len("Soft") :]
         block = block[: block.index("}")]
         assert "Color.muted" not in block, rel
-        assert re.search(
-            r"Qt\.rgba\(Color\.popups\.text\.r, Color\.popups\.text\.g, Color\.popups\.text\.b, 0\.75\)",
-            block,
-        ), rel
+        # F26: the names are SoftText, which holds the 75% popup-text colour.
+        assert block.startswith("SoftText {"), rel
+        assert "color:" not in block, rel
+    soft = read("qml/components/SoftText.qml")
+    assert re.search(
+        r"Qt\.rgba\(Color\.popups\.text\.r, Color\.popups\.text\.g, Color\.popups\.text\.b, 0\.75\)",
+        soft,
+    )
 
 
 # ---- the note after a catch-up jump ----
