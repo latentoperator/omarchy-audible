@@ -243,6 +243,8 @@ Depends on S5/S6 results and the fake backend.
 
 ## Review follow-ups (whole-repo review 2026-10-06, [briefs/REVIEW-2026-10-06.md](briefs/REVIEW-2026-10-06.md))
 
+Second review, 2026-10-07 ([briefs/REVIEW-2026-10-07.md](briefs/REVIEW-2026-10-07.md), F34–F37, placed by Dante): F34 and F35 join **B12**, F36 joins **H1**, and F37 goes in the next desktop brief with U10(c).
+
 Placed by Dante. Order: B14 lands on `b11` before it merges, then the rest in this order, after `b11` is in `main` (B12 and P6 touch the same files as B11). Finding numbers (F1–F33) are the brief's.
 
 - [x] **B14 — Re-download keeps the working copy until the new one is ready** (tier B; Hopebox, **on `b11`**, before `b11` merges; F7, F10). Stage `key.json`, `chapters.txt` and the audio in `.partial/`, verify there, and only then clear the old files and move the new ones in. The free-space check counts the space the old copy will free.
@@ -250,13 +252,13 @@ Placed by Dante. Order: B14 lands on `b11` before it merges, then the rest in th
 - [ ] **P6 — Clock-skew lockout** (tier B; Hopebox JS + backend, then a desktop wiring touch; F1, F3). A remote entry whose `ms` equals this device's last pushed `ms` is our own echo, not newer (the rule `Catchup.js` already uses). `position-push` without `--at` is `invalid_args`. A repeated `stale` shows a line in Mini instead of being dropped silently.
   Acceptance: a test with the device clock behind the server by more than the push interval keeps pushing; vectors shared by Python and JS.
 - [x] **B15 — Confirm `last_updated` is UTC** (maintainer; F2). Folded into B11's desktop acceptance (one real push read back against the wall clock); record the result in SPIKE-RESULTS S3. *Done 2026-10-07: UTC, offset about +1 s.*
-- [ ] **B12 — Backend hardening** (tier B; Hopebox; F3 if not in P6, F4, F6, F8, F9, F13, F14). Tests first.
+- [ ] **B12 — Backend hardening** (tier B; Hopebox; F3 if not in P6, F4, F6, F8, F9, F13, F14, **F34, F35**). Tests first.
 - [ ] **B13 — Login saves before fetching activation bytes** (tier A; Hopebox; F5). No orphan device registration when the activation-bytes fetch fails.
 - [ ] **P7 — Finished flag and one merge** (tier B; Hopebox JS; F16, F20). Start over clears `finished`; `Library.js` has one timestamp merge. Vectors.
 - [ ] **P8 — Service and player fixes** (tier B; desktop; F17, F18, F19, F21, F22, F23). F17 must land with or before R1.
-- [ ] **H1 — Hygiene** (tier A; Hopebox; F24–F27, F30–F33). Includes adding `ruff check` to `make lint`, the `dev` extra, and the `conftest.py` ffmpeg path. **Ruff format is policy** (Dante, 2026-10-06); the one mechanical `ruff format` PR is done (#63, 2026-10-07), so H1 adds `ruff format --check` to `make lint`.
+- [ ] **H1 — Hygiene** (tier A; Hopebox; F24–F27, F30–F33, **F36**). Includes adding `ruff check` to `make lint`, the `dev` extra, and the `conftest.py` ffmpeg path. **Ruff format is policy** (Dante, 2026-10-06); the one mechanical `ruff format` PR is done (#63, 2026-10-07), so H1 adds `ruff format --check` to `make lint`.
 - [ ] **P9 — Service split and orchestration reducers** (tier B, incremental; desktop + Hopebox JS; F28, F29). After U8/U9; one child object per PR.
-- [ ] **U10 — B11 acceptance findings** (tier A/B; Dante placed 2026-10-07 from MANUAL-TEST B11). (a) the debug IPC `libraryQuery` must not change the drawer's live sort, filter or search (it hid all but one book while the search field looked empty); make it read-only or route it through `libraryState`, as R6 already notes. (b) the finished-book Resume / Start over banner is easy to miss, and a row's ▶ only asks again; make the question visible on the row. Start over keeping `finished` is P7 (F16). (c) a `not_local` play error names the ASIN; the service shows the title from the catalog row. (a) and (c) go to Hopebox JS/backend; (b) is a desktop view change.
+- [ ] **U10 — B11 acceptance findings** (tier A/B; Dante placed 2026-10-07 from MANUAL-TEST B11). (a) the debug IPC `libraryQuery` must not change the drawer's live sort, filter or search (it hid all but one book while the search field looked empty); make it read-only or route it through `libraryState`, as R6 already notes. (b) the finished-book Resume / Start over banner is easy to miss, and a row's ▶ only asks again; make the question visible on the row. Start over keeping `finished` is P7 (F16). (c) a `not_local` play error names the ASIN; the service shows the title from the catalog row. With it, F37: Stop clears `playError`. (a) and (c) go to Hopebox JS/backend; (b) is a desktop view change.
 - [ ] **R2 note (B11 d)** — no book in the library has 100+ chapters; accepted on Carl (50 through `chapters-file`) plus the 120-chapter fake book. If a 100+ chapter book is ever bought, run MANUAL-TEST B11 step 3 on it. BEE has no old-style `.m4b` left, so the `.m4b` path is covered by tests and fake mode only.
 - F15 goes on R2's sweep list.
 
