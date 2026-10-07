@@ -2,7 +2,7 @@
 
 Update this file in every PR that changes status. Newest first. See [WORKFLOW.md](WORKFLOW.md) for how work is run.
 
-**Last updated:** 2026-10-06 · **Phase:** M4 done on the desktop (HMSP-OMARCHYBEE): U5 #53 and U6 #55 merged, U7 confirmed, G4 run · **Gate G4:** ✅ run 2026-10-06, all pass (see MANUAL-TEST.md; three-theme scope noted there) · **Gate G3:** ✅ passed 2026-10-05 · **Gate G2:** ✅ passed 2026-10-05 · **Gate G1:** ✅ passed 2026-10-04 · **Gate G0:** ✅ passed 2026-10-04 · **M1:** ✅ B1–B7 merged
+**Last updated:** 2026-10-06 · **Phase:** M4 done on the desktop (HMSP-OMARCHYBEE): U5 #53 and U6 #55 merged, U7 confirmed, G4 run · **Gate G4:** ✅ passed 2026-10-06 (MANUAL-TEST.md; Dante accepted the views-per-theme scope, J6 re-download moved to B11) · **Gate G3:** ✅ passed 2026-10-05 · **Gate G2:** ✅ passed 2026-10-05 · **Gate G1:** ✅ passed 2026-10-04 · **Gate G0:** ✅ passed 2026-10-04 · **M1:** ✅ B1–B7 merged
 
 ## Where we are
 
@@ -86,8 +86,8 @@ D1, D4, D5 were decided at G0 (see SCOPE §9).
 1. ~~A0, S1–S6, G0, M1, M2 (G2), M3 (G3) and G3 findings 1–6~~ Done.
 2. ~~Chris's day of real use → G3 follow-ups.~~ Closed 2026-10-06 when Chris moved M4 to the desktop. Follow-ups from that use: copy says "this device" (#49); a finished download no longer plays by itself (#50).
 3. ~~Spike S7~~ **Go** (2026-10-06, SPIKE-RESULTS S7); D7 decided. **B11** next: backend half on Hopebox Kanban, `PlayerController` half on the desktop. It doesn't block M4: the views read chapters only through `PlayerController`.
-4. ~~M4 (U5, U6, U7) on the desktop (HMSP-OMARCHYBEE) per [briefs/M4-desktop.md](briefs/M4-desktop.md) → G4~~ Done 2026-10-06 (#53, #55, G4 in MANUAL-TEST.md). Chris asked for a Library button in the Full view on the roadmap.
-5. M5 (R1–R7) and marketplace submission. B11 (locked-file playback) still open.
+4. ~~M4 (U5, U6, U7) on the desktop (HMSP-OMARCHYBEE) per [briefs/M4-desktop.md](briefs/M4-desktop.md) → G4~~ Done 2026-10-06 (#53, #55, G4 in MANUAL-TEST.md). G4 follow-ups added to PLAN: U8 (Library button in Full, Chris's request), U9 (pause lag check), the J6 re-download check in B11's acceptance, and a note in R6 that `libraryQuery` changes what the drawer shows.
+5. B11 (locked-file playback, including J6 in full), U8, U9, then M5 (R1–R7) and marketplace submission.
 
 ## Known risks to keep in mind
 
