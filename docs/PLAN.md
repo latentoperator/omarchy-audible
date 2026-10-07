@@ -244,7 +244,7 @@ Depends on S5/S6 results and the fake backend.
 
 Placed by Dante. Order: B14 lands on `b11` before it merges, then the rest in this order, after `b11` is in `main` (B12 and P6 touch the same files as B11). Finding numbers (F1–F33) are the brief's.
 
-- [ ] **B14 — Re-download keeps the working copy until the new one is ready** (tier B; Hopebox, **on `b11`**, before `b11` merges; F7, F10). Stage `key.json`, `chapters.txt` and the audio in `.partial/`, verify there, and only then clear the old files and move the new ones in. The free-space check counts the space the old copy will free.
+- [x] **B14 — Re-download keeps the working copy until the new one is ready** (tier B; Hopebox, **on `b11`**, before `b11` merges; F7, F10). Stage `key.json`, `chapters.txt` and the audio in `.partial/`, verify there, and only then clear the old files and move the new ones in. The free-space check counts the space the old copy will free.
   Acceptance: a failed or cancelled re-download of a local book (every fake-fail mode) leaves the old book playable and unchanged; a successful one leaves only the new layout.
 - [ ] **P6 — Clock-skew lockout** (tier B; Hopebox JS + backend, then a desktop wiring touch; F1, F3). A remote entry whose `ms` equals this device's last pushed `ms` is our own echo, not newer (the rule `Catchup.js` already uses). `position-push` without `--at` is `invalid_args`. A repeated `stale` shows a line in Mini instead of being dropped silently.
   Acceptance: a test with the device clock behind the server by more than the push interval keeps pushing; vectors shared by Python and JS.

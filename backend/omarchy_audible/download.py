@@ -3,21 +3,31 @@
 Pipeline, in order:
 
 1. Pre-flight: require 1.1x the content size in free space (B11: there is no
-   decrypt pass, so the peak is the book itself, not twice it).
-2. ``<booksDir>/<asin>/.partial/`` is created for the raw download.
+   decrypt pass, so the peak is the book itself, not twice it). A re-download
+   counts the bytes its replacement frees — the old audio and an abandoned
+   ``.partial/`` — so it is not refused for space the previous copy holds (B14,
+   F10).
+2. ``<booksDir>/<asin>/.partial/`` is created and the whole book is built
+   there: the raw download, a ``0600`` ``key.json``, ``chapters.txt`` and the
+   audio renamed to its final ``book.aaxc``/``book.aax`` name.
 3. Download with audible-cli, aaxc first and aax if no voucher is offered. A
    byte count is reported by polling the partial directory.
 4. No decrypt (D7). The book directory ends up with the original audio moved
    out of ``.partial/`` unchanged as ``book.aaxc``/``book.aax``, a ``0600``
    ``key.json``, ``chapters.txt`` (ffmetadata built from Audible's
    ``chapters.json`` when it is there) and ``meta.json``.
-5. A ``ffprobe`` duration check with **no key argument**: the header opens
-   without one (S7). An aax whose duration cannot be read without activation
-   bytes is skipped and logged.
-6. On any failure or SIGTERM, ``.partial/`` and every temp file are removed and
-   nothing in the book directory counts as local (ARCHITECTURE 4.3 step 7,
-   4.8). A re-download clears the previous contents first, so an old
-   ``book.m4b`` never sits beside a locked file.
+5. A ``ffprobe`` duration check with **no key argument**, run inside
+   ``.partial/``: the header opens without one (S7). An aax whose duration
+   cannot be read without activation bytes is skipped and logged.
+6. Only once everything in ``.partial/`` checks out: the directory's previous
+   audio, ``key.json``, ``chapters.txt`` and ``meta.json`` are cleared, the new
+   files are moved in (the audio last, so "local" flips at one moment) and
+   ``meta.json`` is written. An old ``book.m4b`` therefore never sits beside a
+   locked file (B14).
+7. On any failure or SIGTERM before that commit, ``.partial/`` and every temp
+   file are removed and the book directory is left exactly as it was, so a
+   failed or cancelled re-download never costs the user a playable book
+   (ARCHITECTURE 4.3, 4.8).
 
 No ``ffmpeg`` or ``ffprobe`` argv here ever contains a key, iv or activation
 bytes: the key is written to ``key.json`` and only read again by ``play-info``.
@@ -77,8 +87,8 @@ _FAKE_TICKS = 10
 _FAKE_TICK_SECONDS = 0.08
 
 _REAL_POLL_SECONDS = 0.5
-# A temp name in the book directory: the audio is moved here, checked, then
-# renamed onto ``book.<ext>`` in one step.
+# A temp name inside ``.partial/``: the audio is moved here, checked, then
+# renamed onto ``book.<ext>`` there in one step.
 _AUDIO_TMP = "book.audio.tmp"
 _Emit = Callable[..., None]
 
@@ -211,12 +221,30 @@ def _unlink(path: Path) -> None:
 def _clear_local(directory: Path) -> None:
     """Remove a previous download's audio, key, chapters and meta.
 
-    Called before a fresh download and again when one fails, so a directory
-    never holds a ``.m4b`` beside a locked file and never counts as local
-    after a failure (B11).
+    Called only at the commit step of a download, once everything in
+    ``.partial/`` has been built and checked, so a directory never holds a
+    ``.m4b`` beside a locked file (B11, B14). Until then the previous copy is
+    left untouched and a failure costs the user nothing.
     """
     for name in (*AUDIO_FILENAMES, KEY_FILENAME, CHAPTERS_FILENAME, META_FILENAME):
         _unlink(directory / name)
+
+
+def _reclaimable_bytes(target_dir: Path, partial: Path) -> int:
+    """The bytes a replacement frees: the old audio plus an abandoned ``.partial/``.
+
+    Counted into the free-space pre-flight so a retry is not refused for space
+    the previous copy itself holds (B14, F10).
+    """
+    total = 0
+    for name in AUDIO_FILENAMES:
+        try:
+            total += (target_dir / name).stat().st_size
+        except OSError:
+            continue
+    if partial.is_dir():
+        total += dir_size(partial)
+    return total
 
 
 def _free_bytes(path: Path) -> int:
@@ -698,10 +726,12 @@ def run_get(
 ) -> Path:
     """Download one book as-is; return the path to ``book.aaxc``/``book.aax``.
 
-    ``.partial/`` and the book directory's temp file are removed on success and
-    on every failure path, and the final audio only ever appears through an
-    atomic rename. ``fake_chapters`` (and ``OMARCHY_AUDIBLE_FAKE_CHAPTERS``)
-    only affects fake mode.
+    The whole book is built in ``.partial/`` and only moved into the book
+    directory once it has been verified there, so a failure or a cancel leaves
+    a previous copy untouched. ``.partial/`` and every temp file are removed on
+    success and on every failure path, and the final audio only ever appears
+    through an atomic rename. ``fake_chapters`` (and
+    ``OMARCHY_AUDIBLE_FAKE_CHAPTERS``) only affects fake mode.
     """
     tracker = children if children is not None else ChildTracker()
     # ``cmd_get`` validates before calling; guard direct callers too, so an
@@ -709,7 +739,6 @@ def run_get(
     validate_asin(paths.books_dir, asin)
     target_dir = book_dir(paths.books_dir, asin)
     partial = target_dir / PARTIAL_DIRNAME
-    tmp = target_dir / _AUDIO_TMP
 
     if fake:
         chapter_count = _resolve_chapter_count(fake_chapters)
@@ -723,17 +752,20 @@ def run_get(
         duration_ms = _metadata_duration_ms(metadata)
         acr = _metadata_acr(metadata)
 
-    check_free_space(_free_bytes(target_dir), content_size)
+    # A re-download may count the bytes it will free (the old audio, and an
+    # abandoned ``.partial/``) as available, so it is not refused for space the
+    # previous copy itself holds (B14, F10).
+    check_free_space(
+        _free_bytes(target_dir) + _reclaimable_bytes(target_dir, partial),
+        content_size,
+    )
 
-    success = False
     final: Path | None = None
     try:
+        # The book directory is untouched from here until the commit below: a
+        # failure at any earlier step leaves the previous copy exactly as it was.
         target_dir.mkdir(parents=True, exist_ok=True)
         _rmtree(partial)
-        _unlink(tmp)
-        # A re-download replaces the directory's contents: drop the previous
-        # audio and key material so a `.m4b` never sits beside a locked file.
-        _clear_local(target_dir)
         partial.mkdir(parents=True, exist_ok=True)
 
         if fake:
@@ -741,32 +773,41 @@ def run_get(
         else:
             raw = _real_fetch(asin, partial, paths, emit, tracker, content_size)
 
-        # key.json (0600) and chapters.txt first, then the audio, then meta.json.
-        fsutil.write_private_json(target_dir / KEY_FILENAME, _key_payload(raw))
-        chapters_path = target_dir / CHAPTERS_FILENAME
+        # Stage the whole book in ``.partial/``: key.json (0600) and
+        # chapters.txt first, then the audio, then the sanity check.
+        staged_key = partial / KEY_FILENAME
+        fsutil.write_private_json(staged_key, _key_payload(raw))
+        staged_chapters = partial / CHAPTERS_FILENAME
         if raw.chapters:
-            chapters_path.write_text(build_ffmetadata(raw.chapters), encoding="utf-8")
+            staged_chapters.write_text(build_ffmetadata(raw.chapters), encoding="utf-8")
         else:
-            _unlink(chapters_path)
+            _unlink(staged_chapters)
 
         # A temp name in the same directory, then one atomic rename onto the
-        # final audio name (ARCHITECTURE 4.3). The duration check runs with no
-        # key argument, before the final name exists.
-        os.replace(raw.raw_path, tmp)
-        _verify_duration(tmp, raw.container, duration_ms)
+        # final audio name inside ``.partial/`` (ARCHITECTURE 4.3). The duration
+        # check runs with no key argument, before the final name exists.
+        staged_tmp = partial / _AUDIO_TMP
+        os.replace(raw.raw_path, staged_tmp)
+        _verify_duration(staged_tmp, raw.container, duration_ms)
+        staged_audio = partial / f"book.{raw.container}"
+        fsutil.atomic_replace(staged_tmp, staged_audio)
+
+        # Everything checked out: clear the previous contents, then move the
+        # new files in, the audio last, so "local" flips at one moment and an
+        # old ``book.m4b`` never sits beside a locked file (B14).
+        _clear_local(target_dir)
+        os.replace(staged_key, target_dir / KEY_FILENAME)
+        if raw.chapters:
+            os.replace(staged_chapters, target_dir / CHAPTERS_FILENAME)
         final = target_dir / f"book.{raw.container}"
-        fsutil.atomic_replace(tmp, final)
+        os.replace(staged_audio, final)
         if fake:
             fakestate.ensure_activation_bytes(paths)
         write_meta(target_dir, _meta_payload(asin, paths, raw, final, duration_ms, acr))
-        success = True
     finally:
         tracker.terminate_all()
         _rmtree(partial)
-        _unlink(tmp)
-        if not success:
-            # Nothing in the book directory counts as local after a failure or a
-            # cancel, and no temp file survives (ARCHITECTURE 4.3 step 7, 4.8).
-            _clear_local(target_dir)
+        # A failure or a cancel before the commit leaves the previous copy
+        # byte-identical: nothing new ever reached the book directory (B14).
     assert final is not None
     return final
