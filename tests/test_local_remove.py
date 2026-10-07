@@ -30,6 +30,27 @@ def _make_book(paths, asin: str, *, payload: bytes = b"x" * 100, downloaded_at: 
     return directory
 
 
+def _make_locked_book(
+    paths,
+    asin: str,
+    *,
+    container: str = "aaxc",
+    payload: bytes = b"y" * 300,
+    key: dict | None = None,
+) -> Path:
+    """A new-format book: the locked original, key.json, chapters.txt, meta.json."""
+    directory = paths.books_dir / asin
+    directory.mkdir(parents=True)
+    (directory / f"book.{container}").write_bytes(payload)
+    (directory / "chapters.txt").write_text(";FFMETADATA1\n", encoding="utf-8")
+    if key is not None:
+        (directory / "key.json").write_text(json.dumps(key), encoding="utf-8")
+    (directory / "meta.json").write_text(
+        json.dumps({"asin": asin, "downloaded_at": "2026-02-03T04:05:06Z"}), encoding="utf-8"
+    )
+    return directory
+
+
 def test_local_lists_only_downloaded_books(run_cli, validate_stream, fake_paths):
     _make_book(fake_paths, "B00FAKE01", payload=b"a" * 100)
     _make_book(fake_paths, "B00FAKE02", payload=b"b" * 250)
@@ -58,6 +79,62 @@ def test_local_falls_back_to_the_file_mtime_without_meta(run_cli, validate_strea
     local = next(event for event in parsed if event["type"] == "local")
     assert [book["asin"] for book in local["books"]] == ["B00FAKE07"]
     assert local["books"][0]["downloaded_at"]
+
+
+# --- B11: locked books count as local (ARCHITECTURE 3, D7) -------------------
+
+
+def test_local_lists_old_and_locked_books(run_cli, validate_stream, fake_paths):
+    _make_book(fake_paths, "B00OLDM4B", payload=b"a" * 100)
+    _make_locked_book(
+        fake_paths,
+        "B00LOCKED",
+        key={"format": "aaxc", "key": "00", "iv": "11"},
+    )
+    _make_locked_book(fake_paths, "B00LOCKAAX", container="aax", key={"format": "aax"})
+
+    parsed = validate_stream(run_cli("local", fake=True), expect_last="done")
+    local = next(event for event in parsed if event["type"] == "local")
+    assert [book["asin"] for book in local["books"]] == [
+        "B00LOCKAAX",
+        "B00LOCKED",
+        "B00OLDM4B",
+    ]
+    by_asin = {book["asin"]: book for book in local["books"]}
+    # The locked book's size includes its key and chapter file.
+    assert by_asin["B00LOCKED"]["size"] >= 300
+    assert by_asin["B00LOCKED"]["downloaded_at"] == "2026-02-03T04:05:06Z"
+
+
+def test_local_ignores_a_locked_file_without_a_key(run_cli, validate_stream, fake_paths):
+    _make_locked_book(fake_paths, "B00NOKEY", key=None)
+
+    parsed = validate_stream(run_cli("local", fake=True), expect_last="done")
+    local = next(event for event in parsed if event["type"] == "local")
+    assert local["books"] == []
+
+
+def test_local_ignores_an_unreadable_key_file(run_cli, validate_stream, fake_paths):
+    directory = _make_locked_book(fake_paths, "B00BADKEY", key=None)
+    (directory / "key.json").write_text("{not json", encoding="utf-8")
+
+    parsed = validate_stream(run_cli("local", fake=True), expect_last="done")
+    local = next(event for event in parsed if event["type"] == "local")
+    assert local["books"] == []
+
+
+def test_remove_deletes_the_key_and_chapters_with_the_book(run_cli, validate_stream, fake_paths):
+    target = _make_locked_book(
+        fake_paths, "B00LOCKED", key={"format": "aaxc", "key": "00", "iv": "11"}
+    )
+    other = _make_book(fake_paths, "B00FAKE02")
+
+    result = run_cli("remove", "B00LOCKED", fake=True)
+    assert result.returncode == 0, result.stderr
+    parsed = validate_stream(result, expect_last="done")
+    assert parsed[-1]["freed_bytes"] >= 300
+    assert not target.exists()
+    assert other.is_dir()
 
 
 def test_remove_deletes_one_book_and_reports_freed_bytes(

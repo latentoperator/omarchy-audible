@@ -1,9 +1,10 @@
-"""Local books: the filesystem scan and the safe removal (ARCHITECTURE 3, 4.4).
+"""Local books: the filesystem scan, removal and playback info (ARCHITECTURE 3, 4.4).
 
 The filesystem is the source of truth for "is this book local". A book is a
-directory ``<booksDir>/<asin>/`` holding ``book.m4b`` and ``meta.json``; in
-progress work lives in ``.partial/`` and a half-written book in
-``book.m4b.tmp``, neither of which counts as local.
+directory ``<booksDir>/<asin>/`` holding either the old decrypted
+``book.m4b``, or the locked original ``book.aaxc``/``book.aax`` **plus** a
+readable ``key.json`` (B11, D7). In progress work lives in ``.partial/`` and a
+half-written book in a ``*.tmp`` file, none of which counts as local.
 
 Removal only ever deletes one ASIN directory inside ``booksDir``. It refuses a
 path that escapes ``booksDir`` and refuses a symlink, and it makes no network
@@ -22,9 +23,17 @@ from typing import Any
 
 from . import fsutil
 from .errors import PipelineError
+from .paths import Paths
 from .protocol import ErrorCode
 
+# Every audio file a book directory may hold. ``book.m4b`` is an old, unlocked
+# download; the other two are the locked originals (B11).
 BOOK_FILENAME = "book.m4b"
+AUDIO_FILENAMES: tuple[str, ...] = ("book.m4b", "book.aaxc", "book.aax")
+# The locked originals: local only together with a readable ``key.json``.
+LOCKED_AUDIO_FILENAMES: tuple[str, ...] = ("book.aaxc", "book.aax")
+KEY_FILENAME = "key.json"
+CHAPTERS_FILENAME = "chapters.txt"
 META_FILENAME = "meta.json"
 PARTIAL_DIRNAME = ".partial"
 
@@ -63,6 +72,45 @@ def write_meta(directory: Path, data: dict[str, Any]) -> None:
     fsutil.atomic_write_json(directory / META_FILENAME, data)
 
 
+def read_key(directory: Path) -> dict[str, Any]:
+    """Read ``key.json``, or an empty dict when it is absent or unreadable.
+
+    A locked book is local only when this returns a dict, so "readable" here
+    means "parses as a JSON object" (B11, ARCHITECTURE 3).
+    """
+    try:
+        data = json.loads((directory / KEY_FILENAME).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def local_audio_file(directory: Path) -> Path | None:
+    """The audio file that makes ``directory`` a local book, or ``None``.
+
+    An old ``book.m4b`` is local on its own; a locked ``book.aaxc``/``book.aax``
+    needs a readable ``key.json`` beside it (B11).
+    """
+    legacy = directory / BOOK_FILENAME
+    if legacy.is_file():
+        return legacy
+    if read_key(directory):
+        for name in LOCKED_AUDIO_FILENAMES:
+            candidate = directory / name
+            if candidate.is_file():
+                return candidate
+    return None
+
+
+def read_activation_bytes(paths: Paths) -> str | None:
+    """The account-wide legacy AAX key, read from disk only (no network call)."""
+    try:
+        value = paths.activation_bytes_file.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return value or None
+
+
 def _iso_from_mtime(path: Path) -> str:
     try:
         stamp = path.stat().st_mtime
@@ -84,17 +132,69 @@ def scan_local(books_dir: Path) -> list[dict[str, Any]]:
     for entry in sorted(books_dir.iterdir()):
         if entry.is_symlink() or not entry.is_dir():
             continue
-        book = entry / BOOK_FILENAME
-        if not book.is_file():
+        audio = local_audio_file(entry)
+        if audio is None:
             continue
         meta = read_meta(entry)
         downloaded_at = meta.get("downloaded_at")
         if not isinstance(downloaded_at, str) or not downloaded_at:
-            downloaded_at = _iso_from_mtime(book)
+            downloaded_at = _iso_from_mtime(audio)
         books.append(
             {"asin": entry.name, "size": dir_size(entry), "downloaded_at": downloaded_at}
         )
     return books
+
+
+def play_info_payload(paths: Paths, asin: str) -> dict[str, Any]:
+    """The ``play_info`` event payload for a local book (ARCHITECTURE 4.2, D7).
+
+    ``lavf_options`` is the ready-made mpv ``demuxer-lavf-o`` value: the aaxc
+    voucher key/iv, the account activation bytes for a legacy aax, or ``""``
+    for an old ``book.m4b``. It is a secret; it is emitted only here, and only
+    after validating the ASIN. Real mode never makes a network call.
+    """
+    target = validate_asin(paths.books_dir, asin)
+    audio = local_audio_file(target)
+    if audio is None:
+        raise PipelineError(
+            ErrorCode.NOT_LOCAL,
+            f"no local book for {asin}",
+            hint="it is not downloaded on this machine",
+        )
+    chapters = target / CHAPTERS_FILENAME
+    lavf = ""
+    if audio.name in LOCKED_AUDIO_FILENAMES:
+        key = read_key(target)
+        if audio.name == "book.aaxc":
+            voucher_key = key.get("key")
+            iv = key.get("iv")
+            if (
+                not isinstance(voucher_key, str)
+                or not voucher_key
+                or not isinstance(iv, str)
+                or not iv
+            ):
+                raise PipelineError(
+                    ErrorCode.DECRYPT,
+                    "the book's key file is unreadable",
+                    hint="download the book again",
+                )
+            lavf = f"audible_key={voucher_key},audible_iv={iv}"
+        else:
+            activation = read_activation_bytes(paths)
+            if not activation:
+                raise PipelineError(
+                    ErrorCode.DECRYPT,
+                    "the account's activation bytes are missing",
+                    hint="sign in again, or run: omarchy-audible login-import-cli",
+                )
+            lavf = f"activation_bytes={activation}"
+    return {
+        "type": "play_info",
+        "path": str(audio),
+        "chapters_file": str(chapters) if chapters.is_file() else None,
+        "lavf_options": lavf,
+    }
 
 
 def validate_asin(books_dir: Path, asin: str, *, code: str = ErrorCode.BAD_ASIN) -> Path:

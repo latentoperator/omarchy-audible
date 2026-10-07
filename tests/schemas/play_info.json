@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "play_info event",
+  "description": "Payload of `play-info` (ARCHITECTURE 4.2, D7): how the player loads one local book. `path` is the audio file (an old book.m4b, or a locked book.aaxc/book.aax). `chapters_file` is the ffmetadata file built from Audible's chapter list, or null when there is none. `lavf_options` is the ready-made mpv `demuxer-lavf-o` value (empty for an old book.m4b); it is a secret and must never be logged or stored.",
+  "type": "object",
+  "required": ["type", "path", "chapters_file", "lavf_options"],
+  "properties": {
+    "type": { "const": "play_info" },
+    "path": { "type": "string", "minLength": 1 },
+    "chapters_file": { "type": ["string", "null"] },
+    "lavf_options": { "type": "string" }
+  },
+  "additionalProperties": false
+}
