@@ -274,11 +274,13 @@ def split_push_args(
     while index < len(args):
         token = args[index]
         if token == "--at":
-            local_updated_at = args[index + 1] if index + 1 < len(args) else None
+            value = args[index + 1] if index + 1 < len(args) else ""
+            # An empty or blank value is the same as no --at (F3).
+            local_updated_at = value.strip() or None
             index += 2
             continue
         if token.startswith("--at="):
-            local_updated_at = token.split("=", 1)[1] or None
+            local_updated_at = token.split("=", 1)[1].strip() or None
             index += 1
             continue
         if token.startswith("-"):

@@ -288,6 +288,9 @@ def test_position_push_requires_at(run_cli, validate_stream):
         ("B00FAKE01", "1000"),
         ("B00FAKE01", "1000", "--at="),
         ("B00FAKE01", "1000", "--at"),
+        ("B00FAKE01", "1000", "--at", ""),
+        ("B00FAKE01", "1000", "--at", "   "),
+        ("B00FAKE01", "1000", "--at=   "),
     ):
         result = run_cli("position-push", *args, fake=True)
         assert result.returncode == protocol.EXIT_USAGE, args
