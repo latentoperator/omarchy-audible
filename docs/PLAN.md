@@ -249,9 +249,9 @@ Placed by Dante. Order: B14 lands on `b11` before it merges, then the rest in th
 
 - [x] **B14 — Re-download keeps the working copy until the new one is ready** (tier B; Hopebox, **on `b11`**, before `b11` merges; F7, F10). Stage `key.json`, `chapters.txt` and the audio in `.partial/`, verify there, and only then clear the old files and move the new ones in. The free-space check counts the space the old copy will free.
   Acceptance: a failed or cancelled re-download of a local book (every fake-fail mode) leaves the old book playable and unchanged; a successful one leaves only the new layout.
-- [ ] **P6 — Clock-skew lockout** (tier B; Hopebox JS + backend, then a desktop wiring touch; F1, F3). A remote entry whose `ms` equals this device's last pushed `ms` is our own echo, not newer (the rule `Catchup.js` already uses). `position-push` without `--at` is `invalid_args`. A repeated `stale` shows a line in Mini instead of being dropped silently.
+- [x] **P6 — Clock-skew lockout** (tier B; Hopebox JS + backend, then a desktop wiring touch; F1, F3). A remote entry whose `ms` equals this device's last pushed `ms` is our own echo, not newer (the rule `Catchup.js` already uses). `position-push` without `--at` is `invalid_args`. A repeated `stale` shows a line in Mini instead of being dropped silently.
   Acceptance: a test with the device clock behind the server by more than the push interval keeps pushing; vectors shared by Python and JS.
-  *Hopebox half done in #65; desktop wiring of `staleNotice` pending.*
+  *Hopebox half done in #65; desktop wiring of `staleNotice` done on `p6-desktop` (2026-10-07).*
 - [x] **B15 — Confirm `last_updated` is UTC** (maintainer; F2). Folded into B11's desktop acceptance (one real push read back against the wall clock); record the result in SPIKE-RESULTS S3. *Done 2026-10-07: UTC, offset about +1 s.*
 - [x] **B12 — Backend hardening** (tier B; Hopebox; F3 if not in P6, F4, F6, F8, F9, F13, F14, **F34, F35**). Tests first.
 - [x] **B13 — Login saves before fetching activation bytes** (tier A; Hopebox; F5). No orphan device registration when the activation-bytes fetch fails.
