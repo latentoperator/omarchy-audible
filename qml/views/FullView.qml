@@ -150,6 +150,13 @@ ColumnLayout {
       Layout.alignment: Qt.AlignTop
       spacing: Style.spacing.xxs
 
+      // The same Library button as Mini's (U8); playback carries on.
+      Button {
+        iconText: Mini.GLYPH_LIBRARY
+        tooltipText: "Library"
+        onClicked: if (root.service) root.service.showView(Panel.VIEW_LIBRARY)
+      }
+
       Button {
         iconText: Player.GLYPH_COLLAPSE
         tooltipText: "Mini player (Backspace)"

@@ -230,7 +230,7 @@ Depends on S5/S6 results and the fake backend.
   A compact pinned strip showing title, play/pause, and ⏪/⏩, tapping it opens Mini.
   Acceptance: visible only when a book is loaded; no layout jump when it appears.
 
-- [ ] **U8 — Library button in the Full view** (tier A; Chris, G4) — Full has collapse, ✕ and Backspace but no way to reach the Library directly; add the same library button Mini has (FR-U3), and add it to FR-U4.
+- [x] **U8 — Library button in the Full view** (tier A; Chris, G4) — Full has collapse, ✕ and Backspace but no way to reach the Library directly; add the same library button Mini has (FR-U3), and add it to FR-U4. *Done on `u8-full-library` (2026-10-07); FR-U4 is Dante's to update at merge.*
   Acceptance: one click from Full opens Library with playback untouched; the now-playing strip still leads back to Mini.
 
 - [ ] **U9 — Pause lag check** (tier B; G4 finding) — audio carries on for about a second after ⏯. The plugin sends one `set pause` over IPC, so first measure the gap (IPC send → `pause` property change → silence) and try mpv's `--audio-buffer` and PipeWire latency. Change something only if the cause is in our hands and the fix doesn't cause dropouts.

@@ -290,7 +290,7 @@ The bar widget owns a `qs.Ui` `KeyboardPanel` anchored under the book icon (✅ 
 - Select a book in Library → hide the panel, start playback, and reopen on the **Mini** view when playback begins (so the user sees it work).
 - ✕ / Esc / click-away → hide the panel; audio continues.
 - Bar click → **Mini** if a book is loaded, otherwise **Library**.
-- Mini has a library button (→ Library) and a maximize button (→ Full). Full has a collapse button (→ Mini).
+- Mini has a library button (→ Library) and a maximize button (→ Full). Full has the same library button (U8) and a collapse button (→ Mini).
 - Onboarding view replaces Library when `status.authenticated` is false or setup is incomplete.
 
 Keyboard: search field focused on open; ↑/↓ move; Enter play; Esc close; Space play/pause when the search field is empty; ←/→ skip in Mini/Full; Backspace in Full collapses to Mini. In the Mini chapter popup, ↑/↓ move, Enter jumps to the chapter and Esc closes only the popup.
