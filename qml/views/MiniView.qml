@@ -191,13 +191,12 @@ ColumnLayout {
   }
 
   // Pushes keep coming back `stale`: the position isn't reaching Audible (P6).
-  Text {
+  SoftText {
     Layout.fillWidth: true
     visible: text.length > 0
     text: root.service ? root.service.staleNotice : ""
     textFormat: Text.PlainText
     wrapMode: Text.WordWrap
-    color: Qt.rgba(Color.popups.text.r, Color.popups.text.g, Color.popups.text.b, 0.75)
     font.family: Style.font.family
     font.pixelSize: Style.font.bodySmall
   }
