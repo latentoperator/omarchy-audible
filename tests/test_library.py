@@ -35,6 +35,7 @@ EXPECTED_API = {
     "buildRows",
     "filterRows",
     "parseState",
+    "queryRows",
     "searchRows",
     "serializeState",
     "sortRows",
@@ -1002,3 +1003,32 @@ def test_serialize_state_never_throws_on_bad_input(library: qjs.JsModule) -> Non
             "volume": None,
             "speed": None,
         }
+
+
+# --- queryRows (U10a) ---------------------------------------------------------
+def test_query_rows_is_sort_then_filter_then_search(
+    library: qjs.JsModule, fixture_rows: list[dict]
+) -> None:
+    for sort in ("recent", "added", "title", "author"):
+        for filt in ("all", "local", "in-progress"):
+            for text in ("", "winter", "zzzz"):
+                expected = library.call(
+                    "searchRows",
+                    library.call(
+                        "filterRows", library.call("sortRows", fixture_rows, sort), filt
+                    ),
+                    text,
+                )
+                got = library.call("queryRows", fixture_rows, sort, filt, text)
+                assert got == expected
+
+
+def test_query_rows_leaves_its_input_alone(
+    library: qjs.JsModule, fixture_rows: list[dict]
+) -> None:
+    before = [dict(row) for row in fixture_rows]
+    assert asins(library.call("queryRows", fixture_rows, "title", "all", "winter")) == [
+        A3
+    ]
+    assert fixture_rows == before
+    assert library.call("queryRows", None, "title", "all", "x") == []

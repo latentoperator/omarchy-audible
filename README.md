@@ -89,6 +89,8 @@ omarchy-shell latentoperator.audible <method> [args]
 
 Every method returns a short string: `ok` on success, or an error such as `error: nothing loaded`.
 
+The target also has read-only status methods, such as `playerStatus`, and test methods. The test methods only work in the plugin's development fake mode; otherwise they return `error: dev only`.
+
 **The plugin does not add any keybinding.** To add your own, put this in your Hyprland config — that file is yours, this project never edits it:
 
 ```ini

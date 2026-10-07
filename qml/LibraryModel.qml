@@ -32,8 +32,7 @@ Item {
     stateDoc, localBooks, jobs)
 
   readonly property bool catalogLoaded: Playback.parseJson(catalogText, null) !== null
-  readonly property var rows: Library.searchRows(
-    Library.filterRows(Library.sortRows(allRows, sortKey), filterKey), searchText)
+  readonly property var rows: Library.queryRows(allRows, sortKey, filterKey, searchText)
   readonly property int count: rows.length
 
   // `{asin: modified ms}` for each cover file on disk; the listing follows
