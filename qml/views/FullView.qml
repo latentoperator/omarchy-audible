@@ -87,25 +87,23 @@ ColumnLayout {
         font.bold: true
       }
 
-      Text {
+      SoftText {
         Layout.fillWidth: true
         readonly property var names: Mini.authors(root.loaded, root.row)
         visible: names.length > 0
         text: Format.names(names)
         textFormat: Text.PlainText
         elide: Text.ElideRight
-        color: Qt.rgba(Color.popups.text.r, Color.popups.text.g, Color.popups.text.b, 0.75)
         font.family: Style.font.family
         font.pixelSize: Style.font.body
       }
 
-      Text {
+      SoftText {
         Layout.fillWidth: true
         visible: root.narratorNames.length > 0
         text: "Narrated by " + Format.names(root.narratorNames)
         textFormat: Text.PlainText
         elide: Text.ElideRight
-        color: Qt.rgba(Color.popups.text.r, Color.popups.text.g, Color.popups.text.b, 0.75)
         font.family: Style.font.family
         font.pixelSize: Style.font.bodySmall
       }
@@ -137,13 +135,12 @@ ColumnLayout {
       }
 
       // Why the position just moved: a catch-up jump to another device's spot.
-      Text {
+      SoftText {
         Layout.fillWidth: true
         visible: text.length > 0
         text: root.service ? root.service.catchupNote : ""
         textFormat: Text.PlainText
         wrapMode: Text.WordWrap
-        color: Qt.rgba(Color.popups.text.r, Color.popups.text.g, Color.popups.text.b, 0.75)
         font.family: Style.font.family
         font.pixelSize: Style.font.bodySmall
       }

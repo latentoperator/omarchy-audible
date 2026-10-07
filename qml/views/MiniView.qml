@@ -15,6 +15,9 @@ ColumnLayout {
   id: root
 
   property var service: null
+  // This view's own panel is open (BarWidget binds it). Each monitor has a
+  // Mini view; only the open one shows the chapter popup (H1 F25).
+  property bool panelOpen: false
 
   readonly property var player: service ? service.player : null
   readonly property var library: service ? service.library : null
@@ -33,13 +36,9 @@ ColumnLayout {
 
   spacing: Style.spacing.panelGap
 
-  Connections {
-    target: root.service
-    function onChapterListOpenChanged() {
-      if (root.service.chapterListOpen) chapterMenu.open()
-      else chapterMenu.close()
-    }
-  }
+  readonly property bool chapterPopupShown: Panel.chapterPopupShown(
+    service ? service.chapterListOpen : false, panelOpen)
+  onChapterPopupShownChanged: chapterPopupShown ? chapterMenu.open() : chapterMenu.close()
 
   RowLayout {
     Layout.fillWidth: true
@@ -69,15 +68,13 @@ ColumnLayout {
         font.pixelSize: Style.font.title
       }
 
-      Text {
+      SoftText {
         Layout.fillWidth: true
         readonly property var names: Mini.authors(root.loaded, root.row)
         visible: names.length > 0
         text: Format.names(names)
         textFormat: Text.PlainText
         elide: Text.ElideRight
-        // Muted is too faint for names on most themes (G3).
-        color: Qt.rgba(Color.popups.text.r, Color.popups.text.g, Color.popups.text.b, 0.75)
         font.family: Style.font.family
         font.pixelSize: Style.font.body
       }
@@ -183,25 +180,23 @@ ColumnLayout {
   }
 
   // Why the position just moved: a catch-up jump to another device's spot.
-  Text {
+  SoftText {
     Layout.fillWidth: true
     visible: text.length > 0
     text: root.service ? root.service.catchupNote : ""
     textFormat: Text.PlainText
     wrapMode: Text.WordWrap
-    color: Qt.rgba(Color.popups.text.r, Color.popups.text.g, Color.popups.text.b, 0.75)
     font.family: Style.font.family
     font.pixelSize: Style.font.bodySmall
   }
 
   // Pushes keep coming back `stale`: the position isn't reaching Audible (P6).
-  Text {
+  SoftText {
     Layout.fillWidth: true
     visible: text.length > 0
     text: root.service ? root.service.staleNotice : ""
     textFormat: Text.PlainText
     wrapMode: Text.WordWrap
-    color: Qt.rgba(Color.popups.text.r, Color.popups.text.g, Color.popups.text.b, 0.75)
     font.family: Style.font.family
     font.pixelSize: Style.font.bodySmall
   }
