@@ -13,6 +13,7 @@ import contextlib
 import json
 
 import pytest
+
 from omarchy_audible import commands, positions, protocol
 from omarchy_audible.errors import PipelineError
 from omarchy_audible.paths import Paths

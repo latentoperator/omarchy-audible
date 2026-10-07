@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 import pytest
+
 from omarchy_audible import bootstrap
 from omarchy_audible.errors import PipelineError
 from omarchy_audible.paths import Paths

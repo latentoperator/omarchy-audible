@@ -17,6 +17,7 @@ import urllib.request
 from pathlib import Path
 
 import pytest
+
 from omarchy_audible import catalog, commands, positions, protocol
 from omarchy_audible.errors import PipelineError
 

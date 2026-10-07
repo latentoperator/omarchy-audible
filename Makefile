@@ -8,6 +8,8 @@ test:
 	python -m pytest -q
 
 lint: check-symlinks
+	ruff check .
+	ruff format --check .
 	omarchy plugin validate .
 
 check-symlinks:

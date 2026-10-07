@@ -1,6 +1,6 @@
 # Omarchy Audible
 
-> **Status: backend built, drawer not yet.** The command-line backend works against a real Audible account and keeps books locked as Audible sends them; the bar icon, drawer and player come next. See [docs/STATE.md](docs/STATE.md).
+> **Status: M4 done — the bar icon, drawer and player are built, and B11 is in `main`.** Books download exactly as Audible sends them and stay locked: no decrypted copy is written. The review follow-ups (P6, B12, B13, P7) are under way. See [docs/STATE.md](docs/STATE.md).
 
 A book icon in the [Omarchy](https://omarchy.org) bar. Click it to browse your Audible library in a themed drawer, pick a book, and a mini player takes over. Dismiss it and the book keeps playing. Only the books you're listening to live on your laptop. Removing one never touches your Audible account.
 
@@ -96,6 +96,18 @@ bind = SUPER, A, exec, omarchy-shell latentoperator.audible toggle
 ```
 
 `qs ipc show` lists the target's methods.
+
+## Tests
+
+The suite has two halves: the Python backend under `tests/`, and the pure `qml/lib/*.js` libraries, which run in PySide6's `QJSEngine` — the same V4 engine Quickshell uses.
+
+```sh
+pip install -e '.[dev]'   # pytest, ruff, jsonschema, PySide6-Essentials
+make test                 # python -m pytest -q
+make lint                 # ruff check ., ruff format --check ., omarchy plugin validate ., no-symlink check
+```
+
+The JS suites need PySide6. They **fail** when it is missing rather than skipping, so a missing engine can never leave them silently green; set `OMARCHY_AUDIBLE_ALLOW_SKIP_QJS=1` to skip them on purpose, e.g. on a machine that only runs the Python backend. Tests that build or probe the fake audio (`get`, `cancel`, re-download, `play-info`) need `ffmpeg`/`ffprobe` on `PATH`; where they live elsewhere, point `OMARCHY_AUDIBLE_FFMPEG_DIR` at their directory and it is prepended.
 
 ## Documents
 

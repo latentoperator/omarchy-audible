@@ -16,6 +16,7 @@ import json
 from pathlib import Path
 
 import pytest
+
 from omarchy_audible.commands import KNOWN_COMMANDS
 
 TERMINAL_TYPES = frozenset({"done", "error"})

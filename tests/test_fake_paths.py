@@ -11,9 +11,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from omarchy_audible.paths import FAKE_DIR_NAME, PLUGIN_DIR_NAME, Paths
-
 from test_contract import COMMAND_CASES
+
+from omarchy_audible.paths import FAKE_DIR_NAME, PLUGIN_DIR_NAME, Paths
 
 
 def _snapshot(roots: tuple[Path, ...]) -> dict[str, tuple[str, int, bytes]]:

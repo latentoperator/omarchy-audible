@@ -37,7 +37,7 @@ DAY = 86400000
 def iso_at(offset_ms: int) -> str:
     """An ISO-8601 UTC timestamp ``offset_ms`` from ``NOW`` (millisecond safe)."""
     total = NOW + offset_ms
-    moment = datetime.datetime.fromtimestamp(total // 1000, datetime.timezone.utc)
+    moment = datetime.datetime.fromtimestamp(total // 1000, datetime.UTC)
     return moment.strftime("%Y-%m-%dT%H:%M:%S") + f".{total % 1000:03d}Z"
 
 
@@ -251,7 +251,7 @@ def test_ago_is_never_for_a_missing_or_bad_timestamp(
 
 
 def test_ago_falls_back_to_the_engine_clock(module: qjs.JsModule) -> None:
-    now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    now = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     assert module.call("ago", now) == "just now"
 
 

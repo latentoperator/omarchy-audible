@@ -18,6 +18,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
 from omarchy_audible import auth, commands, protocol
 from omarchy_audible.errors import PipelineError
 from omarchy_audible.paths import Paths
