@@ -36,7 +36,28 @@ def _runtime_dir(env: Mapping[str, str], home: Path) -> Path:
         return Path(value)
     # XDG_RUNTIME_DIR has no standard fallback; use a per-user directory under
     # the system temp dir so jobs and the mpv socket still have a place to live.
-    return Path(tempfile.gettempdir()) / f"{PLUGIN_DIR_NAME}-{os.getuid()}"
+    # It holds the job lock and the mpv socket, so it is created ``0700`` — and
+    # tightened when it already exists looser and is ours (F13).
+    fallback = Path(tempfile.gettempdir()) / f"{PLUGIN_DIR_NAME}-{os.getuid()}"
+    _ensure_private_owned_dir(fallback)
+    return fallback
+
+
+def _ensure_private_owned_dir(path: Path) -> None:
+    """Create ``path`` as ``0700``, or tighten it when it is ours (F13).
+
+    Anything that is not a directory we own (a symlink, another user's file) is
+    left alone.
+    """
+    try:
+        if path.is_symlink() or (path.exists() and not path.is_dir()):
+            return
+        path.mkdir(mode=0o700, exist_ok=True)
+        stat_result = path.stat()
+        if stat_result.st_uid == os.getuid() and stat_result.st_mode & 0o077:
+            os.chmod(path, 0o700)
+    except OSError:  # pragma: no cover - a temp dir we cannot create or chmod
+        pass
 
 
 @dataclass(frozen=True)

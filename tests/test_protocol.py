@@ -65,3 +65,33 @@ def test_stdout_is_only_ndjson(run_cli):
     assert lines, "expected at least one event"
     for line in lines:
         json.loads(line)
+
+
+def test_a_non_ascii_message_survives_a_c_locale(run_cli, paths, events):
+    """F14: a C-locale stdout must not raise on a non-ASCII message.
+
+    The account name comes from ``account.json``, so it is a real character, not
+    a surrogate-escaped byte from argv. ``LC_ALL=C`` alone is not enough —
+    Python 3.7+ switches on UTF-8 mode for the C locale — so coercion and UTF-8
+    mode are turned off too: that is what a plain C shell looks like.
+    """
+    paths.config_dir.mkdir(parents=True, exist_ok=True)
+    (paths.config_dir / "account.json").write_text(
+        '{"account": "Jos\\u00e9 Fake", "marketplace": "us"}', encoding="utf-8"
+    )
+
+    result = run_cli(
+        "status",
+        extra_env={
+            "LC_ALL": "C",
+            "PYTHONUTF8": "0",
+            "PYTHONCOERCECLOCALE": "0",
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Traceback" not in result.stderr
+    parsed = events(result)
+    assert parsed and parsed[-1]["type"] == "done", parsed
+    status = next(event for event in parsed if event["type"] == "status")
+    assert status["account"] == "Jos\u00e9 Fake"

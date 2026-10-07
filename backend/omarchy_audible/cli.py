@@ -32,6 +32,14 @@ def strip_fake_flag(argv: Sequence[str]) -> tuple[list[str], bool]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    # A C-locale shell would otherwise raise UnicodeEncodeError the moment an
+    # event carried a non-ASCII character (an ASIN echo, an account name);
+    # stdout is the NDJSON channel, so replace the character instead of failing
+    # (F14). Guarded because a test harness may swap in a non-TextIOWrapper.
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if reconfigure is not None:
+        reconfigure(encoding="utf-8", errors="replace")
+
     argv = list(sys.argv[1:] if argv is None else argv)
     env = dict(os.environ)
     argv, flag_fake = strip_fake_flag(argv)

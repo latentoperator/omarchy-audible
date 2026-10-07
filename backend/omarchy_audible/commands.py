@@ -314,6 +314,10 @@ class _sigterm_cancels:
 
     @staticmethod
     def _raise(_signum: int, _frame: object) -> None:
+        # A second SIGTERM (the UI killing the pid after ``cancel``, or two
+        # cancels) must not abort the cleanup the first one starts, so every
+        # later SIGTERM is ignored before ``Cancelled`` is raised (F6).
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
         raise Cancelled()
 
 

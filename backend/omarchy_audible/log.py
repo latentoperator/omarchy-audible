@@ -10,29 +10,22 @@ from __future__ import annotations
 import re
 import sys
 
-_SECRET_KEYS = (
-    "authorization_code",
-    "access_token",
-    "refresh_token",
-    "activation_bytes",
-    # The mpv option that carries a key, and the aaxc key/iv names. ``key`` and
-    # ``iv`` alone do not match inside ``audible_key``/``audible_iv`` because
-    # there is no word boundary after the underscore, so they are listed too
-    # (B11).
-    "lavf_options",
-    "demuxer-lavf-o",
-    "audible_key",
-    "audible_iv",
-    "password",
-    "passwd",
-    "secret",
-    "token",
-    "verifier",
-    "key",
-    "iv",
+# A name is secret when it ends in one of these words (optionally plural), so
+# ``access_token``, ``refresh_token``, ``device_private_key``, ``adp_token``,
+# ``website_cookies``, ``store_authentication_cookie``, ``audible_key`` and
+# ``audible_iv`` are all covered by the suffix alone (F4). The names that do not
+# end in one of them — the login code, the legacy account key, ``passwd`` and
+# the mpv option that carries a key (B11) — are listed in full.
+_SECRET_SUFFIXES = "token|key|secret|cookie|password|verifier|iv"
+_SECRET_NAMES = (
+    r"authorization_code|activation_bytes|passwd"
+    r"|lavf_options|demuxer-lavf-o"
+    r"|[\w.-]*(?:" + _SECRET_SUFFIXES + r")s?"
 )
 
-_SECRET_ALT = "|".join(_SECRET_KEYS)
+# The name of a secret: a whole word, or any dotted/dashed/underscored name
+# ending in a secret suffix.
+_SECRET_ALT = r"(?:" + _SECRET_NAMES + r")\b"
 
 # ``key=value`` and ``key: value`` in plain logs and exception text.
 _KEY_VALUE = re.compile(
