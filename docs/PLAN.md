@@ -212,10 +212,11 @@ Depends on S5/S6 results and the fake backend.
   Done when: findings are in `SPIKE-RESULTS.md` with timings, the key-passing method that works, and a go/no-go. Keys and titles stay out of the repo, logs and argv.
   *If it fails:* keep today's decrypt-to-m4b path and record why.
 
-- [ ] **B11 — Drop the decrypted copy** (tier B; S7 = go and D7 = go, both 2026-10-06; design in SPIKE-RESULTS S7 → D7. Split: backend `get`/`remove`/`local` on Hopebox Kanban, `PlayerController` load path on the desktop)
+- [x] **B11 — Drop the decrypted copy** (tier B; S7 = go and D7 = go, both 2026-10-06; design in SPIKE-RESULTS S7 → D7. Split: backend `get`/`remove`/`local` on Hopebox Kanban, `PlayerController` load path on the desktop)
   `get` keeps the original aaxc/aax plus its key material (`0600`) instead of converting; the free-space check falls to ~1×; `PlayerController` passes the key the S7 way; chapters come from `chapters.json`; `remove` deletes the key material too. Existing `.m4b` books keep playing as they are; only new downloads are locked. README and SCOPE §7 say no unlocked copy is stored.
   How it runs (Dante, 2026-10-06): everything lands on a `b11` integration branch, which merges into `main` in one step, because `main`'s QML would not play a new locked download on its own. Backend, `play-info` and the pure-JS helpers go through Hopebox Kanban as a PR into `b11`. The QML wiring and real-mode acceptance follow [briefs/B11-desktop.md](briefs/B11-desktop.md) on the desktop.
   Acceptance: fake and real-mode get → play → seek → chapter → resume → remove on the desktop, including one 100+ chapter book; a PCM-decode test (not just `file-loaded`) proves the unlock; no key in any process's argv (`ps -eo args`), logs or `recentEvents`; contract tests updated; J6 in full in real mode (finish a book → Remove from this device → download it again → it resumes where Audible says, including the finished-book Resume / Start over prompt), carried over from G4.
+  *Accepted 2026-10-07 on the desktop* (MANUAL-TEST.md, B11): all §4 checks pass. The 100+ chapter check ran on Carl's 50 chapters through `chapters-file`, because no book in the library has 100+ (finding d, for Dante to rule on).
 
 - [x] **U5 — Mini view, complete** (tier B; needs G3, extends U2a)
   Per SCOPE FR-U3: cover, title/author, current chapter with a tap-to-open chapter popup, scrub bar (drag to seek, elapsed/remaining), ⏮ ⏪N ⏯ ⏩N ⏭, speed pill that cycles presets, maximize, library, dismiss.
@@ -248,7 +249,7 @@ Placed by Dante. Order: B14 lands on `b11` before it merges, then the rest in th
   Acceptance: a failed or cancelled re-download of a local book (every fake-fail mode) leaves the old book playable and unchanged; a successful one leaves only the new layout.
 - [ ] **P6 — Clock-skew lockout** (tier B; Hopebox JS + backend, then a desktop wiring touch; F1, F3). A remote entry whose `ms` equals this device's last pushed `ms` is our own echo, not newer (the rule `Catchup.js` already uses). `position-push` without `--at` is `invalid_args`. A repeated `stale` shows a line in Mini instead of being dropped silently.
   Acceptance: a test with the device clock behind the server by more than the push interval keeps pushing; vectors shared by Python and JS.
-- [ ] **B15 — Confirm `last_updated` is UTC** (maintainer; F2). Folded into B11's desktop acceptance (one real push read back against the wall clock); record the result in SPIKE-RESULTS S3.
+- [x] **B15 — Confirm `last_updated` is UTC** (maintainer; F2). Folded into B11's desktop acceptance (one real push read back against the wall clock); record the result in SPIKE-RESULTS S3. *Done 2026-10-07: UTC, offset about +1 s.*
 - [ ] **B12 — Backend hardening** (tier B; Hopebox; F3 if not in P6, F4, F6, F8, F9, F13, F14). Tests first.
 - [ ] **B13 — Login saves before fetching activation bytes** (tier A; Hopebox; F5). No orphan device registration when the activation-bytes fetch fails.
 - [ ] **P7 — Finished flag and one merge** (tier B; Hopebox JS; F16, F20). Start over clears `finished`; `Library.js` has one timestamp merge. Vectors.

@@ -206,6 +206,7 @@ Both paths work. aaxc uses a per-book key from the voucher instead of the accoun
 | Read back | Exact (delta 0 ms), and `last_updated` changed. |
 | Restore | Exact (delta 0 ms). The book stayed first in "recently listened". |
 | `last_updated` format | `YYYY-MM-DD HH:MM:SS.f`, **no timezone**. Treating it as UTC gave a plausible age (3.5 h), but that is inferred. B6 should confirm it against a write made at a known time. |
+| `last_updated` is UTC ✅ (B15, 2026-10-07) | Confirmed on HMSP-OMARCHYBEE during B11's acceptance: a real push read back with `position-get` had `updated_at` **about +1 s** from the UTC wall-clock time the pushed position was playing (the log's resolution; the local clock is UTC−5). |
 
 ### Phone check ✅ (2026-10-04)
 
