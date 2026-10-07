@@ -40,7 +40,9 @@ from .positions import (
     FakePositions,
     RealPositions,
     fetch_positions,
+    load_pushed,
     load_remote,
+    mark_own_echoes,
     push_position,
     write_remote,
 )
@@ -261,8 +263,9 @@ def split_push_args(
     """Split ``position-push`` arguments into ``(asin, ms, local_updated_at)``.
 
     The local timestamp is the ``--at`` option: the time the listening that
-    produced the position happened (ARCHITECTURE 4.6). It defaults to now when
-    omitted, and is what the stale check compares against the remote position.
+    produced the position happened (ARCHITECTURE 4.6). It is required — without
+    it the stale check cannot fire (F3), so the caller refuses a missing or
+    empty value as ``invalid_args``.
     """
     asin: str | None = None
     ms_text: str | None = None
@@ -532,7 +535,11 @@ def cmd_position_get(
     cached.update(items)
     write_remote(paths.remote_file, cached)
 
-    protocol.emit("positions", items=items)
+    # Mark this device's own echo so the service can tell it from a phone
+    # position with the same ms (P6, F1); `remote.json` keeps no `own` key.
+    protocol.emit(
+        "positions", items=mark_own_echoes(items, load_pushed(paths.pushed_file))
+    )
     protocol.done()
     return protocol.EXIT_OK
 
@@ -546,7 +553,16 @@ def cmd_position_push(
         protocol.error(
             protocol.ErrorCode.INVALID_ARGS,
             "position-push needs an ASIN and a position in milliseconds",
-            hint="try: omarchy-audible position-push <asin> <ms> [--at <iso-8601>]",
+            hint="try: omarchy-audible position-push <asin> <ms> --at <iso-8601>",
+        )
+        return protocol.EXIT_USAGE
+    if local_updated_at is None:
+        # F3: without the local listening time the stale check can never fire,
+        # so a push without --at (or with an empty one) is invalid, not "now".
+        protocol.error(
+            protocol.ErrorCode.INVALID_ARGS,
+            "position-push needs --at <iso-8601>: the local listening time",
+            hint="pass the listening time, e.g. --at 2026-01-01T00:00:00Z",
         )
         return protocol.EXIT_USAGE
     try:
@@ -575,6 +591,7 @@ def cmd_position_push(
                 books_dir=paths.books_dir,
                 port=port,
                 local_updated_at=local_updated_at,
+                pushed_path=paths.pushed_file,
             )
     except PipelineError as exc:
         protocol.error(exc.code, exc.message, exc.hint)

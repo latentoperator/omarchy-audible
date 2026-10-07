@@ -21,6 +21,8 @@ PLUGIN_DIR_NAME = "omarchy-audible"
 FAKE_DIR_NAME = f"{PLUGIN_DIR_NAME}-fake"
 # Fake mode's kept positions (B10); it exists only under the fake data dir.
 FAKE_POSITIONS_FILE = "fake-account-positions.json"
+# This device's own successful pushes, ``{asin: {ms, at}}`` (P6, F1).
+PUSHED_FILE = "pushed.json"
 
 
 def _xdg_dir(env: Mapping[str, str], var: str, default: Path) -> Path:
@@ -104,6 +106,16 @@ class Paths:
     @property
     def remote_file(self) -> Path:
         return self.data_dir / "remote.json"
+
+    @property
+    def pushed_file(self) -> Path:
+        """This device's own successful pushes, ``{asin: {ms, at}}`` (P6, F1).
+
+        ``position-push`` writes it and ``position-get`` reads it, so an echo
+        of our own push is never taken for a newer position. Fake mode resolves
+        to the fake data dir, like ``remote.json``.
+        """
+        return self.data_dir / PUSHED_FILE
 
     @property
     def state_file(self) -> Path:
