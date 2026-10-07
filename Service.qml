@@ -12,6 +12,7 @@ import "qml/lib/Onboarding.js" as Onboarding
 import "qml/lib/Panel.js" as Panel
 import "qml/lib/Playback.js" as Playback
 import "qml/lib/Player.js" as Player
+import "qml/lib/PlayRequest.js" as PlayRequest
 import "qml/lib/Positions.js" as Positions
 import "qml/lib/Signin.js" as Signin
 
@@ -73,9 +74,11 @@ Item {
   // Failed downloads by ASIN, shown as the row's error state until retried.
   property var failures: ({})
   property string pendingResume: ""
-  // The book a `play-info` is being read for (B11): {asin, startSec}, or
-  // null. Only the newest request plays; a reply for an older one is dropped.
+  // The book a `play-info` is being read for (B11; PlayRequest.js), or null.
+  // Only the newest request plays: a newer intent or a quit drops it, and a
+  // reply for an older one is ignored.
   property var playRequest: null
+  property int playSerial: 0
   // Why the last `play-info` failed. With the player's own failure, the
   // views' "Couldn't start playback" line.
   property string playError: ""
@@ -326,16 +329,18 @@ Item {
   // and with which key (`play-info`, B11); startPlayInfo does the load.
   function playNow(asin, startSec) {
     playError = ""
-    playRequest = { "asin": asin, "startSec": startSec }
-    if (run("play-info", [asin], "play")) return "ok"
+    playSerial += 1
+    var request = PlayRequest.create(asin, startSec, playSerial)
+    playRequest = request
+    if (run(PlayRequest.COMMAND, [asin], request.purpose)) return "ok"
     playRequest = null
     return failPlay("the backend is not ready")
   }
 
   // `record` is the play_info event. Its `lavf_options` is the book's key: it
   // goes straight to the player and is kept nowhere here.
-  function startPlayInfo(asin, record) {
-    if (!playRequest || playRequest.asin !== asin) return
+  function startPlayInfo(job, record) {
+    if (!PlayRequest.matches(playRequest, job)) return
     var startSec = playRequest.startSec
     playRequest = null
     if (!player.play(String(record.path || ""), startSec,
@@ -343,8 +348,8 @@ Item {
   }
 
   // play-info ended without giving this request a file to play.
-  function finishPlayInfo(asin, outcome) {
-    if (!playRequest || playRequest.asin !== asin) return
+  function finishPlayInfo(job, outcome) {
+    if (!PlayRequest.matches(playRequest, job)) return
     playRequest = null
     failPlay(outcome.ok ? "the backend sent no book to play" : String(outcome.message || outcome.code || "unknown error"))
   }
@@ -559,14 +564,24 @@ Item {
     askAsin = ""
     confirmAsin = ""
     if (pendingResume !== asin) pendingResume = ""
+    // A play still waiting for its play-info is overtaken by any new intent.
+    playRequest = null
     removeAfterUnload = removeAfterUnload.filter(function(a) { return a !== asin })
     if (removeAfterUnload.length === 0) unloadTimer.stop()
   }
 
-  // Books a removal must not touch: loaded, resuming, or about to load.
+  // Books a removal must not touch: loaded, resuming, waiting for play-info,
+  // or about to load.
   function busyAsins() {
     var load = player.pendingLoad ? Playback.asinFromPath(player.pendingLoad.path) : ""
-    return [loadedAsin, pendingResume, load]
+    return [loadedAsin, pendingResume, PlayRequest.busyAsin(playRequest), load]
+  }
+
+  // Stop: no play that is still on its way may start the player again.
+  function quitPlayer() {
+    pendingResume = ""
+    playRequest = null
+    player.quit()
   }
 
   function pick(asin) {
@@ -971,7 +986,7 @@ Item {
     function sleepMinutes(minutes: string): string { player.setSleepTimer(Number(minutes) || 0); return "ok" }
     function sleepChapter(): string { player.setSleepEndOfChapter(); return "ok" }
     function sleepCancel(): string { player.cancelSleep(); return "ok" }
-    function quitPlayer(): string { player.quit(); return "ok" }
+    function quitPlayer(): string { root.quitPlayer(); return "ok" }
     function playerStatus(): string { return root.playerSummary() }
     function libraryQuery(sort: string, filter: string, search: string): string { return root.libraryQuery(sort, filter, search) }
     function flushState(): string { store.flush(); return "ok" }
@@ -1087,8 +1102,8 @@ Item {
         var results = root.catchupResults
         results[read] = { "asin": read, "atMs": Date.now(), "remote": record.items[read] || null }
         root.catchupResults = results
-      } else if (record.type === "play_info" && job.purpose === "play") {
-        root.startPlayInfo(job.args[0], record)
+      } else if (record.type === "play_info") {
+        root.startPlayInfo(job, record)
       } else if (record.type === "positions" && job.purpose === "resume") {
         var resumed = job.args[0]
         var remotes = root.resumeRemotes
@@ -1129,7 +1144,7 @@ Item {
         else if (root.prefetched && root.prefetched.asin === readAsin) root.prefetched = null
         if (Catchup.readResumes(root.catchupAsin, readAsin)) root.resumeCaughtUp(readAsin, result ? result.remote : null)
       }
-      if (job.command === "play-info" && job.purpose === "play") root.finishPlayInfo(job.args[0], outcome)
+      if (job.command === PlayRequest.COMMAND) root.finishPlayInfo(job, outcome)
       if (job.purpose === "resume") {
         var resumedAsin = job.args[0]
         var remote = outcome.ok ? (root.resumeRemotes[resumedAsin] || null) : null

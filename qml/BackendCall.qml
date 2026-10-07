@@ -39,6 +39,10 @@ Item {
   function emitRecords(records) {
     for (var index = 0; index < records.length; index++) {
       root.record(records[index])
+      // play-info's key has now reached the service, which hands it straight
+      // to mpv. Don't keep it in `splitter.events` until this call is
+      // destroyed (B11); the outcome only needs the terminal event.
+      if (records[index].type === "play_info") records[index].lavf_options = ""
     }
   }
 
