@@ -31,7 +31,9 @@ def atomic_write_text(path: Path, text: str) -> None:
 
 def atomic_write_json(path: Path, data: Any) -> None:
     """Serialise ``data`` as compact JSON and write it atomically."""
-    atomic_write_text(path, json.dumps(data, separators=(",", ":"), ensure_ascii=False) + "\n")
+    atomic_write_text(
+        path, json.dumps(data, separators=(",", ":"), ensure_ascii=False) + "\n"
+    )
 
 
 def atomic_write_bytes(path: Path, data: bytes) -> None:

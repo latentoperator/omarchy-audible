@@ -62,7 +62,9 @@ def test_play_info_aax_returns_activation_bytes_from_the_config_dir(
 
     assert payload["path"] == str(fake_paths.books_dir / ASIN / "book.aax")
     assert payload["chapters_file"] == str(fake_paths.books_dir / ASIN / "chapters.txt")
-    assert payload["lavf_options"] == f"activation_bytes={fakestate.FAKE_ACTIVATION_BYTES}"
+    assert (
+        payload["lavf_options"] == f"activation_bytes={fakestate.FAKE_ACTIVATION_BYTES}"
+    )
     # The key file is a reference, not a copy: no activation bytes in it.
     assert json.loads(
         (fake_paths.books_dir / ASIN / "key.json").read_text(encoding="utf-8")
@@ -86,9 +88,7 @@ def test_play_info_aax_without_activation_bytes_is_a_decrypt_error(
     assert last["code"] == "decrypt"
 
 
-def test_play_info_old_m4b_has_no_key_and_no_chapter_file(
-    run_cli, events, fake_paths
-):
+def test_play_info_old_m4b_has_no_key_and_no_chapter_file(run_cli, events, fake_paths):
     book_dir = fake_paths.books_dir / ASIN
     book_dir.mkdir(parents=True)
     (book_dir / "book.m4b").write_bytes(b"old audio")
@@ -108,9 +108,7 @@ def test_play_info_requires_the_book_to_be_local(run_cli, events, fake_paths):
     assert events(result)[-1]["code"] == "not_local"
 
 
-def test_play_info_locked_file_without_a_key_is_not_local(
-    run_cli, events, fake_paths
-):
+def test_play_info_locked_file_without_a_key_is_not_local(run_cli, events, fake_paths):
     book_dir = fake_paths.books_dir / "B00NOKEY1"
     book_dir.mkdir(parents=True)
     (book_dir / "book.aaxc").write_bytes(b"locked")
@@ -171,8 +169,16 @@ def test_play_info_never_writes_into_the_real_tree(
     from omarchy_audible.paths import Paths
 
     real = Paths.from_env(env)
-    before = sorted(p.name for p in real.books_dir.iterdir()) if real.books_dir.exists() else []
+    before = (
+        sorted(p.name for p in real.books_dir.iterdir())
+        if real.books_dir.exists()
+        else []
+    )
     assert run_cli("get", ASIN, fake=True).returncode == 0
     assert run_cli("play-info", ASIN, fake=True).returncode == 0
-    after = sorted(p.name for p in real.books_dir.iterdir()) if real.books_dir.exists() else []
+    after = (
+        sorted(p.name for p in real.books_dir.iterdir())
+        if real.books_dir.exists()
+        else []
+    )
     assert after == before

@@ -145,7 +145,9 @@ def test_a_local_scan_entry_wins(library: qjs.JsModule, catalog: dict) -> None:
     assert row["downloadedAt"] == "2026-02-03T04:05:06Z"
 
 
-def test_local_beats_a_job_for_the_same_book(library: qjs.JsModule, catalog: dict) -> None:
+def test_local_beats_a_job_for_the_same_book(
+    library: qjs.JsModule, catalog: dict
+) -> None:
     local = [{"asin": A1, "size": 1, "downloaded_at": "2026-02-03T04:05:06Z"}]
     jobs = [{"asin": A1, "state": "downloading"}]
     row = rows_by_asin(build(library, catalog, local=local, jobs=jobs))[A1]
@@ -164,7 +166,9 @@ def test_local_beats_a_job_for_the_same_book(library: qjs.JsModule, catalog: dic
 def test_every_job_state_is_reflected(
     library: qjs.JsModule, catalog: dict, asin: str, job_state: str
 ) -> None:
-    rows = rows_by_asin(build(library, catalog, jobs=[{"asin": asin, "state": job_state}]))
+    rows = rows_by_asin(
+        build(library, catalog, jobs=[{"asin": asin, "state": job_state}])
+    )
     assert rows[asin]["state"] == job_state
     assert rows[asin]["jobState"] == job_state
     assert rows[A5]["state"] == "cloud"
@@ -183,12 +187,17 @@ def test_job_states_accept_a_map(library: qjs.JsModule, catalog: dict) -> None:
 
 
 def test_the_most_advanced_job_state_wins(library: qjs.JsModule, catalog: dict) -> None:
-    jobs = [{"asin": A2, "state": "queued"}, {"asin": A2, "state": "error", "message": "x"}]
+    jobs = [
+        {"asin": A2, "state": "queued"},
+        {"asin": A2, "state": "error", "message": "x"},
+    ]
     assert rows_by_asin(build(library, catalog, jobs=jobs))[A2]["state"] == "error"
 
 
 def test_unknown_job_states_are_ignored(library: qjs.JsModule, catalog: dict) -> None:
-    rows = rows_by_asin(build(library, catalog, jobs=[{"asin": A2, "state": "exploded"}]))
+    rows = rows_by_asin(
+        build(library, catalog, jobs=[{"asin": A2, "state": "exploded"}])
+    )
     assert rows[A2]["state"] == "cloud"
 
 
@@ -259,7 +268,9 @@ def merged_position(
     return row["positionMs"]
 
 
-def test_local_position_wins_when_it_is_newer(library: qjs.JsModule, catalog: dict) -> None:
+def test_local_position_wins_when_it_is_newer(
+    library: qjs.JsModule, catalog: dict
+) -> None:
     assert (
         merged_position(
             library,
@@ -273,7 +284,9 @@ def test_local_position_wins_when_it_is_newer(library: qjs.JsModule, catalog: di
     )
 
 
-def test_remote_position_wins_when_it_is_newer(library: qjs.JsModule, catalog: dict) -> None:
+def test_remote_position_wins_when_it_is_newer(
+    library: qjs.JsModule, catalog: dict
+) -> None:
     assert (
         merged_position(
             library,
@@ -287,7 +300,9 @@ def test_remote_position_wins_when_it_is_newer(library: qjs.JsModule, catalog: d
     )
 
 
-def test_equal_timestamps_go_to_the_local_entry(library: qjs.JsModule, catalog: dict) -> None:
+def test_equal_timestamps_go_to_the_local_entry(
+    library: qjs.JsModule, catalog: dict
+) -> None:
     # The Audible no-timezone shape and the local ISO shape are the same instant.
     assert (
         merged_position(
@@ -311,7 +326,12 @@ def test_a_missing_remote_entry_keeps_the_local_position(
 def test_a_missing_local_entry_keeps_the_remote_position(
     library: qjs.JsModule, catalog: dict
 ) -> None:
-    assert merged_position(library, catalog, remote_ms=8000, remote_at="2026-06-01T00:00:00Z") == 8000
+    assert (
+        merged_position(
+            library, catalog, remote_ms=8000, remote_at="2026-06-01T00:00:00Z"
+        )
+        == 8000
+    )
 
 
 def test_no_positions_means_zero(library: qjs.JsModule, catalog: dict) -> None:
@@ -322,7 +342,13 @@ def test_a_local_entry_without_a_timestamp_loses_to_a_timestamped_remote(
     library: qjs.JsModule, catalog: dict
 ) -> None:
     assert (
-        merged_position(library, catalog, local_ms=5000, remote_ms=9000, remote_at="2026-06-01T00:00:00Z")
+        merged_position(
+            library,
+            catalog,
+            local_ms=5000,
+            remote_ms=9000,
+            remote_at="2026-06-01T00:00:00Z",
+        )
         == 9000
     )
 
@@ -345,7 +371,9 @@ def recent_key(
     return row["recentKey"]
 
 
-def test_recent_key_prefers_the_newer_remote_timestamp(library: qjs.JsModule, catalog: dict) -> None:
+def test_recent_key_prefers_the_newer_remote_timestamp(
+    library: qjs.JsModule, catalog: dict
+) -> None:
     assert (
         recent_key(
             library,
@@ -357,7 +385,9 @@ def test_recent_key_prefers_the_newer_remote_timestamp(library: qjs.JsModule, ca
     )
 
 
-def test_recent_key_prefers_the_newer_local_timestamp(library: qjs.JsModule, catalog: dict) -> None:
+def test_recent_key_prefers_the_newer_local_timestamp(
+    library: qjs.JsModule, catalog: dict
+) -> None:
     assert (
         recent_key(
             library,
@@ -369,13 +399,23 @@ def test_recent_key_prefers_the_newer_local_timestamp(library: qjs.JsModule, cat
     )
 
 
-def test_recent_key_uses_the_only_value_available(library: qjs.JsModule, catalog: dict) -> None:
-    assert recent_key(library, catalog, last_played_at="2026-03-01T00:00:00Z") == "2026-03-01T00:00:00Z"
-    assert recent_key(library, catalog, remote_at="2026-03-01T00:00:00Z") == "2026-03-01T00:00:00Z"
+def test_recent_key_uses_the_only_value_available(
+    library: qjs.JsModule, catalog: dict
+) -> None:
+    assert (
+        recent_key(library, catalog, last_played_at="2026-03-01T00:00:00Z")
+        == "2026-03-01T00:00:00Z"
+    )
+    assert (
+        recent_key(library, catalog, remote_at="2026-03-01T00:00:00Z")
+        == "2026-03-01T00:00:00Z"
+    )
     assert recent_key(library, catalog) is None
 
 
-def test_recent_key_compares_no_timezone_as_utc(library: qjs.JsModule, catalog: dict) -> None:
+def test_recent_key_compares_no_timezone_as_utc(
+    library: qjs.JsModule, catalog: dict
+) -> None:
     # Same instant: the local ISO form is not "newer" than the Audible form.
     assert (
         recent_key(
@@ -399,14 +439,18 @@ def test_percent_falls_back_to_the_catalog_when_there_is_no_position(
     assert rows[A5]["percent"] == pytest.approx(100.0)
 
 
-def test_percent_is_derived_from_the_merged_position(library: qjs.JsModule, catalog: dict) -> None:
+def test_percent_is_derived_from_the_merged_position(
+    library: qjs.JsModule, catalog: dict
+) -> None:
     # 2244 minutes * 60000 ms; 41% of it.
     remote = {A3: {"ms": 55202400, "updated_at": "2026-06-01T00:00:00Z"}}
     rows = rows_by_asin(build(library, catalog, remote=remote))
     assert rows[A3]["percent"] == pytest.approx(41.0)
 
 
-def test_percent_is_clamped_to_one_hundred(library: qjs.JsModule, catalog: dict) -> None:
+def test_percent_is_clamped_to_one_hundred(
+    library: qjs.JsModule, catalog: dict
+) -> None:
     remote = {A1: {"ms": 512 * 60000 * 3, "updated_at": "2026-06-01T00:00:00Z"}}
     row = rows_by_asin(build(library, catalog, remote=remote))[A1]
     assert row["percent"] == 100
@@ -429,7 +473,9 @@ def recent_input() -> tuple[dict, dict, dict]:
     return state, remote, {}
 
 
-def test_sort_recent_newest_first_with_missing_last(library: qjs.JsModule, catalog: dict) -> None:
+def test_sort_recent_newest_first_with_missing_last(
+    library: qjs.JsModule, catalog: dict
+) -> None:
     state, remote, _ = recent_input()
     rows = build(library, catalog, state=state, remote=remote)
     assert asins(library.call("sortRows", rows, "recent")) == [A5, A2, A1, A3, A4]
@@ -440,7 +486,9 @@ def test_sort_added_newest_first(library: qjs.JsModule, catalog: dict) -> None:
     assert asins(library.call("sortRows", rows, "added")) == [A2, A5, A1, A4, A3]
 
 
-def test_sort_title_ignores_articles_and_case(library: qjs.JsModule, catalog: dict) -> None:
+def test_sort_title_ignores_articles_and_case(
+    library: qjs.JsModule, catalog: dict
+) -> None:
     rows = build(library, catalog)
     assert asins(library.call("sortRows", rows, "title")) == [A3, A2, A1, A5, A4]
 
@@ -454,9 +502,24 @@ def test_sort_author_uses_surname(library: qjs.JsModule, catalog: dict) -> None:
 def test_sort_title_strips_articles() -> None:
     library = qjs.load("Library")
     rows = [
-        {"title": "The Beta", "authors": ["The Zenith"], "dateAdded": None, "recentKey": None},
-        {"title": "Alpha", "authors": ["A Young"], "dateAdded": None, "recentKey": None},
-        {"title": "An Epsilon", "authors": ["An Aardvark"], "dateAdded": None, "recentKey": None},
+        {
+            "title": "The Beta",
+            "authors": ["The Zenith"],
+            "dateAdded": None,
+            "recentKey": None,
+        },
+        {
+            "title": "Alpha",
+            "authors": ["A Young"],
+            "dateAdded": None,
+            "recentKey": None,
+        },
+        {
+            "title": "An Epsilon",
+            "authors": ["An Aardvark"],
+            "dateAdded": None,
+            "recentKey": None,
+        },
     ]
     assert [row["title"] for row in library.call("sortRows", rows, "title")] == [
         "Alpha",
@@ -525,7 +588,10 @@ def test_sort_author_by_surname_with_honorifics_and_suffixes() -> None:
         "Moss, Ian",
         "Reyes,Zara",
     ]
-    rows = [{"title": n, "authors": [n], "dateAdded": None, "recentKey": None} for n in names]
+    rows = [
+        {"title": n, "authors": [n], "dateAdded": None, "recentKey": None}
+        for n in names
+    ]
     assert [row["authors"][0] for row in library.call("sortRows", rows, "author")] == [
         "June Abernathy",
         "Jane Doe PhD",
@@ -542,9 +608,19 @@ def test_sort_author_by_surname_with_honorifics_and_suffixes() -> None:
 def test_sort_is_stable_for_equal_keys() -> None:
     library = qjs.load("Library")
     rows = [
-        {"title": "The Alpha", "authors": ["Author"], "dateAdded": None, "recentKey": None},
+        {
+            "title": "The Alpha",
+            "authors": ["Author"],
+            "dateAdded": None,
+            "recentKey": None,
+        },
         {"title": "alpha", "authors": ["author"], "dateAdded": None, "recentKey": None},
-        {"title": "A Alpha", "authors": ["an author"], "dateAdded": None, "recentKey": None},
+        {
+            "title": "A Alpha",
+            "authors": ["an author"],
+            "dateAdded": None,
+            "recentKey": None,
+        },
     ]
     result = library.call("sortRows", rows, "title")
     assert [row["title"] for row in result] == ["The Alpha", "alpha", "A Alpha"]
@@ -559,14 +635,19 @@ def test_sort_does_not_mutate_its_input(library: qjs.JsModule, catalog: dict) ->
     assert [row["asin"] for row in rows] == before
 
 
-def test_sort_with_an_unknown_key_returns_a_copy(library: qjs.JsModule, catalog: dict) -> None:
+def test_sort_with_an_unknown_key_returns_a_copy(
+    library: qjs.JsModule, catalog: dict
+) -> None:
     rows = build(library, catalog)
     assert asins(library.call("sortRows", rows, "sideways")) == ALL_ASINS
 
 
 def test_sort_tolerates_bad_input(library: qjs.JsModule) -> None:
     assert library.call("sortRows", None, "title") == []
-    assert library.call("sortRows", [{"title": None, "authors": None}], "title") is not None
+    assert (
+        library.call("sortRows", [{"title": None, "authors": None}], "title")
+        is not None
+    )
 
 
 # --- filterRows --------------------------------------------------------------
@@ -575,7 +656,9 @@ def test_filter_all_returns_every_row(library: qjs.JsModule, catalog: dict) -> N
     assert asins(library.call("filterRows", rows, "all")) == ALL_ASINS
 
 
-def test_filter_local_keeps_downloaded_books(library: qjs.JsModule, catalog: dict) -> None:
+def test_filter_local_keeps_downloaded_books(
+    library: qjs.JsModule, catalog: dict
+) -> None:
     local = [
         {"asin": A2, "size": 10, "downloaded_at": "2026-01-01T00:00:00Z"},
         {"asin": A5, "size": 20, "downloaded_at": "2026-01-02T00:00:00Z"},
@@ -591,7 +674,9 @@ def test_filter_in_progress_keeps_started_unfinished_books(
     assert asins(library.call("filterRows", rows, "in-progress")) == [A1, A3, A4]
 
 
-def test_filter_in_progress_excludes_a_finished_book(library: qjs.JsModule, catalog: dict) -> None:
+def test_filter_in_progress_excludes_a_finished_book(
+    library: qjs.JsModule, catalog: dict
+) -> None:
     # A5 is at 100% and finished; a book with a position but finished is out.
     remote = {A1: {"ms": 512 * 60000, "updated_at": "2026-06-01T00:00:00Z"}}
     state = {"books": {A1: {"finished": True}}}
@@ -599,7 +684,9 @@ def test_filter_in_progress_excludes_a_finished_book(library: qjs.JsModule, cata
     assert A1 not in asins(library.call("filterRows", rows, "in-progress"))
 
 
-def test_filter_unknown_value_behaves_like_all(library: qjs.JsModule, catalog: dict) -> None:
+def test_filter_unknown_value_behaves_like_all(
+    library: qjs.JsModule, catalog: dict
+) -> None:
     rows = build(library, catalog)
     assert asins(library.call("filterRows", rows, "whatever")) == ALL_ASINS
 
@@ -632,7 +719,9 @@ def fixture_rows(library: qjs.JsModule, catalog: dict) -> list[dict]:
         ("   ", ALL_ASINS),
     ],
 )
-def test_search(fixture_rows: list[dict], text: str, expected: list[str], library: qjs.JsModule) -> None:
+def test_search(
+    fixture_rows: list[dict], text: str, expected: list[str], library: qjs.JsModule
+) -> None:
     assert asins(library.call("searchRows", fixture_rows, text)) == expected
 
 
@@ -752,7 +841,9 @@ def test_parse_state_recovers_from_bad_input(library: qjs.JsModule, text) -> Non
 def test_parse_state_recovers_when_books_or_queue_have_the_wrong_type(
     library: qjs.JsModule,
 ) -> None:
-    parsed = library.call("parseState", '{"schema":1,"books":"nope","push_queue":"nope"}')
+    parsed = library.call(
+        "parseState", '{"schema":1,"books":"nope","push_queue":"nope"}'
+    )
     assert parsed["recovered"] is True
     assert parsed["books"] == {}
     assert parsed["push_queue"] == []
@@ -765,7 +856,9 @@ def test_parse_state_drops_non_numeric_volume_and_speed(library: qjs.JsModule) -
 
 
 def test_parse_state_drops_non_object_queue_entries(library: qjs.JsModule) -> None:
-    parsed = library.call("parseState", '{"schema":1,"push_queue":[1,"x",null,{"asin":"B1"}]}')
+    parsed = library.call(
+        "parseState", '{"schema":1,"push_queue":[1,"x",null,{"asin":"B1"}]}'
+    )
     assert parsed["push_queue"] == [{"asin": "B1", "ms": 0, "at": None}]
 
 
@@ -792,7 +885,15 @@ def test_serialize_state_is_deterministic_and_sorted(library: qjs.JsModule) -> N
     text = library.call("serializeState", first)
     assert text == library.call("serializeState", second)
     parsed = json.loads(text)
-    assert list(parsed) == ["schema", "books", "push_queue", "volume", "speed", "alpha", "zeta"]
+    assert list(parsed) == [
+        "schema",
+        "books",
+        "push_queue",
+        "volume",
+        "speed",
+        "alpha",
+        "zeta",
+    ]
     assert list(parsed["books"]) == ["B1", "B2"]
     assert text.find("recovered") == -1
 

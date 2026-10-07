@@ -67,13 +67,18 @@ def test_blank_and_null_input_never_throws(ndjson: qjs.JsModule) -> None:
 
 # --- chunk boundaries --------------------------------------------------------
 def test_a_line_split_across_three_chunks(ndjson: qjs.JsModule) -> None:
-    line = json.dumps({"type": "progress", "stage": "download", "bytes": 1, "total": 2}) + "\n"
+    line = (
+        json.dumps({"type": "progress", "stage": "download", "bytes": 1, "total": 2})
+        + "\n"
+    )
     parts = [line[:5], line[5:17], line[17:]]
     assert all(parts), "the three parts must all be non-empty"
 
     state, returned = collect(ndjson, parts)
 
-    assert returned == [{"type": "progress", "stage": "download", "bytes": 1, "total": 2}]
+    assert returned == [
+        {"type": "progress", "stage": "download", "bytes": 1, "total": 2}
+    ]
     assert state["events"] == returned
     assert state["buffer"] == ""
 
@@ -119,7 +124,9 @@ def test_carriage_return_line_endings_are_tolerated(ndjson: qjs.JsModule) -> Non
     assert state["buffer"] == ""
 
 
-def test_character_by_character_feed_matches_a_single_chunk(ndjson: qjs.JsModule) -> None:
+def test_character_by_character_feed_matches_a_single_chunk(
+    ndjson: qjs.JsModule,
+) -> None:
     stream = (
         '{"type":"status","ready":true,"missing":[],"authenticated":true,'
         '"marketplace":"us","account":"fake@example.com","catalog_age_s":null,'
@@ -144,13 +151,19 @@ def test_non_json_lines_become_a_bad_line(ndjson: qjs.JsModule, text: str) -> No
     assert state["events"] == returned
 
 
-@pytest.mark.parametrize("text", ["42", "[1,2]", '"just a string"', "null", "true", '{"nope":1}'])
-def test_json_that_is_not_an_event_is_also_a_bad_line(ndjson: qjs.JsModule, text: str) -> None:
+@pytest.mark.parametrize(
+    "text", ["42", "[1,2]", '"just a string"', "null", "true", '{"nope":1}']
+)
+def test_json_that_is_not_an_event_is_also_a_bad_line(
+    ndjson: qjs.JsModule, text: str
+) -> None:
     _, returned = collect(ndjson, [text + "\n"])
     assert returned == [{"type": "_bad_line", "line": text}]
 
 
-def test_a_bad_line_is_truncated_to_two_hundred_characters(ndjson: qjs.JsModule) -> None:
+def test_a_bad_line_is_truncated_to_two_hundred_characters(
+    ndjson: qjs.JsModule,
+) -> None:
     text = "x" * 500
     _, returned = collect(ndjson, [text + "\n"])
     assert returned == [{"type": "_bad_line", "line": "x" * 200}]
@@ -184,7 +197,9 @@ def test_classify(ndjson: qjs.JsModule, record, expected: str) -> None:
 # --- finish ------------------------------------------------------------------
 def test_finish_done(ndjson: qjs.JsModule) -> None:
     outcome = ndjson.call(
-        "finish", 0, [{"type": "progress", "stage": "library"}, {"type": "done", "path": "/x"}]
+        "finish",
+        0,
+        [{"type": "progress", "stage": "library"}, {"type": "done", "path": "/x"}],
     )
     assert outcome["ok"] is True
     assert outcome["busy"] is False
@@ -209,7 +224,9 @@ def test_finish_error_keeps_code_message_and_hint(ndjson: qjs.JsModule) -> None:
     assert outcome["mismatch"] is False
 
 
-def test_finish_error_without_a_code_falls_back_to_internal(ndjson: qjs.JsModule) -> None:
+def test_finish_error_without_a_code_falls_back_to_internal(
+    ndjson: qjs.JsModule,
+) -> None:
     outcome = ndjson.call("finish", 1, [{"type": "error", "message": "m"}])
     assert outcome["code"] == "internal"
     assert outcome["message"] == "m"
@@ -237,20 +254,26 @@ def test_finish_on_an_empty_stream_is_internal(ndjson: qjs.JsModule) -> None:
 
 
 def test_finish_requires_the_terminal_to_be_last(ndjson: qjs.JsModule) -> None:
-    outcome = ndjson.call("finish", 0, [{"type": "done"}, {"type": "progress", "stage": "library"}])
+    outcome = ndjson.call(
+        "finish", 0, [{"type": "done"}, {"type": "progress", "stage": "library"}]
+    )
     assert outcome["ok"] is False
     assert outcome["code"] == "internal"
 
 
 def test_finish_exit_three_is_busy(ndjson: qjs.JsModule) -> None:
-    outcome = ndjson.call("finish", 3, [{"type": "error", "code": "internal", "message": "held"}])
+    outcome = ndjson.call(
+        "finish", 3, [{"type": "error", "code": "internal", "message": "held"}]
+    )
     assert outcome["busy"] is True
     assert outcome["ok"] is False
     assert outcome["code"] == "busy"
 
 
 def test_finish_error_code_busy_is_busy(ndjson: qjs.JsModule) -> None:
-    outcome = ndjson.call("finish", 1, [{"type": "error", "code": "busy", "message": "held"}])
+    outcome = ndjson.call(
+        "finish", 1, [{"type": "error", "code": "busy", "message": "held"}]
+    )
     assert outcome["busy"] is True
     assert outcome["code"] == "busy"
     assert outcome["mismatch"] is False
@@ -272,7 +295,9 @@ def test_finish_done_with_a_nonzero_exit_is_internal(ndjson: qjs.JsModule) -> No
 
 
 def test_finish_error_with_a_zero_exit_is_a_mismatch(ndjson: qjs.JsModule) -> None:
-    outcome = ndjson.call("finish", 0, [{"type": "error", "code": "network", "message": "m"}])
+    outcome = ndjson.call(
+        "finish", 0, [{"type": "error", "code": "network", "message": "m"}]
+    )
     assert outcome["ok"] is False
     assert outcome["code"] == "network"
     assert outcome["mismatch"] is True
@@ -293,7 +318,9 @@ def test_finish_counts_bad_lines(ndjson: qjs.JsModule) -> None:
 
 
 def test_finish_rejects_a_bad_line_after_the_terminal(ndjson: qjs.JsModule) -> None:
-    outcome = ndjson.call("finish", 0, [{"type": "done"}, {"type": "_bad_line", "line": "x"}])
+    outcome = ndjson.call(
+        "finish", 0, [{"type": "done"}, {"type": "_bad_line", "line": "x"}]
+    )
     assert outcome["ok"] is False
     assert outcome["code"] == "internal"
     assert outcome["mismatch"] is True

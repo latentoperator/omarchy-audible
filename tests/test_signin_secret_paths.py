@@ -29,7 +29,7 @@ def function_body(source: str, name: str) -> str:
         elif source[index] == "}":
             depth -= 1
             if depth == 0:
-                return source[start:index + 1]
+                return source[start : index + 1]
     raise AssertionError(f"unbalanced {name}")
 
 
@@ -48,7 +48,10 @@ def test_view_uses_the_field_text_only_to_send_or_clear():
     assert "password: true" in view
     # Clipboard chunks fill only the view that asked (another monitor's field
     # never holds the text), and every view clears on clearPaste.
-    assert "function onClipboardRead(target, chunk) { if (target === root) paste.text += chunk }" in view
+    assert (
+        "function onClipboardRead(target, chunk) { if (target === root) paste.text += chunk }"
+        in view
+    )
     assert 'function onClearPaste() { paste.text = "" }' in view
     assert "root.service.readClipboard(root)" in view
 
@@ -59,9 +62,12 @@ def test_service_passes_the_paste_only_to_the_check_and_stdin():
     uses = re.findall(r"\bpasted\b", body)
     # parameter, the blank check, looksLikeRedirect(pasted), runWithInput(..., pasted)
     assert len(uses) == 4, body
-    assert "pasteEmpty = !/\\S/.test(pasted || \"\")" in body
+    assert 'pasteEmpty = !/\\S/.test(pasted || "")' in body
     assert "Onboarding.looksLikeRedirect(pasted)" in body
-    assert 'runner.runWithInput("login-finish", ["--session", loginSession], "login", pasted)' in body
+    assert (
+        'runner.runWithInput("login-finish", ["--session", loginSession], "login", pasted)'
+        in body
+    )
     assert "logEvent" not in body
     # Sending clears every view's field at once.
     assert "clearPaste()" in body
@@ -72,8 +78,8 @@ def test_service_passes_the_paste_only_to_the_check_and_stdin():
 
 def test_clipboard_text_is_streamed_not_stored():
     service = read("Service.qml")
-    paster = service[service.index("id: paster"):]
-    paster = paster[:paster.index("\n  }\n")]
+    paster = service[service.index("id: paster") :]
+    paster = paster[: paster.index("\n  }\n")]
     assert "SplitParser" in paster and "StdioCollector" not in paster
     assert "root.clipboardRead(root.clipboardTarget, chunk)" in paster
     assert re.search(r"signal clipboardRead\(var target, string text\)", service)
@@ -89,7 +95,10 @@ def test_no_log_line_mentions_the_input():
 def test_onboarding_events_are_logged_by_type_only():
     service = read("Service.qml")
     assert "Signin.logText(job.command, record.type," in service
-    assert 'Signin.isOnboardingCommand(job.command) ? "" : EventLog.summarize(record, 160)' in service
+    assert (
+        'Signin.isOnboardingCommand(job.command) ? "" : EventLog.summarize(record, 160)'
+        in service
+    )
 
 
 def test_runner_keeps_input_out_of_job_objects():
@@ -108,10 +117,14 @@ def test_runner_keeps_input_out_of_job_objects():
 
 def test_backend_call_writes_then_clears_and_closes_stdin():
     call = read("qml/BackendCall.qml")
-    started = call[call.index("onStarted: {"):]
-    started = started[:started.index("\n    }\n")]
+    started = call[call.index("onStarted: {") :]
+    started = started[: started.index("\n    }\n")]
     assert "write(root.input)" in started
-    assert started.index("write(root.input)") < started.index('root.input = ""') < started.index("stdinEnabled = false")
+    assert (
+        started.index("write(root.input)")
+        < started.index('root.input = ""')
+        < started.index("stdinEnabled = false")
+    )
     # The input is never handed to the record/stderr paths.
     assert len(re.findall(r"root\.input\b", call)) == 2
 

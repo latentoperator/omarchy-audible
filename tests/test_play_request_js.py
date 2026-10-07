@@ -17,7 +17,12 @@ def job(asin, purpose, command="play-info"):
 
 
 def test_create(pr):
-    assert pr.call("create", "B0X", 12.5, 3) == {"asin": "B0X", "startSec": 12.5, "id": 3, "purpose": "play:3"}
+    assert pr.call("create", "B0X", 12.5, 3) == {
+        "asin": "B0X",
+        "startSec": 12.5,
+        "id": 3,
+        "purpose": "play:3",
+    }
     assert pr.call("create", "B0X", None, 4)["startSec"] == 0
     assert pr.call("create", "B0X", -1, 5)["startSec"] == -1
 
@@ -37,16 +42,25 @@ def test_same_book_asked_twice_only_the_newest_matches(pr):
 def test_other_book_or_command_never_matches(pr):
     request = pr.call("create", "B0B", 0, 9)
     assert pr.call("matches", request, job("B0A", "play:9")) is False
-    assert pr.call("matches", request, job("B0B", "play:9", command="position-get")) is False
+    assert (
+        pr.call("matches", request, job("B0B", "play:9", command="position-get"))
+        is False
+    )
     assert pr.call("matches", request, job("B0B", "resume")) is False
 
 
-@pytest.mark.parametrize("request_,job_", [
-    (None, {"command": "play-info", "args": ["B0X"], "purpose": "play:1"}),
-    ({"asin": "B0X", "purpose": "play:1"}, None),
-    ({"asin": "B0X", "purpose": "play:1"}, {"command": "play-info", "args": "B0X", "purpose": "play:1"}),
-    ([], {}),
-])
+@pytest.mark.parametrize(
+    "request_,job_",
+    [
+        (None, {"command": "play-info", "args": ["B0X"], "purpose": "play:1"}),
+        ({"asin": "B0X", "purpose": "play:1"}, None),
+        (
+            {"asin": "B0X", "purpose": "play:1"},
+            {"command": "play-info", "args": "B0X", "purpose": "play:1"},
+        ),
+        ([], {}),
+    ],
+)
 def test_matches_bad_input(pr, request_, job_):
     assert pr.call("matches", request_, job_) is False
 

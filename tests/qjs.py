@@ -89,7 +89,9 @@ class JsModule:
         self.functions = sorted(self._globals() - before)
 
     def _globals(self) -> set[str]:
-        value = self._engine.evaluate("JSON.stringify(Object.getOwnPropertyNames(this))")
+        value = self._engine.evaluate(
+            "JSON.stringify(Object.getOwnPropertyNames(this))"
+        )
         self._check(value, "listing globals")
         return set(json.loads(value.toString()))
 

@@ -22,8 +22,14 @@ def test_observe_commands_cover_every_property(mpv):
 
 
 def test_parse_property_change(mpv):
-    line = json.dumps({"event": "property-change", "id": 1, "name": "time-pos", "data": 12.5})
-    assert mpv.call("parseMessage", line) == {"kind": "property", "name": "time-pos", "data": 12.5}
+    line = json.dumps(
+        {"event": "property-change", "id": 1, "name": "time-pos", "data": 12.5}
+    )
+    assert mpv.call("parseMessage", line) == {
+        "kind": "property",
+        "name": "time-pos",
+        "data": 12.5,
+    }
 
 
 def test_parse_property_change_without_data_is_null(mpv):
@@ -33,9 +39,13 @@ def test_parse_property_change_without_data_is_null(mpv):
 
 def test_parse_events_and_replies(mpv):
     assert mpv.call("parseMessage", '{"event":"end-file","reason":"eof"}') == {
-        "kind": "event", "event": "end-file", "reason": "eof"}
-    assert mpv.call("parseMessage", '{"error":"success","data":null,"request_id":4}') == {
-        "kind": "reply", "id": 4, "error": None, "data": None}
+        "kind": "event",
+        "event": "end-file",
+        "reason": "eof",
+    }
+    assert mpv.call(
+        "parseMessage", '{"error":"success","data":null,"request_id":4}'
+    ) == {"kind": "reply", "id": 4, "error": None, "data": None}
     reply = mpv.call("parseMessage", '{"error":"property unavailable","request_id":5}')
     assert reply["error"] == "property unavailable"
 
@@ -55,7 +65,11 @@ def test_apply_property_copies_and_ignores_unknown(mpv):
 def test_derive_empty_is_not_loaded(mpv):
     derived = mpv.call("derive", mpv.call("emptyState"))
     assert derived["loaded"] is False and derived["playing"] is False
-    assert derived["positionMs"] == 0 and derived["chapterIndex"] == -1 and derived["speed"] == 1
+    assert (
+        derived["positionMs"] == 0
+        and derived["chapterIndex"] == -1
+        and derived["speed"] == 1
+    )
 
 
 def test_derive_has_position_only_for_a_real_time_pos(mpv):
@@ -63,21 +77,34 @@ def test_derive_has_position_only_for_a_real_time_pos(mpv):
     assert mpv.call("derive", state)["hasPosition"] is False
     after = mpv.call("applyProperty", state, "time-pos", 0)
     assert mpv.call("derive", after)["hasPosition"] is True
-    assert mpv.call("derive", mpv.call("applyProperty", after, "time-pos", None))["hasPosition"] is False
+    assert (
+        mpv.call("derive", mpv.call("applyProperty", after, "time-pos", None))[
+            "hasPosition"
+        ]
+        is False
+    )
 
 
 def test_derive_playing_book(mpv):
     state = mpv.call("emptyState")
     for name, data in {
-        "path": "/b/book.m4b", "idle-active": False, "pause": False, "time-pos": 43.5,
-        "duration": 180.0, "chapter": 1, "speed": 1.5,
+        "path": "/b/book.m4b",
+        "idle-active": False,
+        "pause": False,
+        "time-pos": 43.5,
+        "duration": 180.0,
+        "chapter": 1,
+        "speed": 1.5,
         "chapter-list": [{"title": "One", "time": 0.0}, {"title": "Two", "time": 60.0}],
     }.items():
         state = mpv.call("applyProperty", state, name, data)
     derived = mpv.call("derive", state)
     assert derived["playing"] is True and derived["loaded"] is True
     assert derived["positionMs"] == 43500 and derived["durationMs"] == 180000
-    assert derived["chapters"] == [{"title": "One", "startMs": 0}, {"title": "Two", "startMs": 60000}]
+    assert derived["chapters"] == [
+        {"title": "One", "startMs": 0},
+        {"title": "Two", "startMs": 60000},
+    ]
     assert derived["chapterIndex"] == 1 and derived["speed"] == 1.5
 
 
@@ -93,12 +120,20 @@ def test_derive_paused_and_idle(mpv):
 def test_parse_chapters_skips_bad_items(mpv):
     items = [{"title": "A", "time": 1.2345}, None, {"title": "x"}, {"time": 5}, "str"]
     assert mpv.call("parseChapters", items) == [
-        {"title": "A", "startMs": 1235}, {"title": "", "startMs": 5000}]
+        {"title": "A", "startMs": 1235},
+        {"title": "", "startMs": 5000},
+    ]
     assert mpv.call("parseChapters", None) == []
 
 
 def test_commands(mpv):
-    assert mpv.call("loadCommand", "/b/book.m4b", 42) == ["loadfile", "/b/book.m4b", "replace", 0, "start=42"]
+    assert mpv.call("loadCommand", "/b/book.m4b", 42) == [
+        "loadfile",
+        "/b/book.m4b",
+        "replace",
+        0,
+        "start=42",
+    ]
     assert mpv.call("loadCommand", "/b/book.m4b", -3)[-1] == "start=0"
     assert mpv.call("pauseCommand", True) == ["set_property", "pause", True]
     assert mpv.call("pauseCommand", False) == ["set_property", "pause", False]
@@ -110,12 +145,23 @@ def test_commands(mpv):
 
 # ---- B11: the locked-file load path ----
 
+
 def test_load_command_without_options_is_unchanged(mpv):
     # `options` absent (undefined) must stay byte-identical to the old output.
     assert mpv.call("loadCommand", "/b/book.m4b", 0) == [
-        "loadfile", "/b/book.m4b", "replace", 0, "start=0"]
+        "loadfile",
+        "/b/book.m4b",
+        "replace",
+        0,
+        "start=0",
+    ]
     assert mpv.call("loadCommand", "/b/book.m4b", 12, None) == [
-        "loadfile", "/b/book.m4b", "replace", 0, "start=12"]
+        "loadfile",
+        "/b/book.m4b",
+        "replace",
+        0,
+        "start=12",
+    ]
 
 
 def test_load_command_with_options_uses_the_option_map(mpv):
@@ -141,25 +187,46 @@ def test_load_command_with_options_uses_the_option_map(mpv):
 
 def test_load_command_leaves_out_empty_options(mpv):
     assert mpv.call("loadCommand", "/b/book.aaxc", 5, {}) == [
-        "loadfile", "/b/book.aaxc", "replace", -1, {"start": "5"}]
+        "loadfile",
+        "/b/book.aaxc",
+        "replace",
+        -1,
+        {"start": "5"},
+    ]
     assert mpv.call(
         "loadCommand", "/b/book.aaxc", 5, {"lavf": "", "chaptersFile": None}
     ) == ["loadfile", "/b/book.aaxc", "replace", -1, {"start": "5"}]
     assert mpv.call("loadCommand", "/b/book.aaxc", -1, {"lavf": "k=1"}) == [
-        "loadfile", "/b/book.aaxc", "replace", -1, {"start": "0", "demuxer-lavf-o": "k=1"}]
+        "loadfile",
+        "/b/book.aaxc",
+        "replace",
+        -1,
+        {"start": "0", "demuxer-lavf-o": "k=1"},
+    ]
 
 
 def test_clear_key_command(mpv):
     assert mpv.call("clearKeyCommand") == ["set_property", "demuxer-lavf-o", ""]
 
 
-@pytest.mark.parametrize("given,expected", [(1.25, 1.25), (0.1, 0.5), (9, 3.0), ("x", 1), (0, 1), (-1, 1)])
+@pytest.mark.parametrize(
+    "given,expected", [(1.25, 1.25), (0.1, 0.5), (9, 3.0), ("x", 1), (0, 1), (-1, 1)]
+)
 def test_speed_is_clamped(mpv, given, expected):
     assert mpv.call("speedCommand", given) == ["set_property", "speed", expected]
 
 
-@pytest.mark.parametrize("index,count,delta,expected", [
-    (0, 3, 1, 1), (1, 3, -1, 0), (2, 3, 1, -1), (0, 3, -1, -1), (0, 0, 1, -1), (None, 3, 1, -1)])
+@pytest.mark.parametrize(
+    "index,count,delta,expected",
+    [
+        (0, 3, 1, 1),
+        (1, 3, -1, 0),
+        (2, 3, 1, -1),
+        (0, 3, -1, -1),
+        (0, 0, 1, -1),
+        (None, 3, 1, -1),
+    ],
+)
 def test_chapter_target(mpv, index, count, delta, expected):
     assert mpv.call("chapterTarget", index, count, delta) == expected
 
@@ -176,7 +243,9 @@ def test_retry_only_while_wanted_and_under_the_cap(mpv):
     assert mpv.call("shouldRetry", 0, False) is False
 
 
-@pytest.mark.parametrize("remaining,expected", [(10000, 80), (5000, 80), (2500, 40), (0, 0), (-5, 0)])
+@pytest.mark.parametrize(
+    "remaining,expected", [(10000, 80), (5000, 80), (2500, 40), (0, 0), (-5, 0)]
+)
 def test_fade_volume(mpv, remaining, expected):
     assert mpv.call("fadeVolume", 80, remaining, 5000) == pytest.approx(expected)
 
@@ -192,8 +261,14 @@ def test_chapter_end(mpv):
 
 def test_chapter_sleep_timer_is_fixed_to_the_chapter_end(mpv):
     chapters = [{"startMs": 0}, {"startMs": 60000}]
-    assert mpv.call("chapterSleepTimer", chapters, 0, 120000) == {"mode": "chapter", "endMs": 60000}
-    assert mpv.call("chapterSleepTimer", chapters, 1, 120000) == {"mode": "chapter", "endMs": 120000}
+    assert mpv.call("chapterSleepTimer", chapters, 0, 120000) == {
+        "mode": "chapter",
+        "endMs": 60000,
+    }
+    assert mpv.call("chapterSleepTimer", chapters, 1, 120000) == {
+        "mode": "chapter",
+        "endMs": 120000,
+    }
     assert mpv.call("chapterSleepTimer", chapters, 1, 0) is None
     assert mpv.call("chapterSleepTimer", [], 0, 120000) is None
 
@@ -211,22 +286,41 @@ def test_sleep_remaining(mpv):
     assert mpv.call("sleepRemainingMs", {"mode": "chapter"}, 0, 0, 1) == -1
 
 
-@pytest.mark.parametrize("options", [None, {}, {"lavf": "", "chaptersFile": None}, {"lavf": None, "chaptersFile": ""}, "k", 3])
+@pytest.mark.parametrize(
+    "options",
+    [
+        None,
+        {},
+        {"lavf": "", "chaptersFile": None},
+        {"lavf": None, "chaptersFile": ""},
+        "k",
+        3,
+    ],
+)
 def test_load_options_empty_keeps_the_plain_form(mpv, options):
     # An old .m4b: play-info sends "" and null, and the load stays the plain one.
     assert mpv.call("loadOptions", options) is None
-    assert mpv.call("loadCommand", "/b/book.m4b", 7, mpv.call("loadOptions", options)) == [
-        "loadfile", "/b/book.m4b", "replace", 0, "start=7"]
+    assert mpv.call(
+        "loadCommand", "/b/book.m4b", 7, mpv.call("loadOptions", options)
+    ) == ["loadfile", "/b/book.m4b", "replace", 0, "start=7"]
 
 
 def test_load_options_locked_book(mpv):
-    options = mpv.call("loadOptions", {"lavf": "k=1", "chaptersFile": "/b/chapters.txt", "extra": "x"})
+    options = mpv.call(
+        "loadOptions", {"lavf": "k=1", "chaptersFile": "/b/chapters.txt", "extra": "x"}
+    )
     assert options == {"lavf": "k=1", "chaptersFile": "/b/chapters.txt"}
     assert mpv.call("loadCommand", "/b/book.aaxc", 5, options) == [
-        "loadfile", "/b/book.aaxc", "replace", -1,
-        {"start": "5", "demuxer-lavf-o": "k=1", "chapters-file": "/b/chapters.txt"}]
+        "loadfile",
+        "/b/book.aaxc",
+        "replace",
+        -1,
+        {"start": "5", "demuxer-lavf-o": "k=1", "chapters-file": "/b/chapters.txt"},
+    ]
 
 
 def test_load_options_chapters_only(mpv):
     assert mpv.call("loadOptions", {"lavf": "", "chaptersFile": "/b/chapters.txt"}) == {
-        "lavf": "", "chaptersFile": "/b/chapters.txt"}
+        "lavf": "",
+        "chaptersFile": "/b/chapters.txt",
+    }

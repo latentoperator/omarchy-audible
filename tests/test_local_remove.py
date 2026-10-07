@@ -20,7 +20,13 @@ from omarchy_audible.errors import PipelineError
 ASIN = "B00FAKE01"
 
 
-def _make_book(paths, asin: str, *, payload: bytes = b"x" * 100, downloaded_at: str = "2026-01-02T03:04:05Z") -> Path:
+def _make_book(
+    paths,
+    asin: str,
+    *,
+    payload: bytes = b"x" * 100,
+    downloaded_at: str = "2026-01-02T03:04:05Z",
+) -> Path:
     directory = paths.books_dir / asin
     directory.mkdir(parents=True)
     (directory / "book.m4b").write_bytes(payload)
@@ -46,7 +52,8 @@ def _make_locked_book(
     if key is not None:
         (directory / "key.json").write_text(json.dumps(key), encoding="utf-8")
     (directory / "meta.json").write_text(
-        json.dumps({"asin": asin, "downloaded_at": "2026-02-03T04:05:06Z"}), encoding="utf-8"
+        json.dumps({"asin": asin, "downloaded_at": "2026-02-03T04:05:06Z"}),
+        encoding="utf-8",
     )
     return directory
 
@@ -70,7 +77,9 @@ def test_local_lists_only_downloaded_books(run_cli, validate_stream, fake_paths)
     assert local["books"][1]["size"] >= 250
 
 
-def test_local_falls_back_to_the_file_mtime_without_meta(run_cli, validate_stream, fake_paths):
+def test_local_falls_back_to_the_file_mtime_without_meta(
+    run_cli, validate_stream, fake_paths
+):
     directory = fake_paths.books_dir / "B00FAKE07"
     directory.mkdir()
     (directory / "book.m4b").write_bytes(b"z" * 10)
@@ -106,7 +115,9 @@ def test_local_lists_old_and_locked_books(run_cli, validate_stream, fake_paths):
     assert by_asin["B00LOCKED"]["downloaded_at"] == "2026-02-03T04:05:06Z"
 
 
-def test_local_ignores_a_locked_file_without_a_key(run_cli, validate_stream, fake_paths):
+def test_local_ignores_a_locked_file_without_a_key(
+    run_cli, validate_stream, fake_paths
+):
     _make_locked_book(fake_paths, "B00NOKEY", key=None)
 
     parsed = validate_stream(run_cli("local", fake=True), expect_last="done")
@@ -123,7 +134,9 @@ def test_local_ignores_an_unreadable_key_file(run_cli, validate_stream, fake_pat
     assert local["books"] == []
 
 
-def test_remove_deletes_the_key_and_chapters_with_the_book(run_cli, validate_stream, fake_paths):
+def test_remove_deletes_the_key_and_chapters_with_the_book(
+    run_cli, validate_stream, fake_paths
+):
     target = _make_locked_book(
         fake_paths, "B00LOCKED", key={"format": "aaxc", "key": "00", "iv": "11"}
     )
@@ -174,7 +187,9 @@ def test_remove_refuses_a_symlink_inside_books_dir(run_cli, events, fake_paths):
     assert real.is_dir()
 
 
-def test_remove_refuses_a_symlink_pointing_outside(run_cli, events, fake_paths, tmp_path):
+def test_remove_refuses_a_symlink_pointing_outside(
+    run_cli, events, fake_paths, tmp_path
+):
     victim = tmp_path / "victim"
     victim.mkdir()
     (victim / "keep.txt").write_text("keep", encoding="utf-8")
@@ -218,7 +233,11 @@ def test_remove_makes_no_network_call(env, monkeypatch, capsys, fake_paths):
 
     code = main(["remove", ASIN, "--fake"])
     assert code == 0
-    events = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()]
+    events = [
+        json.loads(line)
+        for line in capsys.readouterr().out.splitlines()
+        if line.strip()
+    ]
     assert events[-1]["type"] == "done"
     assert not target.exists()
 
@@ -228,7 +247,20 @@ def test_remove_makes_no_network_call(env, monkeypatch, capsys, fake_paths):
 
 @pytest.mark.parametrize(
     "bad",
-    ["", ".", "..", "../x", "a/b", "a\\b", "/abs", "x\x00y", "a b", "a.b", "-x", "x" * 33],
+    [
+        "",
+        ".",
+        "..",
+        "../x",
+        "a/b",
+        "a\\b",
+        "/abs",
+        "x\x00y",
+        "a b",
+        "a.b",
+        "-x",
+        "x" * 33,
+    ],
 )
 def test_validate_asin_rejects_malformed_values(paths, bad):
     with pytest.raises(PipelineError) as excinfo:
@@ -237,7 +269,10 @@ def test_validate_asin_rejects_malformed_values(paths, bad):
 
 
 def test_validate_asin_accepts_a_plain_asin(paths):
-    assert library.validate_asin(paths.books_dir, "B00FAKE01") == paths.books_dir / "B00FAKE01"
+    assert (
+        library.validate_asin(paths.books_dir, "B00FAKE01")
+        == paths.books_dir / "B00FAKE01"
+    )
 
 
 def test_validate_asin_rejects_a_symlink(paths):

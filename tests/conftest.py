@@ -132,9 +132,7 @@ def schemas_dir() -> Path:
 @pytest.fixture
 def events():
     def _events(result):
-        return [
-            json.loads(line) for line in result.stdout.splitlines() if line.strip()
-        ]
+        return [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
 
     return _events
 

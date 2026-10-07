@@ -25,11 +25,12 @@ def function_body(source: str, name: str) -> str:
         elif source[i] == "}":
             depth -= 1
             if depth == 0:
-                return source[start:i + 1]
+                return source[start : i + 1]
     raise AssertionError(f"unterminated {name}")
 
 
 # ---- Service.pick ----
+
 
 def test_pick_decides_before_note_intent():
     # noteIntent clears confirmAsin, so the decision must be captured first,
@@ -62,25 +63,34 @@ def test_other_intents_clear_the_question():
 def test_question_goes_away_when_no_longer_valid():
     # The book got downloaded another way, vanished, or the laptop went offline.
     service = read("Service.qml")
-    assert ("readonly property bool confirmStillValid: "
-            "LibraryUi.confirmValid(confirmAsin, library.rowFor(confirmAsin), syncFailure.offline)") in service
+    assert (
+        "readonly property bool confirmStillValid: "
+        "LibraryUi.confirmValid(confirmAsin, library.rowFor(confirmAsin), syncFailure.offline)"
+    ) in service
     # Cleared later, after a fresh check, never from inside the change that
     # its own binding reads (Codex R1 #2: binding-loop warnings).
-    assert "onConfirmStillValidChanged: if (!confirmStillValid) Qt.callLater(dropInvalidConfirm)" in service
+    assert (
+        "onConfirmStillValidChanged: if (!confirmStillValid) Qt.callLater(dropInvalidConfirm)"
+        in service
+    )
     body = function_body(service, "dropInvalidConfirm")
-    assert "LibraryUi.confirmValid(confirmAsin, library.rowFor(confirmAsin), syncFailure.offline)" in body
+    assert (
+        "LibraryUi.confirmValid(confirmAsin, library.rowFor(confirmAsin), syncFailure.offline)"
+        in body
+    )
     assert 'confirmAsin = ""' in body
 
 
 def test_ipc_exposes_the_question():
     service = read("Service.qml")
-    ipc = service[service.index("IpcHandler {"):]
+    ipc = service[service.index("IpcHandler {") :]
     assert '"confirm": root.confirmAsin' in ipc
     assert "return root.confirmDownload()" in ipc
     assert "return root.cancelConfirm()" in ipc
 
 
 # ---- BookRow / LibraryView ----
+
 
 def test_row_shows_the_action_icon():
     row = read("qml/components/BookRow.qml")
@@ -99,7 +109,10 @@ def test_row_shows_the_question_with_buttons():
     assert 'text: "Download"' in row
     assert 'text: "Cancel"' in row
     library = read("qml/views/LibraryView.qml")
-    assert "confirming: root.service ? root.service.confirmAsin === modelData.asin : false" in library
+    assert (
+        "confirming: root.service ? root.service.confirmAsin === modelData.asin : false"
+        in library
+    )
     assert "onConfirmRequested: root.service.confirmDownload()" in library
     assert "onCancelRequested: root.service.cancelConfirm()" in library
 
@@ -113,8 +126,8 @@ def test_question_size_is_guarded():
 
 def test_esc_cancels_the_question_before_closing():
     library = read("qml/views/LibraryView.qml")
-    keys = library[library.index("Keys.onPressed"):]
-    keys = keys[:keys.index("event.accepted = true")]
+    keys = library[library.index("Keys.onPressed") :]
+    keys = keys[: keys.index("event.accepted = true")]
     close = keys.index("Drawer.KEY_CLOSE")
     cancel = keys.index("root.service.cancelConfirm()")
     assert close < cancel < keys.index("root.closeRequested()")
@@ -131,7 +144,10 @@ def test_the_question_scrolls_into_view():
     # Codex R1 #1: a row at the bottom grows past the clipped list; Enter
     # again must never confirm a question the user can't fully see.
     library = read("qml/views/LibraryView.qml")
-    assert "onHeightChanged: if (revealQuestion && confirming) books.positionViewAtIndex(index, ListView.Contain)" in library
+    assert (
+        "onHeightChanged: if (revealQuestion && confirming) books.positionViewAtIndex(index, ListView.Contain)"
+        in library
+    )
     # Codex R2: only a question just opened scrolls; a delegate recreated with
     # `confirming` already true starts with revealQuestion false.
     assert "property bool revealQuestion: false" in library

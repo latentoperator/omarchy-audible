@@ -130,7 +130,12 @@ def main(argv: list[str]) -> int:
 
     # Unknown commands are forwarded so the backend can report
     # error(code=unknown_command) on stdout.
-    if fake or command is None or command in LAUNCHER_COMMANDS or command not in KNOWN_COMMANDS:
+    if (
+        fake
+        or command is None
+        or command in LAUNCHER_COMMANDS
+        or command not in KNOWN_COMMANDS
+    ):
         return _run_backend(argv, env, fake, python)
 
     venv_python = _venv_python(env)

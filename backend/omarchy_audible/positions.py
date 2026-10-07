@@ -125,9 +125,7 @@ def is_remote_newer(remote_entry: Any, local_updated_at: Any) -> bool:
     return remote_key is not None and remote_key > local_key
 
 
-def batches(
-    asins: Sequence[str], size: int = POSITION_BATCH_SIZE
-) -> list[list[str]]:
+def batches(asins: Sequence[str], size: int = POSITION_BATCH_SIZE) -> list[list[str]]:
     """Chunk ``asins`` (deduplicated, order kept) into calls of at most ``size``."""
     unique = list(dict.fromkeys(asins))
     return [unique[start : start + size] for start in range(0, len(unique), size)]

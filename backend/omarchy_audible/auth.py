@@ -250,7 +250,9 @@ def account_from_auth_file(path: Path) -> str | None:
     return account_from_info(data.get("customer_info"))
 
 
-def _account_payload(origin: str, marketplace: str, account: str | None) -> dict[str, Any]:
+def _account_payload(
+    origin: str, marketplace: str, account: str | None
+) -> dict[str, Any]:
     return {
         "schema": ACCOUNT_SCHEMA,
         "origin": origin,
@@ -392,7 +394,9 @@ def login_start(
     session_id = secrets.token_urlsafe(12)
 
     if fake:
-        url = f"https://www.amazon.com/ap/signin?audible_fake=1&marketplace={marketplace}"
+        url = (
+            f"https://www.amazon.com/ap/signin?audible_fake=1&marketplace={marketplace}"
+        )
         serial = "FAKESERIAL01"
         verifier = b"fake-code-verifier"
     else:
@@ -600,7 +604,9 @@ def login_import_cli(
             "the audible-cli auth file could not be read",
             hint="it may be encrypted or not a valid audible-cli login",
         ) from exc
-    marketplace = profile.get("country_code") or _locale_code(text) or DEFAULT_MARKETPLACE
+    marketplace = (
+        profile.get("country_code") or _locale_code(text) or DEFAULT_MARKETPLACE
+    )
     _persist_import(
         paths,
         text,

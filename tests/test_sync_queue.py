@@ -41,7 +41,12 @@ def test_remove_entry_only_removes_the_same_push(sync):
 
 
 def test_push_args(sync):
-    assert sync.call("pushArgs", entry("A", 1234.6)) == ["A", "1235", "--at", "2026-10-05T14:00:00Z"]
+    assert sync.call("pushArgs", entry("A", 1234.6)) == [
+        "A",
+        "1235",
+        "--at",
+        "2026-10-05T14:00:00Z",
+    ]
     assert sync.call("pushArgs", {"asin": "A", "ms": 5, "at": None}) == ["A", "5"]
 
 

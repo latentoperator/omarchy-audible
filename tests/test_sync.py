@@ -257,7 +257,11 @@ def test_covers_are_downloaded_only_when_missing_unless_full(paths):
     port = positions.FakePositions()
 
     catalog.run_sync(
-        paths, fake=True, library=library, positions_port=port, cover_fetch=fetch,
+        paths,
+        fake=True,
+        library=library,
+        positions_port=port,
+        cover_fetch=fetch,
         emit=lambda *args, **kwargs: None,
     )
     target = paths.covers_dir / "B0COVER001.jpg"
@@ -266,15 +270,24 @@ def test_covers_are_downloaded_only_when_missing_unless_full(paths):
 
     # A second run finds the cover present and does not download it again.
     catalog.run_sync(
-        paths, fake=True, library=library, positions_port=port, cover_fetch=fetch,
+        paths,
+        fake=True,
+        library=library,
+        positions_port=port,
+        cover_fetch=fetch,
         emit=lambda *args, **kwargs: None,
     )
     assert len(fetched) == 1
 
     # --full refreshes it anyway.
     catalog.run_sync(
-        paths, fake=True, full=True, library=library, positions_port=port,
-        cover_fetch=fetch, emit=lambda *args, **kwargs: None,
+        paths,
+        fake=True,
+        full=True,
+        library=library,
+        positions_port=port,
+        cover_fetch=fetch,
+        emit=lambda *args, **kwargs: None,
     )
     assert len(fetched) == 2
 
@@ -362,7 +375,9 @@ class _NoPushPositions:
         self.push_calls = 0
 
     def fetch_batch(self, asins):
-        return {asin: {"ms": 7, "updated_at": "2026-01-01 00:00:00.0"} for asin in asins}
+        return {
+            asin: {"ms": 7, "updated_at": "2026-01-01 00:00:00.0"} for asin in asins
+        }
 
     def fetch_acr(self, asin):
         raise AssertionError("sync must not read content metadata")

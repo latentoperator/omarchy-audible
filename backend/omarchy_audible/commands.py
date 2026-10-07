@@ -92,9 +92,7 @@ def _status_dirs(paths: Paths) -> dict[str, str]:
     }
 
 
-def cmd_status(
-    args: Sequence[str], *, command: str, fake: bool, paths: Paths
-) -> int:
+def cmd_status(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> int:
     """Report readiness (ARCHITECTURE 4.2)."""
     if fake:
         # Fake mode pretends the tools and the venv are ready so the UI can run
@@ -151,12 +149,14 @@ def _tool_check(name: str) -> dict[str, object]:
         ok = bool(found) and Path(found).is_file()
         return {"name": name, "ok": ok, "detail": found}
     found = shutil.which(name)
-    return {"name": name, "ok": found is not None, "detail": found or f"{name} not found on PATH"}
+    return {
+        "name": name,
+        "ok": found is not None,
+        "detail": found or f"{name} not found on PATH",
+    }
 
 
-def cmd_doctor(
-    args: Sequence[str], *, command: str, fake: bool, paths: Paths
-) -> int:
+def cmd_doctor(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> int:
     """Report the state of every external dependency (ARCHITECTURE 4.2).
 
     ``doctor`` always exits 0 once it has produced its report; the ``ok`` flags
@@ -430,7 +430,9 @@ def cmd_local(args: Sequence[str], *, command: str, fake: bool, paths: Paths) ->
     return protocol.EXIT_OK
 
 
-def cmd_play_info(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> int:
+def cmd_play_info(
+    args: Sequence[str], *, command: str, fake: bool, paths: Paths
+) -> int:
     """Describe how to play a local book (ARCHITECTURE 4.2, D7).
 
     A non-job command: it never takes ``job.lock``, so the drawer can ask about
@@ -485,7 +487,9 @@ def _positional_args(args: Sequence[str]) -> list[str]:
 
 
 @contextlib.contextmanager
-def _positions_port(fake: bool, paths: Paths) -> Iterator[FakePositions | RealPositions]:
+def _positions_port(
+    fake: bool, paths: Paths
+) -> Iterator[FakePositions | RealPositions]:
     """A positions port over the fake fixture or an authenticated client.
 
     The real client is closed on the way out, like ``sync`` does.
@@ -497,7 +501,9 @@ def _positions_port(fake: bool, paths: Paths) -> Iterator[FakePositions | RealPo
         yield RealPositions(client)
 
 
-def cmd_position_get(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> int:
+def cmd_position_get(
+    args: Sequence[str], *, command: str, fake: bool, paths: Paths
+) -> int:
     """Read positions for the given ASINs and refresh ``remote.json`` (4.6)."""
     asins = _positional_args(args)
     if not asins:
@@ -531,7 +537,9 @@ def cmd_position_get(args: Sequence[str], *, command: str, fake: bool, paths: Pa
     return protocol.EXIT_OK
 
 
-def cmd_position_push(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> int:
+def cmd_position_push(
+    args: Sequence[str], *, command: str, fake: bool, paths: Paths
+) -> int:
     """Write one local position back to the account (ARCHITECTURE 4.6)."""
     asin, ms_text, local_updated_at = split_push_args(args)
     if not asin or ms_text is None:

@@ -103,7 +103,9 @@ def test_duration_nan_and_infinity_give_empty(module: qjs.JsModule) -> None:
         (100, 50, ""),
     ],
 )
-def test_left(module: qjs.JsModule, position: int, duration_ms: int, expected: str) -> None:
+def test_left(
+    module: qjs.JsModule, position: int, duration_ms: int, expected: str
+) -> None:
     assert module.call("left", position, duration_ms) == expected
 
 
@@ -203,9 +205,7 @@ def test_bytes_nan_and_infinity_give_empty(module: qjs.JsModule) -> None:
         (2.9, 100, "2 books \u00b7 100 B"),  # a fractional count floors
     ],
 )
-def test_storage_line(
-    module: qjs.JsModule, count, total, expected: str
-) -> None:
+def test_storage_line(module: qjs.JsModule, count, total, expected: str) -> None:
     assert module.call("storageLine", count, total) == expected
 
 
@@ -243,9 +243,7 @@ def test_ago(module: qjs.JsModule, offset: int, expected: str) -> None:
     assert module.call("ago", iso_at(offset), NOW) == expected
 
 
-@pytest.mark.parametrize(
-    "value", [None, "", "not a date", "2026-13-45T00:00:00Z", 42]
-)
+@pytest.mark.parametrize("value", [None, "", "not a date", "2026-13-45T00:00:00Z", 42])
 def test_ago_is_never_for_a_missing_or_bad_timestamp(
     module: qjs.JsModule, value
 ) -> None:
@@ -300,7 +298,5 @@ def test_names_not_a_list_gives_empty(module: qjs.JsModule, value) -> None:
         ("Title", "Author", "  ", "Title \u2014 Author"),
     ],
 )
-def test_tooltip(
-    module: qjs.JsModule, title, author, left_text, expected: str
-) -> None:
+def test_tooltip(module: qjs.JsModule, title, author, left_text, expected: str) -> None:
     assert module.call("tooltip", title, author, left_text) == expected

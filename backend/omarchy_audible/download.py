@@ -319,7 +319,9 @@ def probe_duration_ms(path: Path) -> int | None:
         return None
 
 
-def _verify_duration(path: Path, container: str, expected_duration_ms: int | None) -> None:
+def _verify_duration(
+    path: Path, container: str, expected_duration_ms: int | None
+) -> None:
     """Check the downloaded duration against the catalog, with no key."""
     if not expected_duration_ms:
         return
@@ -328,7 +330,9 @@ def _verify_duration(path: Path, container: str, expected_duration_ms: int | Non
         if container == "aax":
             # A legacy aax needs activation bytes for ffprobe to read its
             # duration; the file is otherwise fine, so skip the check (B11).
-            log("ffprobe could not read the aax duration without activation bytes; skipped")
+            log(
+                "ffprobe could not read the aax duration without activation bytes; skipped"
+            )
         return
     if abs(actual - expected_duration_ms) > max(1000, expected_duration_ms * 0.01):
         raise PipelineError(
@@ -443,7 +447,12 @@ def _fake_generate_raw(raw_path: Path, children: ChildTracker, audio_ms: int) ->
         "ipod",
         str(raw_path),
     ]
-    _run(argv, children, protocol.ErrorCode.CONVERT, hint="ffmpeg is required in fake mode")
+    _run(
+        argv,
+        children,
+        protocol.ErrorCode.CONVERT,
+        hint="ffmpeg is required in fake mode",
+    )
 
 
 # --- real mode ---------------------------------------------------------------
@@ -525,7 +534,11 @@ def _content_size(metadata: Any) -> int:
         content.get("content_url"),
     ):
         size = source.get("content_size_in_bytes") if isinstance(source, dict) else None
-        if isinstance(size, int) and not isinstance(size, bool) and 0 < size <= _MAX_CONTENT_SIZE:
+        if (
+            isinstance(size, int)
+            and not isinstance(size, bool)
+            and 0 < size <= _MAX_CONTENT_SIZE
+        ):
             return size
     return 0  # unknown: let the download proceed rather than block it
 

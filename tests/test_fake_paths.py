@@ -41,7 +41,9 @@ def _seed_real_layout(paths: Paths) -> None:
     paths.config_dir.mkdir(parents=True, exist_ok=True)
     (paths.config_dir / "auth.json").write_text('{"fake": "auth"}', encoding="utf-8")
     paths.data_dir.mkdir(parents=True, exist_ok=True)
-    (paths.data_dir / "catalog.json").write_text('{"schema": 1, "books": []}', encoding="utf-8")
+    (paths.data_dir / "catalog.json").write_text(
+        '{"schema": 1, "books": []}', encoding="utf-8"
+    )
     (paths.data_dir / "remote.json").write_text(
         '{"B00REAL01": {"ms": 1, "updated_at": null}}', encoding="utf-8"
     )
@@ -76,7 +78,9 @@ def test_status_reports_the_resolved_dirs_in_both_modes(env, run_cli, events):
         event for event in events(run_cli("status")) if event["type"] == "status"
     )
     fake_status = next(
-        event for event in events(run_cli("status", fake=True)) if event["type"] == "status"
+        event
+        for event in events(run_cli("status", fake=True))
+        if event["type"] == "status"
     )
 
     real = Paths.from_env(env)
@@ -94,7 +98,11 @@ def test_fake_mode_ignores_the_books_dir_override(env, run_cli, events, tmp_path
     status = next(
         event
         for event in events(
-            run_cli("status", fake=True, extra_env={"OMARCHY_AUDIBLE_BOOKS_DIR": str(override)})
+            run_cli(
+                "status",
+                fake=True,
+                extra_env={"OMARCHY_AUDIBLE_BOOKS_DIR": str(override)},
+            )
         )
         if event["type"] == "status"
     )

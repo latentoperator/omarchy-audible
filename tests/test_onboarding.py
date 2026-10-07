@@ -40,8 +40,7 @@ EXPECTED_API = {
 
 # A redirect URL carrying the one-time code. Invented; never a real account.
 REDIRECT = (
-    "https://www.amazon.com/ap/register"
-    "?openid.oa2.authorization_code=INVENTEDCODE123"
+    "https://www.amazon.com/ap/register?openid.oa2.authorization_code=INVENTEDCODE123"
 )
 
 # Every code `errorText` must cover, read from the backend itself.
@@ -108,7 +107,9 @@ def test_step_loading_for_a_missing_status(onboarding: qjs.JsModule, status) -> 
 
 def test_step_missing_when_a_tool_is_missing(onboarding: qjs.JsModule) -> None:
     assert onboarding.call("step", ready_status(missing=["mpv"])) == "missing"
-    assert onboarding.call("step", ready_status(missing=["mpv", "ffprobe"])) == "missing"
+    assert (
+        onboarding.call("step", ready_status(missing=["mpv", "ffprobe"])) == "missing"
+    )
 
 
 def test_step_setup_when_the_venv_is_not_ready(onboarding: qjs.JsModule) -> None:
@@ -143,7 +144,10 @@ def test_step_derives_from_the_fields_not_the_ready_flag(
     onboarding: qjs.JsModule,
 ) -> None:
     assert onboarding.call("step", ready_status(ready=False)) == "ready"
-    assert onboarding.call("step", ready_status(ready=True, authenticated=False)) == "connect"
+    assert (
+        onboarding.call("step", ready_status(ready=True, authenticated=False))
+        == "connect"
+    )
 
 
 def test_step_ignores_a_non_array_missing(onboarding: qjs.JsModule) -> None:
@@ -169,9 +173,7 @@ def test_step_ignores_a_non_array_missing(onboarding: qjs.JsModule) -> None:
         (["ffmpeg", "mpv", "ffmpeg"], "omarchy pkg add ffmpeg mpv"),
     ],
 )
-def test_install_command(
-    onboarding: qjs.JsModule, missing, expected: str
-) -> None:
+def test_install_command(onboarding: qjs.JsModule, missing, expected: str) -> None:
     assert onboarding.call("installCommand", missing) == expected
 
 
@@ -181,9 +183,10 @@ def test_install_command_with_no_list(onboarding: qjs.JsModule, missing) -> None
 
 
 def test_install_command_skips_unusable_entries(onboarding: qjs.JsModule) -> None:
-    assert onboarding.call(
-        "installCommand", [None, "", "   ", 42, "mpv", [], "ffprobe"]
-    ) == "omarchy pkg add mpv ffmpeg"
+    assert (
+        onboarding.call("installCommand", [None, "", "   ", 42, "mpv", [], "ffprobe"])
+        == "omarchy pkg add mpv ffmpeg"
+    )
 
 
 # --- view --------------------------------------------------------------------
@@ -227,9 +230,7 @@ def test_view_library_is_always_library(onboarding: qjs.JsModule) -> None:
 
 
 @pytest.mark.parametrize("loaded", [None, "yes", 1, 0, {}, []])
-def test_view_player_loaded_must_be_true(
-    onboarding: qjs.JsModule, loaded
-) -> None:
+def test_view_player_loaded_must_be_true(onboarding: qjs.JsModule, loaded) -> None:
     assert onboarding.call("view", "ready", loaded, None) == "library"
     assert onboarding.call("view", "ready", loaded, "mini") == "library"
     assert onboarding.call("view", "ready", loaded, "full") == "library"
@@ -266,16 +267,17 @@ def test_error_text_unknown_code_falls_back(onboarding: qjs.JsModule) -> None:
 
 
 @pytest.mark.parametrize("value", [None, "", "garbage", 42, {}, []])
-def test_error_text_missing_code_falls_back(
-    onboarding: qjs.JsModule, value
-) -> None:
+def test_error_text_missing_code_falls_back(onboarding: qjs.JsModule, value) -> None:
     assert onboarding.call("errorText", value, None, None) == onboarding.call(
         "errorText", ErrorCode.INTERNAL, None, None
     )
 
 
 def test_error_text_reconnect_only_for_auth_failed(onboarding: qjs.JsModule) -> None:
-    assert onboarding.call("errorText", ErrorCode.AUTH_FAILED, None, None)["reconnect"] is True
+    assert (
+        onboarding.call("errorText", ErrorCode.AUTH_FAILED, None, None)["reconnect"]
+        is True
+    )
     for code in ERROR_CODES:
         if code != ErrorCode.AUTH_FAILED:
             assert onboarding.call("errorText", code, None, None)["reconnect"] is False
@@ -285,7 +287,10 @@ def test_error_text_uses_the_backend_message_and_hint(
     onboarding: qjs.JsModule,
 ) -> None:
     text = onboarding.call(
-        "errorText", ErrorCode.NETWORK, "Could not reach Audible.", "Check the connection."
+        "errorText",
+        ErrorCode.NETWORK,
+        "Could not reach Audible.",
+        "Check the connection.",
     )
     assert text["body"] == "Could not reach Audible. Check the connection."
 
@@ -296,7 +301,9 @@ def test_error_text_uses_the_message_alone(onboarding: qjs.JsModule) -> None:
 
 
 def test_error_text_uses_the_hint_alone(onboarding: qjs.JsModule) -> None:
-    text = onboarding.call("errorText", ErrorCode.NETWORK, None, "Check the connection.")
+    text = onboarding.call(
+        "errorText", ErrorCode.NETWORK, None, "Check the connection."
+    )
     default = onboarding.call("errorText", ErrorCode.NETWORK, None, None)["body"]
     assert text["body"] == default + " Check the connection."
 
@@ -427,7 +434,5 @@ def test_clipboard_notice_when_the_code_is_in_history(
         {"type": "done", "clipboard_history_contains_code": 1},
     ],
 )
-def test_clipboard_notice_otherwise_is_empty(
-    onboarding: qjs.JsModule, done
-) -> None:
+def test_clipboard_notice_otherwise_is_empty(onboarding: qjs.JsModule, done) -> None:
     assert onboarding.call("clipboardNotice", done) == ""

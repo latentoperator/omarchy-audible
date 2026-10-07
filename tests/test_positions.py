@@ -187,10 +187,20 @@ def test_fetch_positions_never_batches_more_than_25():
 
 # --- argument parsing --------------------------------------------------------
 def test_split_push_args_reads_the_local_timestamp():
-    assert commands.split_push_args(["B00FAKE01", "1000"]) == ("B00FAKE01", "1000", None)
+    assert commands.split_push_args(["B00FAKE01", "1000"]) == (
+        "B00FAKE01",
+        "1000",
+        None,
+    )
     expected = ("B00FAKE01", "1000", "2026-01-01T00:00:00Z")
-    assert commands.split_push_args(["B00FAKE01", "1000", "--at", "2026-01-01T00:00:00Z"]) == expected
-    assert commands.split_push_args(["B00FAKE01", "1000", "--at=2026-01-01T00:00:00Z"]) == expected
+    assert (
+        commands.split_push_args(["B00FAKE01", "1000", "--at", "2026-01-01T00:00:00Z"])
+        == expected
+    )
+    assert (
+        commands.split_push_args(["B00FAKE01", "1000", "--at=2026-01-01T00:00:00Z"])
+        == expected
+    )
 
 
 # --- the CLI in fake mode ----------------------------------------------------
@@ -261,7 +271,9 @@ def test_position_push_refuses_a_stale_local_position(monkeypatch, capsys, paths
         paths=paths,
     )
     events = [
-        json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()
+        json.loads(line)
+        for line in capsys.readouterr().out.splitlines()
+        if line.strip()
     ]
     assert code == protocol.EXIT_ERROR
     assert events[-1]["type"] == "error"

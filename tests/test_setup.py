@@ -24,9 +24,7 @@ class RecordingRunner:
         self.calls: list[list[str]] = []
         self.fail_on = fail_on
 
-    def __call__(
-        self, argv, env=None
-    ) -> subprocess.CompletedProcess[str]:
+    def __call__(self, argv, env=None) -> subprocess.CompletedProcess[str]:
         tokens = [str(token) for token in argv]
         self.calls.append(tokens)
         if tokens[1:3] == ["-m", "venv"]:

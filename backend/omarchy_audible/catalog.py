@@ -290,9 +290,7 @@ class RealLibrary:
         }
         if self._image_sizes:
             try:
-                return self._client.get(
-                    LIBRARY_ENDPOINT, image_sizes="252", **params
-                )
+                return self._client.get(LIBRARY_ENDPOINT, image_sizes="252", **params)
             except Exception as exc:  # noqa: BLE001 - the parameter is optional
                 log(
                     "library image_sizes=252 unavailable "

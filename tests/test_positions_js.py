@@ -59,12 +59,16 @@ def test_finish_trailing_constant(module: qjs.JsModule) -> None:
 
 
 # --- the shared vectors (both engines must agree) ----------------------------
-@pytest.mark.parametrize("case", PARSE_CASES, ids=[case["name"] for case in PARSE_CASES])
+@pytest.mark.parametrize(
+    "case", PARSE_CASES, ids=[case["name"] for case in PARSE_CASES]
+)
 def test_parse_updated_at_matches_the_vector(module: qjs.JsModule, case: dict) -> None:
     assert module.call("parseUpdatedAt", case["value"]) == case["epoch_ms"]
 
 
-@pytest.mark.parametrize("case", MERGE_CASES, ids=[case["name"] for case in MERGE_CASES])
+@pytest.mark.parametrize(
+    "case", MERGE_CASES, ids=[case["name"] for case in MERGE_CASES]
+)
 def test_merge_matches_the_vector(module: qjs.JsModule, case: dict) -> None:
     assert module.call("merge", case["local"], case["remote"]) == case["expected"]
 
@@ -92,7 +96,9 @@ def test_resume_survives_missing_entries(module: qjs.JsModule) -> None:
 
 
 # --- shouldPush (D4: local listening only, ARCHITECTURE 4.6) -----------------
-def test_should_push_false_for_a_book_never_played_locally(module: qjs.JsModule) -> None:
+def test_should_push_false_for_a_book_never_played_locally(
+    module: qjs.JsModule,
+) -> None:
     book = {
         "ms": 5000,
         "updated_at": "2026-02-01 00:00:00.0",
@@ -106,13 +112,20 @@ def test_should_push_false_for_a_book_never_played_locally(module: qjs.JsModule)
 def test_should_push_false_without_a_position(module: qjs.JsModule) -> None:
     assert module.call("shouldPush", {"played_since_download": True, "ms": 0}) is False
     assert module.call("shouldPush", {"played_since_download": True}) is False
-    assert module.call("shouldPush", {"played_since_download": True, "ms": "nope"}) is False
+    assert (
+        module.call("shouldPush", {"played_since_download": True, "ms": "nope"})
+        is False
+    )
     assert module.call("shouldPush", None) is False
     assert module.call("shouldPush", "junk") is False
 
 
 def test_should_push_true_when_played_and_never_pushed(module: qjs.JsModule) -> None:
-    book = {"ms": 5000, "played_since_download": True, "updated_at": "2026-02-01 00:00:00.0"}
+    book = {
+        "ms": 5000,
+        "played_since_download": True,
+        "updated_at": "2026-02-01 00:00:00.0",
+    }
     assert module.call("shouldPush", book) is True
 
 
@@ -210,7 +223,9 @@ def test_flush_plan_drops_a_stale_queued_push(module: qjs.JsModule) -> None:
     assert plan["send"] == [{"asin": OTHER, "ms": 2000, "at": "2026-02-02T00:00:00Z"}]
 
 
-def test_flush_plan_sends_when_the_remote_is_older_or_unknown(module: qjs.JsModule) -> None:
+def test_flush_plan_sends_when_the_remote_is_older_or_unknown(
+    module: qjs.JsModule,
+) -> None:
     queue = [
         push(ASIN, 1000, "2026-01-01T00:00:00Z"),
         push(OTHER, 2000, "2026-02-02T00:00:00Z"),
