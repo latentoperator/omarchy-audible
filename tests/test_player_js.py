@@ -392,3 +392,16 @@ def test_full_key_action(player, view, text, action):
 
 def test_sleep_minutes(player):
     assert player.evaluate("SLEEP_MINUTES") == [15, 30, 45, 60]
+
+
+@pytest.mark.parametrize("connection,last_error,play_error,expected", [
+    ("connected", "", "", ""),
+    ("failed", "", "", ""),
+    ("failed", "mpv did not start", "", "mpv did not start"),
+    ("connected", "mpv: something", "", ""),
+    ("connected", "", "book is not downloaded", "book is not downloaded"),
+    ("failed", "mpv did not start", "book is not downloaded", "book is not downloaded"),
+    (None, None, None, ""),
+])
+def test_play_failure(player, connection, last_error, play_error, expected):
+    assert player.call("playFailure", connection, last_error, play_error) == expected

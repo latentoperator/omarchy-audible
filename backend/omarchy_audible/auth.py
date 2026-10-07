@@ -42,6 +42,9 @@ from urllib.parse import parse_qs, urlsplit
 
 from . import fakestate, protocol
 from .errors import PipelineError
+from .fsutil import ensure_private_dir as _ensure_private_dir
+from .fsutil import write_private_json as _write_private_json
+from .fsutil import write_private_text as _write_private_text
 from .library import iso_now
 from .log import log
 from .paths import Paths
@@ -169,32 +172,8 @@ class RealAudible:
 
 
 # --- private files -----------------------------------------------------------
-def _ensure_private_dir(path: Path) -> None:
-    path.mkdir(parents=True, exist_ok=True, mode=0o700)
-    try:
-        os.chmod(path, 0o700)
-    except OSError:  # pragma: no cover - a pre-existing dir we cannot chmod
-        pass
-
-
-def _write_private_text(path: Path, text: str) -> None:
-    """Create ``path`` as ``0600`` and write ``text`` to it."""
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    data = text.encode("utf-8")
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    try:
-        view = memoryview(data)
-        while view:
-            view = view[os.write(fd, view) :]
-    finally:
-        os.close(fd)
-    os.chmod(path, 0o600)
-
-
-def _write_private_json(path: Path, data: Any) -> None:
-    _write_private_text(
-        path, json.dumps(data, separators=(",", ":"), ensure_ascii=False) + "\n"
-    )
+# The ``0600``/``0700`` writers live in ``fsutil`` so the download pipeline can
+# create ``key.json`` at ``0600`` without importing from here (B11).
 
 
 def _unlink(path: Path) -> None:

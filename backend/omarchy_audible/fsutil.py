@@ -54,6 +54,40 @@ def atomic_write_bytes(path: Path, data: bytes) -> None:
         raise
 
 
+def ensure_private_dir(path: Path) -> None:
+    """Create ``path`` as ``0700`` (best effort on a pre-existing directory)."""
+    path.mkdir(parents=True, exist_ok=True, mode=0o700)
+    try:
+        os.chmod(path, 0o700)
+    except OSError:  # pragma: no cover - a directory we cannot chmod
+        pass
+
+
+def write_private_text(path: Path, text: str) -> None:
+    """Create ``path`` as ``0600`` and write ``text``.
+
+    The mode is set at creation (``os.open``), so the file never exists at a
+    wider mode for even an instant (B11 ``key.json``, ARCHITECTURE 3).
+    """
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    data = text.encode("utf-8")
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        view = memoryview(data)
+        while view:
+            view = view[os.write(fd, view) :]
+    finally:
+        os.close(fd)
+    os.chmod(path, 0o600)
+
+
+def write_private_json(path: Path, data: Any) -> None:
+    """Serialise ``data`` as compact JSON and write it ``0600``."""
+    write_private_text(
+        path, json.dumps(data, separators=(",", ":"), ensure_ascii=False) + "\n"
+    )
+
+
 def atomic_replace(src: Path, dst: Path) -> None:
     """Move ``src`` onto ``dst`` in one step (ARCHITECTURE 4.3 step 5).
 

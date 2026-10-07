@@ -128,9 +128,45 @@ function toMs(seconds) {
 
 // ---- commands (argv arrays for mpv's `command` field) ----
 
-function loadCommand(path, startSec) {
+// `loadfile` for a book. With no `options` this is the plain form used for an
+// old unlocked `.m4b`. With `{lavf, chaptersFile}` it becomes mpv's per-file
+// option map: mpv >= 0.38 takes the index (-1 = "no index") before the map
+// (ARCHITECTURE 5.1). Empty or null option values are left out, so an old book
+// and a locked one both load through this one function.
+function loadCommand(path, startSec, options) {
   var start = typeof startSec === "number" && startSec > 0 ? startSec : 0;
-  return ["loadfile", String(path), "replace", 0, "start=" + start];
+  if (isNull(options) || typeof options !== "object" || Array.isArray(options)) {
+    return ["loadfile", String(path), "replace", 0, "start=" + start];
+  }
+  var map = { "start": String(start) };
+  if (typeof options.lavf === "string" && options.lavf.length > 0) {
+    map["demuxer-lavf-o"] = options.lavf;
+  }
+  if (typeof options.chaptersFile === "string" && options.chaptersFile.length > 0) {
+    map["chapters-file"] = options.chaptersFile;
+  }
+  return ["loadfile", String(path), "replace", -1, map];
+}
+
+// The `loadCommand` options for a book from `play-info`'s {lavf, chaptersFile},
+// or null when both are empty (an old `.m4b`), so that book keeps the plain
+// loadfile form it has always used.
+function loadOptions(options) {
+  if (isNull(options) || typeof options !== "object") {
+    return null;
+  }
+  var lavf = typeof options.lavf === "string" ? options.lavf : "";
+  var chaptersFile = typeof options.chaptersFile === "string" ? options.chaptersFile : "";
+  if (lavf.length === 0 && chaptersFile.length === 0) {
+    return null;
+  }
+  return { "lavf": lavf, "chaptersFile": chaptersFile };
+}
+
+// Drop the key material from mpv's options after the file is loaded: the key is
+// readable over the socket while `demuxer-lavf-o` is set (SPIKE-RESULTS S7).
+function clearKeyCommand() {
+  return ["set_property", "demuxer-lavf-o", ""];
 }
 
 function pauseCommand(paused) {

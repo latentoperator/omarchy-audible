@@ -78,6 +78,7 @@ def test_registry_classifies_job_and_non_job_commands():
         "status",
         "doctor",
         "local",
+        "play-info",
         "position-get",
         "position-push",
         "login-start",

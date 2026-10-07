@@ -2,7 +2,7 @@
 
 Every command in ARCHITECTURE 4.2 is implemented: ``status``/``doctor`` (B1),
 ``setup`` (B2), the auth commands (B3), ``sync`` (B4),
-``get``/``cancel``/``local``/``remove`` (B5), and
+``get``/``cancel``/``local``/``remove`` (B5), ``play-info`` (B11), and
 ``position-get``/``position-push`` (B6). Each registry entry carries its
 job/non-job classification (ARCHITECTURE 4.8), which is what the job lock uses.
 """
@@ -32,9 +32,9 @@ from .auth import (
 )
 from .bootstrap import run_setup, venv_ready
 from .catalog import open_client, run_sync
-from .download import FAKE_FAIL_MODES, run_get
+from .download import FAKE_FAIL_MODES, parse_fake_chapters, run_get
 from .errors import Cancelled, PipelineError
-from .library import remove_book, scan_local, validate_asin
+from .library import play_info_payload, remove_book, scan_local, validate_asin
 from .paths import Paths
 from .positions import (
     FakePositions,
@@ -218,24 +218,32 @@ def cmd_sync(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> 
     return protocol.EXIT_OK
 
 
-def split_get_args(args: Sequence[str]) -> tuple[str | None, str | None]:
-    """Split ``get`` arguments into ``(asin, fake_fail)``.
+def split_get_args(args: Sequence[str]) -> tuple[str | None, str | None, str | None]:
+    """Split ``get`` arguments into ``(asin, fake_fail, fake_chapters)``.
 
     Tolerates an unknown flag by returning the tokens it could read; validation
     is the caller's job.
     """
     asin: str | None = None
     fake_fail: str | None = None
+    fake_chapters: str | None = None
     index = 0
     while index < len(args):
         token = args[index]
-        if token == "--fake-fail":
+        if token in ("--fake-fail", "--fake-chapters"):
             if index + 1 < len(args):
-                fake_fail = args[index + 1]
+                if token == "--fake-fail":
+                    fake_fail = args[index + 1]
+                else:
+                    fake_chapters = args[index + 1]
             index += 2
             continue
         if token.startswith("--fake-fail="):
             fake_fail = token.split("=", 1)[1]
+            index += 1
+            continue
+        if token.startswith("--fake-chapters="):
+            fake_chapters = token.split("=", 1)[1]
             index += 1
             continue
         if token.startswith("-"):
@@ -244,7 +252,7 @@ def split_get_args(args: Sequence[str]) -> tuple[str | None, str | None]:
         if asin is None:
             asin = token
         index += 1
-    return asin, fake_fail
+    return asin, fake_fail, fake_chapters
 
 
 def split_push_args(
@@ -305,8 +313,8 @@ class _sigterm_cancels:
 
 
 def cmd_get(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> int:
-    """Download and convert one book (ARCHITECTURE 4.3)."""
-    asin, fake_fail = split_get_args(args)
+    """Download one book, keeping the locked original (ARCHITECTURE 4.3)."""
+    asin, fake_fail, fake_chapters_text = split_get_args(args)
     if asin is None:
         protocol.error(
             protocol.ErrorCode.INVALID_ARGS,
@@ -321,6 +329,14 @@ def cmd_get(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> i
             hint=f"choose one of: {', '.join(FAKE_FAIL_MODES)} (fake mode only)",
         )
         return protocol.EXIT_USAGE
+    fake_chapters: int | None = None
+    if fake_chapters_text is not None and fake:
+        # Real mode ignores the flag; only fake mode has a chapter count to set.
+        try:
+            fake_chapters = parse_fake_chapters(fake_chapters_text)
+        except PipelineError as exc:
+            protocol.error(exc.code, exc.message, exc.hint)
+            return protocol.EXIT_USAGE
 
     try:
         validate_asin(paths.books_dir, asin)
@@ -331,7 +347,13 @@ def cmd_get(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> i
     path: Path | None = None
     try:
         with _sigterm_cancels():
-            path = run_get(asin, paths, fake=fake, fake_fail=fake_fail)
+            path = run_get(
+                asin,
+                paths,
+                fake=fake,
+                fake_fail=fake_fail,
+                fake_chapters=fake_chapters,
+            )
     except Cancelled:
         protocol.error(
             protocol.ErrorCode.CANCELLED,
@@ -404,6 +426,34 @@ def cmd_cancel(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -
 def cmd_local(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> int:
     """List the books downloaded on this machine (ARCHITECTURE 4.2)."""
     protocol.emit("local", books=scan_local(paths.books_dir))
+    protocol.done()
+    return protocol.EXIT_OK
+
+
+def cmd_play_info(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> int:
+    """Describe how to play a local book (ARCHITECTURE 4.2, D7).
+
+    A non-job command: it never takes ``job.lock``, so the drawer can ask about
+    a book while another one is downloading. The ``lavf_options`` value it emits
+    is a secret; it is the only event that carries one.
+    """
+    positional = _positional_args(args)
+    asin = positional[0] if positional else None
+    if not asin:
+        protocol.error(
+            protocol.ErrorCode.INVALID_ARGS,
+            "play-info needs an ASIN",
+            hint="try: omarchy-audible play-info <asin>",
+        )
+        return protocol.EXIT_USAGE
+
+    try:
+        payload = play_info_payload(paths, asin)
+    except PipelineError as exc:
+        protocol.error(exc.code, exc.message, exc.hint)
+        return _error_exit(exc)
+
+    protocol.write_event(payload)
     protocol.done()
     return protocol.EXIT_OK
 
@@ -633,6 +683,7 @@ def _registry() -> dict[str, Command]:
         "login-import-cli": Command(cmd_login_import_cli, True),
         "logout": Command(cmd_logout, True),
         "local": Command(cmd_local, False),
+        "play-info": Command(cmd_play_info, False),
         "position-get": Command(cmd_position_get, False),
         "position-push": Command(cmd_position_push, False),
         "login-start": Command(cmd_login_start, False),

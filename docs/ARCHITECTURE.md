@@ -21,8 +21,8 @@ Companion to [SCOPE.md](SCOPE.md). Facts marked ✅ were verified by hand on 202
           unix socket               │                │
                                     │      ┌─────────┴──────────┐
                                     │      ▼                    ▼
-                                    │  `audible` lib /      ffmpeg (decrypt → m4b)
-                                    │  `audible-cli`
+                                    │  `audible` lib /      ffmpeg (fake audio) /
+                                    │  `audible-cli`        ffprobe (duration)
                                     │      │
                                     └──────┴──▶ Audible API / CDN  (Python backend only)
 ```
@@ -75,14 +75,17 @@ Theming rule: import `qs.Commons` and `qs.Ui` and use `Style`/theme tokens only.
 | `~/.local/share/omarchy-audible/remote.json` | Remote positions cache `{asin: {ms, updated_at}}`. **Written only by the backend** (`sync`, `position-get`) | |
 | `~/.local/share/omarchy-audible/state.json` | Local positions, last-played times, push queue. **Written only by `Service.qml`** | |
 | `~/.local/share/omarchy-audible/covers/<asin>.jpg` | Cover thumbnails | |
-| `<booksDir>/<asin>/book.m4b` | Decrypted audio, chapters embedded | |
-| `<booksDir>/<asin>/meta.json` | Title, author, duration, size, downloaded_at | |
+| `<booksDir>/<asin>/book.m4b` | Decrypted audio, chapters embedded — **old downloads only**, before B11 | |
+| `<booksDir>/<asin>/book.aaxc` \| `book.aax` | The file exactly as Audible sent it, unlocked in memory at play time (B11, D7) | |
+| `<booksDir>/<asin>/key.json` | Decryption material: `{format:"aaxc",key,iv}` from the voucher, or `{format:"aax"}` as a **reference** to the account's activation bytes, not a copy (D7) | 0600 |
+| `<booksDir>/<asin>/chapters.txt` | ffmetadata chapter list built from Audible's `chapters.json` (absent when Audible sent no list) | |
+| `<booksDir>/<asin>/meta.json` | Title, author, duration, size, downloaded_at, `format`, `locked` | |
 | `$XDG_RUNTIME_DIR/omarchy-audible/mpv.sock` | mpv IPC socket | |
 | `$XDG_RUNTIME_DIR/omarchy-audible/job.lock` | Exclusive lock held by the running job command (§4.8) | |
 | `$XDG_RUNTIME_DIR/omarchy-audible/job.json` | `{pid, command, asin}` of the running job, for `cancel` | |
 | `$XDG_RUNTIME_DIR/omarchy-audible/login-<id>.json` | Login session `{verifier, serial, marketplace, created}`, 10-minute TTL, tmpfs | 0600 | |
 
-Books are keyed by **ASIN directory**, not by title. That makes removal a single `rm -r` of one directory, avoids filename-encoding problems, and makes "what is local?" a directory scan. The filesystem is the source of truth for "is this book local".
+Books are keyed by **ASIN directory**, not by title. That makes removal a single `rm -r` of one directory, avoids filename-encoding problems, and makes "what is local?" a directory scan. The filesystem is the source of truth for "is this book local": a directory holding `book.m4b`, or a locked `book.aaxc`/`book.aax` **plus a readable `key.json`** (B11). A locked file with no key file is not local.
 
 `state.json` (schema v1, written **only** by `Service.qml`, §4.8; parsed and serialized by `qml/lib/Library.js`):
 
@@ -125,8 +128,10 @@ login-import-cli [--dir ~/.audible]          → done | error(code=no_auth_file)
 logout                      → done (deregisters this device only, then deletes auth.json, activation_bytes, config.toml; keeps books)
 sync [--full]               → progress {"type":"progress","stage":"library","n":40,"of":91}, then done
                               (writes catalog.json atomically, fetches missing covers)
-get <asin>                  → {"type":"progress","stage":"download|convert","bytes":123,"total":456}
-                              … then {"type":"done","path":".../book.m4b"}
+get <asin>                  → {"type":"progress","stage":"download","bytes":123,"total":456}
+                              … then {"type":"done","path":".../book.aaxc"}  (the locked original)
+play-info <asin>            → {"type":"play_info","path":".../book.aaxc","chapters_file":"..."|null,
+                               "lavf_options":"audible_key=…,audible_iv=…"}   then done
 cancel <asin>               → done | error(code=not_running)   (signals the running `get`, see §4.8)
 remove <asin>               → {"type":"done","freed_bytes":N}      (LOCAL ONLY — see §4.4)
 local                       → {"type":"local","books":[{"asin":…,"size":N,"downloaded_at":…}]}
@@ -135,24 +140,31 @@ position-push <asin> <ms>   → done | error(code=unsupported|network)
 doctor                      → {"type":"doctor","checks":[{"name":…,"ok":bool,"detail":…}]}
 ```
 
-`--fake` (or env `OMARCHY_AUDIBLE_FAKE=1`) runs the same protocol against `fixtures/` with no network and no account. This lets UI work and tests proceed without credentials, and is what CI runs. Fake `get` produces a short synthetic m4b with chapters using `ffmpeg -f lavfi` and simulates progress and failures (`--fake-fail <code>`).
+`--fake` (or env `OMARCHY_AUDIBLE_FAKE=1`) runs the same protocol against `fixtures/` with no network and no account. This lets UI work and tests proceed without credentials, and is what CI runs. Fake `get` produces the same layout as real mode — a short sine served as `book.aaxc`, a fake-hex `key.json`, `chapters.txt` and `meta.json` — and simulates progress and failures (`--fake-fail <code>`). `OMARCHY_AUDIBLE_FAKE_CHAPTERS=<n>` (1–500) or `--fake-chapters <n>` on a fake `get` gives the fake book `n` evenly spaced chapters, for UI checks on 100+ chapter books; real mode ignores it.
+
+`play-info` is the only event that carries a key. Its `lavf_options` value is a secret: never log it, never store it (the service redacts it in `recentEvents`, `qml/lib/EventLog.js`), and clear it from mpv as soon as the file is loaded.
 
 Fake mode carries its own onboarding state so the sign-in and setup screens can be exercised without a real account. A fresh fake tree **starts signed in**; `logout --fake` writes a `fake-signed-out` marker in the fake config dir and `login-finish --fake` / `login-import-cli --fake` remove it, so `status --fake` flips `authenticated` (and `ready`) accordingly. An optional `<fake config dir>/fake-status.json` — `{"missing": ["mpv"], "venv_ready": false}`, both keys optional — overrides those two `status` fields, and `setup --fake` drops the `venv_ready` override so the UI can return to the ready state. Real mode reads neither file.
 
-### 4.3 Download and decrypt pipeline ✅ (S2)
-Verified manually:
+### 4.3 Download pipeline ✅ (S2) — locked layout (B11, D7)
+S2 verified the old decrypt path by hand:
 - `audible download --asin <ASIN> --aax-fallback --cover --chapter -y -o <dir>` produced `*.aax` (264 MB for a 9-hour book, ~18 s), a 500px cover, and a chapters JSON.
 - `audible activation-bytes` returned the 8-hex-character account key.
 - `ffmpeg -activation_bytes <hex> -i book.aax -c copy book.m4b` is a lossless stream copy, **preserved all 20 chapters**, and ran in a few seconds. ffmpeg prints `Application provided duration … in stream 2 is invalid` warnings for the embedded cover stream; they are harmless.
 
+**B11 dropped that conversion.** The plugin no longer writes a decrypted copy (D7), so those commands are history, not the pipeline: the file stays exactly as Audible sent it and mpv unlocks it in memory (§5.1).
+
 Pipeline for `get <asin>`:
-1. Pre-flight: content metadata gives `content_size_in_bytes` before download; require ≥ 2.1× that in free space (S2 measured a 2.0× peak).
-2. Create `<booksDir>/<asin>/.partial/`.
+1. Pre-flight: content metadata gives `content_size_in_bytes` before download; require ≥ 1.1× that in free space (B11: without the decrypt pass the peak is the book itself, not twice it). A re-download counts the bytes it will free — the old audio and any abandoned `.partial/` — so it is not refused for space the previous copy itself holds (B14, F10).
+2. Create `<booksDir>/<asin>/.partial/` and build the whole book **there**: `key.json` (`0600` at creation), `chapters.txt` and the audio renamed to its final `book.aaxc`/`book.aax` name. The book directory is untouched until the download has been verified (B14).
 3. Download via `audible-cli` with `--aaxc --chapter -q best`, no progress bars. **Prefer aaxc; if no voucher is offered, retry with `--aax`** (G0 decision). Note that audible-cli's own `--aax-fallback` goes the other way (aax first), so don't use it. Report progress by polling the partial file size.
-4. Decrypt: `.aaxc` uses the voucher `content_license.license_response.key`/`.iv` (`-audible_key`, `-audible_iv`); `.aax` uses `-activation_bytes` ✅ S2 proved both paths. ffmpeg offers no other input for the aaxc key/iv, so they are passed as argv and are visible to same-user processes in `/proc/<pid>/cmdline` for the few seconds the conversion runs; that is accepted.
-5. **Chapters come from Audible's list, not the file** (G0 decision; one book had 20 embedded chapters vs 46 in the API). Build an ffmetadata chapter file from `<ASIN>-chapters.json` (flat) and apply it in the same `-c copy` pass (`-i chapters.txt -map_metadata 1 -map_chapters 1`). Fall back to the embedded chapters if the JSON is missing. Write to `book.m4b.tmp`, then `ffprobe` sanity check (duration within 1% of catalog runtime; chapter count equals the flat list), then atomic rename to `book.m4b`.
-6. Write `meta.json`, delete `.partial/` and the raw `.aax`/`.aaxc` (**the raw file is never kept**).
-7. On failure or cancel at any step, delete `.partial/` and emit `error`.
+4. Write into `.partial/`: `key.json` `0600` — for aaxc `{"format":"aaxc","key":"<hex>","iv":"<hex>"}` from the voucher's `content_license.license_response.key`/`.iv`; for aax `{"format":"aax"}` only, a **reference** to the account's activation bytes, not a copy (D7). Write `chapters.txt`, the ffmetadata built from Audible's `chapters.json` (flat) with the shared `build_ffmetadata`; no JSON means no file.
+5. Move the original audio onto its final `book.aaxc`/`book.aax` name **inside `.partial/`**, through a temp name in the same directory and one atomic rename. **Chapters come from Audible's list, not the file** (G0 decision; one book had 20 embedded chapters vs 46 in the API) — they are carried by `chapters.txt`, not baked into the audio.
+6. A key-free sanity check, still in `.partial/`: `ffprobe` duration against the catalog runtime, within 1% (S7: the header opens without a key). If ffprobe cannot read an aax without activation bytes, skip the check and say so in the log.
+7. Commit, only once everything in `.partial/` checks out: clear the directory's previous audio, `key.json`, `chapters.txt` and `meta.json`, then move the new files in — the audio last, through `os.replace`, so "local" flips at one moment — and write `meta.json` (`format`, `locked: true`, the cached `acr`). An old `book.m4b` never sits beside a locked file (B14).
+8. On failure or cancel before that commit, delete `.partial/` and every temp file; any previous copy in the book directory is left exactly as it was, so a failed or cancelled re-download never costs the user a playable book (B14). Nothing in `.partial/` counts as local (ARCHITECTURE §4.8).
+
+**No `ffmpeg` or `ffprobe` argv in `get` may contain a key, iv or activation bytes**: the key is written to `key.json` and only read again by `play-info`, and it reaches mpv over the IPC socket, never as an argument (§5.1, D7).
 
 ### 4.4 Removal safety (hard requirement)
 `remove <asin>` only deletes `<booksDir>/<asin>/`. It must verify the resolved path is inside `booksDir` and refuse otherwise. The backend has no code path that calls an Audible endpoint with a mutating method except position write-back (§4.6). A test greps the package for `delete`, `remove`, and `return` calls to the API and fails if any is found.
@@ -225,7 +237,7 @@ The merge rule (§4.6) runs in the service: it reads `state.json` and `remote.js
 **Jobs: one at a time, owned by the service.**
 - `JobRunner.qml` is the only thing that spawns backend commands from the UI. It keeps a queue and runs one **job command** at a time.
 - Job commands (`setup`, `sync`, `get`, `remove`, `login-finish`, `login-import-cli`, `logout`) take an exclusive `flock` on `job.lock` **without waiting**. If it is held they exit with `error(code=busy)`. That guards against a second shell, a hotkey, or a user running the CLI.
-- Non-job commands never take the lock: `status`, `doctor`, `local`, `position-get`, `position-push`, `login-start`, and `cancel`. Pushes and status checks therefore work during a download.
+- Non-job commands never take the lock: `status`, `doctor`, `local`, `play-info`, `position-get`, `position-push`, `login-start`, and `cancel`. Pushes, status checks and `play-info` therefore work during a download.
 - `get` writes `job.json` `{pid, command, asin}` after taking the lock and removes it on exit. `cancel <asin>` reads `job.json`; if the asin matches it sends SIGTERM to that pid, otherwise `error(code=not_running)`. `get` handles SIGTERM by stopping its children, deleting `.partial/`, and emitting `error(code=cancelled)`. The UI can also just kill the process it spawned; both paths must clean up.
 
 ## 5. Player (QML)
@@ -241,7 +253,10 @@ Launched as `systemd-run --user --scope --quiet --collect --unit=omarchy-audible
 
 The service connects with Quickshell's unix-socket client (`Quickshell.Io` `Socket`) and speaks mpv's JSON IPC (`{"command":[…],"request_id":n}`; events as JSON lines). Observed properties: `time-pos`, `duration`, `pause`, `speed`, `chapter`, `chapter-list`, `path`, `idle-active`, `eof-reached`, `volume`.
 
-Commands: `loadfile <path> replace 0 start=<seconds>`, `set pause yes|no`, `seek ±N relative`, `seek <s> absolute`, `add chapter ±1`, `set chapter <i>`, `set speed <x>`.
+Commands (B11: the first form loads an old unlocked `.m4b`; the second is the locked-file form):
+- `loadfile <path> replace 0 start=<seconds>` — no options.
+- `loadfile <path> replace -1 {"start": "<s>", "demuxer-lavf-o": "<key options>", "chapters-file": "<chapters.txt>"}` — mpv ≥ 0.38 takes the index argument **before** the options map (the desktop has mpv 0.41); `-1` means "no playlist index". Empty or absent options are left out of the map. `demuxer-lavf-o` carries the `play-info` value (`audible_key=…,audible_iv=…`, or `activation_bytes=…`), so the key travels over the IPC socket and never in mpv's argv. Once the file is loaded the service sends `set_property demuxer-lavf-o ""` so the key no longer sits in a readable property (S7).
+- `set pause yes|no`, `seek ±N relative`, `seek <s> absolute`, `add chapter ±1`, `set chapter <i>`, `set speed <x>`.
 
 ### 5.2 PlayerController (QML object)
 Exposes: `loaded`, `playing`, `positionMs`, `durationMs`, `chapters[]`, `chapterIndex`, `speed`, `asin`, and functions `play(asin)`, `pause()`, `toggle()`, `skip(seconds)`, `nextChapter()`, `prevChapter()`, `seekMs()`, `setSpeed()`, `setSleepTimer()`.
@@ -284,7 +299,7 @@ mpv does not export MPRIS by itself. The AUR/Arch package `mpv-mpris` provides i
 | Layer | How |
 |-------|-----|
 | Backend unit | `pytest`, no network. Fixtures in `fixtures/` (synthetic catalog JSON, fake `audible` responses). |
-| Backend pipeline | `--fake` mode: ffmpeg-generated sine-wave m4b with 3 chapters; assert atomicity, cleanup on failure, `remove` path safety, free-space check. |
+| Backend pipeline | `--fake` mode: ffmpeg-generated sine served as `book.aaxc` (with a fake key) or `book.aax`, plus `chapters.txt`; assert atomicity, cleanup on failure, `remove` path safety, the free-space check, and that no argv carries key material. |
 | Protocol contract | JSON-schema per event type in `tests/schemas/`; both fake and real backends are validated against them. |
 | QML | Run inside the real shell with the repo symlinked and `OMARCHY_AUDIBLE_FAKE=1`. A `docs/MANUAL-TEST.md` checklist covers J1–J7 and three themes. |
 | Real account | A short manual checklist run by the maintainer before each release. Not automated. |

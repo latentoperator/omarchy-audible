@@ -29,6 +29,18 @@ var GLYPH_MAXIMIZE = "";
 var GLYPH_DISMISS = "";
 var GLYPH_CHAPTERS = "";
 
+// The "Couldn't start playback" reason, or "" when there is none: the last
+// `play-info` failure (B11) first, else the player's own failure.
+function playFailure(connection, lastError, playError) {
+  if (typeof playError === "string" && playError.length > 0) {
+    return playError;
+  }
+  if (connection === "failed" && typeof lastError === "string" && lastError.length > 0) {
+    return lastError;
+  }
+  return "";
+}
+
 function isNumber(value) {
   return typeof value === "number" && isFinite(value);
 }

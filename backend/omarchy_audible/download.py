@@ -1,21 +1,36 @@
-"""``get``: download, decrypt and apply Audible's chapters (ARCHITECTURE 4.3).
+"""``get``: download the locked original and keep its key material (4.3, D7).
 
 Pipeline, in order:
 
-1. Pre-flight: require 2.1x the content size in free space (S2 measured a 2.0x
-   peak) before anything is written.
-2. ``<booksDir>/<asin>/.partial/`` is created for the raw download.
+1. Pre-flight: require 1.1x the content size in free space (B11: there is no
+   decrypt pass, so the peak is the book itself, not twice it). A re-download
+   counts the bytes its replacement frees — the old audio and an abandoned
+   ``.partial/`` — so it is not refused for space the previous copy holds (B14,
+   F10).
+2. ``<booksDir>/<asin>/.partial/`` is created and the whole book is built
+   there: the raw download, a ``0600`` ``key.json``, ``chapters.txt`` and the
+   audio renamed to its final ``book.aaxc``/``book.aax`` name.
 3. Download with audible-cli, aaxc first and aax if no voucher is offered. A
-   zero byte count is reported by polling the partial directory.
-4. Decrypt with ffmpeg (aaxc: voucher ``key``/``iv``; aax: activation bytes) and
-   rebuild the chapter list from Audible's ``chapters.json`` in the same
-   ``-c copy`` pass.
-5. ``ffprobe`` sanity check, then an atomic rename onto ``book.m4b``.
-6. Write ``meta.json`` (including the cached ``acr``) and delete ``.partial/``;
-   the raw ``.aax``/``.aaxc`` is never kept.
+   byte count is reported by polling the partial directory.
+4. No decrypt (D7). The book directory ends up with the original audio moved
+   out of ``.partial/`` unchanged as ``book.aaxc``/``book.aax``, a ``0600``
+   ``key.json``, ``chapters.txt`` (ffmetadata built from Audible's
+   ``chapters.json`` when it is there) and ``meta.json``.
+5. A ``ffprobe`` duration check with **no key argument**, run inside
+   ``.partial/``: the header opens without one (S7). An aax whose duration
+   cannot be read without activation bytes is skipped and logged.
+6. Only once everything in ``.partial/`` checks out: the directory's previous
+   audio, ``key.json``, ``chapters.txt`` and ``meta.json`` are cleared, the new
+   files are moved in (the audio last, so "local" flips at one moment) and
+   ``meta.json`` is written. An old ``book.m4b`` therefore never sits beside a
+   locked file (B14).
+7. On any failure or SIGTERM before that commit, ``.partial/`` and every temp
+   file are removed and the book directory is left exactly as it was, so a
+   failed or cancelled re-download never costs the user a playable book
+   (ARCHITECTURE 4.3, 4.8).
 
-Any failure or SIGTERM deletes ``.partial/`` and the half-written
-``book.m4b.tmp`` and leaves no ``book.m4b`` (ARCHITECTURE 4.3 step 7, 4.8).
+No ``ffmpeg`` or ``ffprobe`` argv here ever contains a key, iv or activation
+bytes: the key is written to ``key.json`` and only read again by ``play-info``.
 
 The ``audible`` library is imported lazily, inside real-mode code paths only,
 so the test suite runs without it installed.
@@ -34,11 +49,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from . import fsutil, protocol
+from . import fakestate, fsutil, protocol
 from .chapters import Chapter, build_ffmetadata, parse_chapters
 from .errors import Cancelled, PipelineError
 from .library import (
-    BOOK_FILENAME,
+    AUDIO_FILENAMES,
+    CHAPTERS_FILENAME,
+    KEY_FILENAME,
+    META_FILENAME,
     PARTIAL_DIRNAME,
     book_dir,
     dir_size,
@@ -49,49 +67,110 @@ from .library import (
 from .log import log
 from .paths import Paths
 
-FREE_SPACE_FACTOR = 2.1
+FREE_SPACE_FACTOR = 1.1
 
 # --- fake mode (ARCHITECTURE 4.2) --------------------------------------------
 FAKE_FAIL_MODES = ("disk", "network", "decrypt", "novoucher")
 FAKE_RAW_CHAPTERS = 3
+# The fake sine's shortest length; ``--fake-chapters`` grows it by a second per
+# chapter so every chapter has room (B11).
 FAKE_AUDIO_MS = 6000
+FAKE_CHAPTERS_DEFAULT = 5
+FAKE_CHAPTERS_MAX = 500
+FAKE_CHAPTERS_ENV = "OMARCHY_AUDIBLE_FAKE_CHAPTERS"
 FAKE_CONTENT_SIZE = 2_000_000
 FAKE_ACR = "FAKEACR0"
+# Obviously fake key material for the fake tree's ``key.json``.
+FAKE_VOUCHER_KEY = "00112233445566778899aabbccddeeff"
+FAKE_VOUCHER_IV = "aabbccdd00112233"
 _FAKE_TICKS = 10
 _FAKE_TICK_SECONDS = 0.08
 
-# The fake ``chapters.json``: a flat list with a different count from the raw
-# m4b (3), so a passing chapter check proves the list was actually applied.
-# Invented titles only.
-FAKE_CHAPTERS_SPEC: dict[str, Any] = {
-    "content_metadata": {
-        "chapter_info": {
-            "chapter_titles_type": "Flat",
-            "runtime_length_ms": FAKE_AUDIO_MS,
-            "chapters": [
-                {"title": "Alpha", "start_offset_ms": 0, "length_ms": 1200},
-                {"title": "Beta", "start_offset_ms": 1200, "length_ms": 1200},
-                {"title": "Gamma", "start_offset_ms": 2400, "length_ms": 1200},
-                {"title": "Delta", "start_offset_ms": 3600, "length_ms": 1200},
-                {"title": "Epsilon", "start_offset_ms": 4800, "length_ms": 1200},
-            ],
+_REAL_POLL_SECONDS = 0.5
+# A temp name inside ``.partial/``: the audio is moved here, checked, then
+# renamed onto ``book.<ext>`` there in one step.
+_AUDIO_TMP = "book.audio.tmp"
+_Emit = Callable[..., None]
+
+
+def fake_audio_ms(chapter_count: int) -> int:
+    """The fake sine's length: at least 6 s, one second per chapter."""
+    return max(FAKE_AUDIO_MS, max(1, chapter_count) * 1000)
+
+
+def fake_chapters_spec(chapter_count: int) -> dict[str, Any]:
+    """An Audible-shaped ``chapters.json`` with ``chapter_count`` chapters.
+
+    Invented titles only, evenly spaced across the fake sine.
+    """
+    count = max(1, chapter_count)
+    total = fake_audio_ms(count)
+    step = max(1, total // count)
+    chapters = []
+    for index in range(count):
+        start = index * step
+        length = step if index < count - 1 else max(1, total - start)
+        chapters.append(
+            {
+                "title": f"Chapter {index + 1}",
+                "start_offset_ms": start,
+                "length_ms": length,
+            }
+        )
+    return {
+        "content_metadata": {
+            "chapter_info": {
+                "chapter_titles_type": "Flat",
+                "runtime_length_ms": total,
+                "chapters": chapters,
+            }
         }
     }
-}
 
-_REAL_POLL_SECONDS = 0.5
-_M4B_TMP = "book.m4b.tmp"
-_Emit = Callable[..., None]
+
+def parse_fake_chapters(text: str | None) -> int | None:
+    """The ``--fake-chapters`` value as an int, or ``None`` when unset.
+
+    Raises ``invalid_args`` for anything outside 1-500.
+    """
+    if text is None:
+        return None
+    try:
+        value = int(text)
+    except (TypeError, ValueError):
+        value = -1
+    if not 1 <= value <= FAKE_CHAPTERS_MAX:
+        raise PipelineError(
+            protocol.ErrorCode.INVALID_ARGS,
+            f"invalid --fake-chapters: {text!r}",
+            hint=f"choose a whole number from 1 to {FAKE_CHAPTERS_MAX}",
+        )
+    return value
+
+
+def _resolve_chapter_count(override: int | None) -> int:
+    """The fake book's chapter count: the flag, else the env var, else 5."""
+    if override is not None:
+        return override
+    raw = os.environ.get(FAKE_CHAPTERS_ENV)
+    if raw is None:
+        return FAKE_CHAPTERS_DEFAULT
+    try:
+        value = int(str(raw).strip())
+    except ValueError:
+        return FAKE_CHAPTERS_DEFAULT
+    return value if 1 <= value <= FAKE_CHAPTERS_MAX else FAKE_CHAPTERS_DEFAULT
 
 
 @dataclass
 class RawDownload:
-    """The undecrypted audio plus everything needed to decrypt and chapter it."""
+    """The original audio plus everything needed to finish the book."""
 
     raw_path: Path
     container: str  # "aaxc" | "aax"
     chapters: list[Chapter]
-    key_args: list[str]
+    voucher_key: str | None = None
+    voucher_iv: str | None = None
 
 
 class ChildTracker:
@@ -139,6 +218,35 @@ def _unlink(path: Path) -> None:
         pass
 
 
+def _clear_local(directory: Path) -> None:
+    """Remove a previous download's audio, key, chapters and meta.
+
+    Called only at the commit step of a download, once everything in
+    ``.partial/`` has been built and checked, so a directory never holds a
+    ``.m4b`` beside a locked file (B11, B14). Until then the previous copy is
+    left untouched and a failure costs the user nothing.
+    """
+    for name in (*AUDIO_FILENAMES, KEY_FILENAME, CHAPTERS_FILENAME, META_FILENAME):
+        _unlink(directory / name)
+
+
+def _reclaimable_bytes(target_dir: Path, partial: Path) -> int:
+    """The bytes a replacement frees: the old audio plus an abandoned ``.partial/``.
+
+    Counted into the free-space pre-flight so a retry is not refused for space
+    the previous copy itself holds (B14, F10).
+    """
+    total = 0
+    for name in AUDIO_FILENAMES:
+        try:
+            total += (target_dir / name).stat().st_size
+        except OSError:
+            continue
+    if partial.is_dir():
+        total += dir_size(partial)
+    return total
+
+
 def _free_bytes(path: Path) -> int:
     probe = path
     while not probe.exists() and probe != probe.parent:
@@ -184,6 +292,10 @@ def _run(
 
 
 def probe_duration_ms(path: Path) -> int | None:
+    """The audio duration in ms, or ``None`` when ffprobe cannot read it.
+
+    No key argument is ever passed: S7 showed the header opens without one.
+    """
     result = subprocess.run(
         [
             _tool("ffprobe"),
@@ -207,80 +319,44 @@ def probe_duration_ms(path: Path) -> int | None:
         return None
 
 
-def probe_chapter_titles(path: Path) -> list[str]:
-    result = subprocess.run(
-        [_tool("ffprobe"), "-v", "error", "-show_chapters", "-of", "json", str(path)],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        return []
-    try:
-        data = json.loads(result.stdout or "{}")
-    except ValueError:
-        return []
-    return [
-        str((chapter.get("tags") or {}).get("title", ""))
-        for chapter in data.get("chapters", [])
-    ]
+def _verify_duration(path: Path, container: str, expected_duration_ms: int | None) -> None:
+    """Check the downloaded duration against the catalog, with no key."""
+    if not expected_duration_ms:
+        return
+    actual = probe_duration_ms(path)
+    if actual is None:
+        if container == "aax":
+            # A legacy aax needs activation bytes for ffprobe to read its
+            # duration; the file is otherwise fine, so skip the check (B11).
+            log("ffprobe could not read the aax duration without activation bytes; skipped")
+        return
+    if abs(actual - expected_duration_ms) > max(1000, expected_duration_ms * 0.01):
+        raise PipelineError(
+            protocol.ErrorCode.CONVERT,
+            "the downloaded duration differs from the catalog",
+            hint="retry the download",
+        )
 
 
-def _verify(tmp: Path, chapters: list[Chapter], expected_duration_ms: int | None) -> None:
-    if chapters:
-        titles = probe_chapter_titles(tmp)
-        if len(titles) != len(chapters):
+def _key_payload(raw: RawDownload) -> dict[str, Any]:
+    """The ``key.json`` content: aaxc key/iv, or an aax reference (D7)."""
+    if raw.container == "aaxc":
+        if not raw.voucher_key or not raw.voucher_iv:
             raise PipelineError(
-                protocol.ErrorCode.CONVERT,
-                f"chapter count {len(titles)} does not match Audible's list ({len(chapters)})",
+                protocol.ErrorCode.DECRYPT,
+                "the aaxc voucher has no key/iv",
                 hint="retry the download",
             )
-    if expected_duration_ms:
-        actual = probe_duration_ms(tmp)
-        if actual is not None and abs(actual - expected_duration_ms) > max(
-            1000, expected_duration_ms * 0.01
-        ):
-            raise PipelineError(
-                protocol.ErrorCode.CONVERT,
-                "the converted duration differs from the catalog",
-                hint="retry the download",
-            )
-
-
-def _decrypt(raw: RawDownload, tmp: Path, children: ChildTracker) -> None:
-    argv = [
-        _tool("ffmpeg"),
-        "-nostdin",
-        "-v",
-        "error",
-        "-y",
-        *raw.key_args,
-        "-i",
-        str(raw.raw_path),
-    ]
-    if raw.chapters:
-        chapter_file = raw.raw_path.parent / "chapters-ffmetadata.txt"
-        chapter_file.write_text(build_ffmetadata(raw.chapters), encoding="utf-8")
-        argv += [
-            "-i",
-            str(chapter_file),
-            "-map",
-            "0:a",
-            "-map_metadata",
-            "1",
-            "-map_chapters",
-            "1",
-        ]
-    else:
-        argv += ["-map", "0:a"]
-    argv += ["-c", "copy", "-f", "ipod", str(tmp)]
-    _run(argv, children, protocol.ErrorCode.DECRYPT, hint="retry the download")
+        return {"format": "aaxc", "key": raw.voucher_key, "iv": raw.voucher_iv}
+    # An aax book carries no key here: ``key.json`` only records the format and
+    # ``play-info`` reads the account's activation bytes at play time.
+    return {"format": "aax"}
 
 
 # --- fake mode ---------------------------------------------------------------
 def _fake_content_size(fake_fail: str | None, books_dir: Path) -> int:
     if fake_fail == "disk":
-        # Anything above this cannot fit under the 2.1x rule.
+        # Anything above this cannot fit under the 1.1x rule.
         return _free_bytes(books_dir)
     return FAKE_CONTENT_SIZE
 
@@ -291,10 +367,10 @@ def _fake_fetch(
     emit: _Emit,
     children: ChildTracker,
     fake_fail: str | None,
+    chapter_count: int,
 ) -> RawDownload:
     container = "aax" if fake_fail == "novoucher" else "aaxc"
-    suffix = "aaxc" if container == "aaxc" else "aax"
-    raw = partial / f"{asin}-fake.{suffix}"
+    raw = partial / f"{asin}-fake.{container}"
 
     step = max(1, FAKE_CONTENT_SIZE // _FAKE_TICKS)
     written = 0
@@ -311,22 +387,31 @@ def _fake_fetch(
                 hint="retry the download",
             )
 
-    _fake_generate_raw(raw, children)
+    spec = fake_chapters_spec(chapter_count)
+    _fake_generate_raw(raw, children, fake_audio_ms(chapter_count))
     (partial / f"{asin}-chapters.json").write_text(
-        json.dumps(FAKE_CHAPTERS_SPEC, indent=2), encoding="utf-8"
+        json.dumps(spec, indent=2), encoding="utf-8"
     )
+    # ``decrypt`` simulates a voucher that carries no key/iv.
+    broken = fake_fail == "decrypt"
     return RawDownload(
         raw_path=raw,
         container=container,
-        chapters=parse_chapters(FAKE_CHAPTERS_SPEC),
-        key_args=[],
+        chapters=parse_chapters(spec),
+        voucher_key=None if broken else FAKE_VOUCHER_KEY,
+        voucher_iv=None if broken else FAKE_VOUCHER_IV,
     )
 
 
-def _fake_generate_raw(raw_path: Path, children: ChildTracker) -> None:
-    """Write a short sine m4b carrying ``FAKE_RAW_CHAPTERS`` embedded chapters."""
+def _fake_generate_raw(raw_path: Path, children: ChildTracker, audio_ms: int) -> None:
+    """Write the fake sine, still carrying ``FAKE_RAW_CHAPTERS`` embedded ones.
+
+    The book is served as ``book.aaxc`` (an ordinary unencrypted MP4 under that
+    name) or ``book.aax``; the embedded chapters differ from ``chapters.txt``
+    so a passing chapter check proves the external list was used.
+    """
     chapter_file = raw_path.parent / "fake-raw-chapters.txt"
-    step = FAKE_AUDIO_MS // FAKE_RAW_CHAPTERS
+    step = max(1, audio_ms // FAKE_RAW_CHAPTERS)
     source_chapters = [
         Chapter(title=f"Source {index + 1}", start_ms=index * step, length_ms=step)
         for index in range(FAKE_RAW_CHAPTERS)
@@ -341,7 +426,7 @@ def _fake_generate_raw(raw_path: Path, children: ChildTracker) -> None:
         "-f",
         "lavfi",
         "-i",
-        f"sine=frequency=300:duration={FAKE_AUDIO_MS / 1000}",
+        f"sine=frequency=300:duration={audio_ms / 1000}",
         "-i",
         str(chapter_file),
         "-map",
@@ -516,7 +601,7 @@ def _find_voucher(partial: Path) -> Path | None:
 def _read_chapters(partial: Path, asin: str) -> list[Chapter]:
     candidates = sorted(partial.glob("*-chapters.json"))
     if not candidates:
-        return []  # fall back to the chapters embedded in the audio file
+        return []
     try:
         data = json.loads(candidates[0].read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -524,7 +609,8 @@ def _read_chapters(partial: Path, asin: str) -> list[Chapter]:
     return parse_chapters(data)
 
 
-def _voucher_key_args(voucher_path: Path) -> list[str]:
+def _voucher_key_iv(voucher_path: Path) -> tuple[str, str]:
+    """The aaxc voucher's key and iv (SPIKE-RESULTS S2). Never logged."""
     try:
         data = json.loads(voucher_path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
@@ -538,27 +624,7 @@ def _voucher_key_args(voucher_path: Path) -> list[str]:
         raise PipelineError(
             protocol.ErrorCode.NO_VOUCHER, "the aaxc voucher has no key/iv"
         )
-    return ["-audible_key", str(key), "-audible_iv", str(iv)]
-
-
-def _activation_bytes(paths: Paths, cli: str, env: dict[str, str]) -> str:
-    try:
-        value = paths.activation_bytes_file.read_text(encoding="utf-8").strip()
-    except OSError:
-        value = ""
-    if value:
-        return value
-    result = subprocess.run(
-        [cli, "activation-bytes"], env=env, capture_output=True, text=True, check=False
-    )
-    lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
-    if result.returncode != 0 or not lines:
-        raise PipelineError(
-            protocol.ErrorCode.DECRYPT,
-            "could not read the activation bytes",
-            hint="run: omarchy-audible login-import-cli",
-        )
-    return lines[-1]
+    return str(key), str(iv)
 
 
 def _real_fetch(
@@ -579,11 +645,13 @@ def _real_fetch(
             raise PipelineError(
                 protocol.ErrorCode.NO_VOUCHER, "the aaxc download offered no voucher"
             )
+        key, iv = _voucher_key_iv(voucher)
         return RawDownload(
             raw_path=raw_path,
             container="aaxc",
             chapters=_read_chapters(partial, asin),
-            key_args=_voucher_key_args(voucher),
+            voucher_key=key,
+            voucher_iv=iv,
         )
     except PipelineError as exc:
         # aaxc first, aax fallback (G0 decision): an aaxc failure, including a
@@ -602,11 +670,10 @@ def _real_fetch(
             "the aax download produced no audio file",
             hint="retry the download",
         )
+    # No activation bytes are read here: the aax path stores a reference only
+    # (D7), and nothing at download time needs them.
     return RawDownload(
-        raw_path=raw_path,
-        container="aax",
-        chapters=_read_chapters(partial, asin),
-        key_args=["-activation_bytes", _activation_bytes(paths, cli, env)],
+        raw_path=raw_path, container="aax", chapters=_read_chapters(partial, asin)
     )
 
 
@@ -640,6 +707,8 @@ def _meta_payload(
         "downloaded_at": iso_now(),
         "acr": acr,
         "container": raw.container,
+        "format": raw.container,
+        "locked": True,
         "chapter_count": len(raw.chapters),
     }
 
@@ -651,60 +720,94 @@ def run_get(
     *,
     fake: bool,
     fake_fail: str | None = None,
+    fake_chapters: int | None = None,
     emit: _Emit = protocol.emit,
     children: ChildTracker | None = None,
 ) -> Path:
-    """Download and convert one book; return the path to ``book.m4b``.
+    """Download one book as-is; return the path to ``book.aaxc``/``book.aax``.
 
-    ``.partial/`` and ``book.m4b.tmp`` are removed on success and on every
-    failure path, and ``book.m4b`` only ever appears through an atomic rename.
+    The whole book is built in ``.partial/`` and only moved into the book
+    directory once it has been verified there, so a failure or a cancel leaves
+    a previous copy untouched. ``.partial/`` and every temp file are removed on
+    success and on every failure path, and the final audio only ever appears
+    through an atomic rename. ``fake_chapters`` (and
+    ``OMARCHY_AUDIBLE_FAKE_CHAPTERS``) only affects fake mode.
     """
     tracker = children if children is not None else ChildTracker()
     # ``cmd_get`` validates before calling; guard direct callers too, so an
-    # unvalidated ASIN can never reach the ``book_dir``/``rmtree`` below.
+    # unvalidated ASIN can never reach the ``book_dir``/rmtree below.
     validate_asin(paths.books_dir, asin)
     target_dir = book_dir(paths.books_dir, asin)
     partial = target_dir / PARTIAL_DIRNAME
-    tmp = target_dir / _M4B_TMP
-    final = target_dir / BOOK_FILENAME
 
     if fake:
+        chapter_count = _resolve_chapter_count(fake_chapters)
         content_size = _fake_content_size(fake_fail, paths.books_dir)
-        duration_ms: int | None = FAKE_AUDIO_MS
+        duration_ms: int | None = fake_audio_ms(chapter_count)
         acr: str | None = FAKE_ACR
     else:
+        chapter_count = FAKE_CHAPTERS_DEFAULT
         metadata = _real_content_metadata(asin, paths)
         content_size = _content_size(metadata)
         duration_ms = _metadata_duration_ms(metadata)
         acr = _metadata_acr(metadata)
 
-    check_free_space(_free_bytes(target_dir), content_size)
+    # A re-download may count the bytes it will free (the old audio, and an
+    # abandoned ``.partial/``) as available, so it is not refused for space the
+    # previous copy itself holds (B14, F10).
+    check_free_space(
+        _free_bytes(target_dir) + _reclaimable_bytes(target_dir, partial),
+        content_size,
+    )
 
+    final: Path | None = None
     try:
+        # The book directory is untouched from here until the commit below: a
+        # failure at any earlier step leaves the previous copy exactly as it was.
         target_dir.mkdir(parents=True, exist_ok=True)
         _rmtree(partial)
-        _unlink(tmp)
         partial.mkdir(parents=True, exist_ok=True)
 
         if fake:
-            raw = _fake_fetch(asin, partial, emit, tracker, fake_fail)
+            raw = _fake_fetch(asin, partial, emit, tracker, fake_fail, chapter_count)
         else:
             raw = _real_fetch(asin, partial, paths, emit, tracker, content_size)
 
-        emit("progress", stage="convert", bytes=0, total=content_size)
-        if fake and fake_fail == "decrypt":
-            tmp.write_bytes(b"not a real book\n")
-            raise PipelineError(
-                protocol.ErrorCode.DECRYPT,
-                "simulated decrypt failure",
-                hint="retry the download",
-            )
-        _decrypt(raw, tmp, tracker)
-        _verify(tmp, raw.chapters, duration_ms)
-        fsutil.atomic_replace(tmp, final)
+        # Stage the whole book in ``.partial/``: key.json (0600) and
+        # chapters.txt first, then the audio, then the sanity check.
+        staged_key = partial / KEY_FILENAME
+        fsutil.write_private_json(staged_key, _key_payload(raw))
+        staged_chapters = partial / CHAPTERS_FILENAME
+        if raw.chapters:
+            staged_chapters.write_text(build_ffmetadata(raw.chapters), encoding="utf-8")
+        else:
+            _unlink(staged_chapters)
+
+        # A temp name in the same directory, then one atomic rename onto the
+        # final audio name inside ``.partial/`` (ARCHITECTURE 4.3). The duration
+        # check runs with no key argument, before the final name exists.
+        staged_tmp = partial / _AUDIO_TMP
+        os.replace(raw.raw_path, staged_tmp)
+        _verify_duration(staged_tmp, raw.container, duration_ms)
+        staged_audio = partial / f"book.{raw.container}"
+        fsutil.atomic_replace(staged_tmp, staged_audio)
+
+        # Everything checked out: clear the previous contents, then move the
+        # new files in, the audio last, so "local" flips at one moment and an
+        # old ``book.m4b`` never sits beside a locked file (B14).
+        _clear_local(target_dir)
+        os.replace(staged_key, target_dir / KEY_FILENAME)
+        if raw.chapters:
+            os.replace(staged_chapters, target_dir / CHAPTERS_FILENAME)
+        final = target_dir / f"book.{raw.container}"
+        os.replace(staged_audio, final)
+        if fake:
+            fakestate.ensure_activation_bytes(paths)
         write_meta(target_dir, _meta_payload(asin, paths, raw, final, duration_ms, acr))
     finally:
         tracker.terminate_all()
         _rmtree(partial)
-        _unlink(tmp)
+        # A failure or a cancel before the commit leaves the previous copy
+        # byte-identical: nothing new ever reached the book directory (B14).
+    assert final is not None
     return final

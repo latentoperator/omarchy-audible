@@ -43,6 +43,8 @@ Item {
   // mpv's playback-restart events: one after every seek has landed (and on
   // each load). The scrub bar waits for one before trusting positions again.
   property int restarts: 0
+  // The next book to load: {path, startSec, options}. `options.lavf` is the
+  // book's key (B11): it lives only here, and only until the load is sent.
   property var pendingLoad: null
   property int nextRequest: 1
 
@@ -81,6 +83,9 @@ Item {
         return
       }
       subscribe()
+      // An mpv reattached after a shell restart may have been mid-load: make
+      // sure no key is left in its options. Harmless when there is none.
+      send(Mpv.clearKeyCommand())
       flushPending()
     } else if (connection === "connected") {
       mpvState = Mpv.emptyState()
@@ -122,6 +127,12 @@ Item {
       mpvState = Mpv.applyProperty(mpvState, message.name, message.data)
     } else if (message.kind === "event" && message.event === "playback-restart") {
       restarts += 1
+    } else if (message.kind === "event" && message.event === "file-loaded") {
+      // mpv has opened the file, so it no longer needs the key: take it out
+      // of the readable option (SPIKE-RESULTS S7). Once per load; harmless
+      // for an old `.m4b`, and a quick switch to another book can't leave a
+      // key behind, since that book's own file-loaded clears it too.
+      send(Mpv.clearKeyCommand())
     } else if (message.kind === "reply" && message.error) {
       lastError = "mpv: " + message.error
     }
@@ -157,6 +168,8 @@ Item {
     } else {
       connection = "idle"
     }
+    // Nothing will send it now: don't keep its key.
+    pendingLoad = null
     wanted = false
     attaching = false
     launching = false
@@ -193,19 +206,21 @@ Item {
     if (!pendingLoad) return
     var load = pendingLoad
     pendingLoad = null
-    send(Mpv.loadCommand(load.path, load.startSec))
+    send(Mpv.loadCommand(load.path, load.startSec, load.options))
     send(Mpv.pauseCommand(false))
   }
 
   // ---- control ----
 
-  function play(path, startSec) {
+  // `options` is {lavf, chaptersFile} from `play-info`; both may be empty
+  // (an old `.m4b`). The key is never stored anywhere else.
+  function play(path, startSec, options) {
     if (socketPath.length === 0) {
       lastError = "player not ready"
       return false
     }
     wanted = true
-    pendingLoad = { "path": path, "startSec": startSec }
+    pendingLoad = { "path": path, "startSec": startSec, "options": Mpv.loadOptions(options) }
     // A quit that has not been sent yet is overtaken by this play.
     quitPending = false
     if (connected && !quitting) {

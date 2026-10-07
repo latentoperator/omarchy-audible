@@ -197,8 +197,8 @@ ColumnLayout {
   // A play that never started (G3 finding 2).
   Text {
     Layout.fillWidth: true
-    visible: root.player ? root.player.connection === "failed" && root.player.lastError.length > 0 : false
-    text: "Couldn't start playback: " + (root.player ? root.player.lastError : "")
+    visible: root.service ? root.service.playFailure.length > 0 : false
+    text: "Couldn't start playback: " + (root.service ? root.service.playFailure : "")
     textFormat: Text.PlainText
     wrapMode: Text.WordWrap
     color: Color.urgent
