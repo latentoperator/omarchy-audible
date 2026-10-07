@@ -79,3 +79,28 @@ def test_stale_notice_never_throws_on_bad_input(sync):
 
 def test_stale_notice_threshold_is_two(sync):
     assert sync.evaluate("STALE_NOTICE_AFTER") == 2
+
+
+def test_stale_count_after(sync):
+    stale = {"ok": False, "code": "stale"}
+    # Two refusals in a row build the run; a push that goes through ends it.
+    assert sync.call("staleCountAfter", 0, stale) == 1
+    assert sync.call("staleCountAfter", 1, stale) == 2
+    assert sync.call("staleCountAfter", 2, {"ok": True}) == 0
+    # Being offline or refused says nothing about the clock.
+    assert sync.call("staleCountAfter", 2, {"ok": False, "code": "network"}) == 2
+    assert sync.call("staleCountAfter", 1, {"ok": False, "code": "refused"}) == 1
+    # Bad input never throws and never counts.
+    assert sync.call("staleCountAfter", None, stale) == 1
+    assert sync.call("staleCountAfter", -3, {"ok": True}) == 0
+    assert sync.call("staleCountAfter", 2, None) == 2
+
+
+def test_stale_run_reaches_the_notice(sync):
+    count = 0
+    for _ in range(sync.evaluate("STALE_NOTICE_AFTER")):
+        assert sync.call("staleNotice", count) == ""
+        count = sync.call("staleCountAfter", count, {"ok": False, "code": "stale"})
+    assert "Check this computer's clock" in sync.call("staleNotice", count)
+    count = sync.call("staleCountAfter", count, {"ok": True})
+    assert sync.call("staleNotice", count) == ""

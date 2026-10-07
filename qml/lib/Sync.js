@@ -64,6 +64,17 @@ function isObject(value) {
   return value !== null && value !== undefined && typeof value === "object" && !Array.isArray(value);
 }
 
+// The run of `stale` refusals after one push finishes (P6). A push that went
+// through ends the run; a `stale` one adds to it; any other outcome (offline,
+// refused, an error) says nothing about the clock and leaves it as it was.
+function staleCountAfter(count, outcome) {
+  var current = typeof count === "number" && isFinite(count) && count > 0 ? Math.floor(count) : 0;
+  if (!isObject(outcome)) return current;
+  if (outcome.ok === true) return 0;
+  if (outcome.code === "stale") return current + 1;
+  return current;
+}
+
 // The Mini line to show after a run of refused pushes, or "" when there is
 // nothing to say. A single `stale` is ordinary; two or more in a row mean the
 // position is not getting through and the usual cause is this computer's clock

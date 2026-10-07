@@ -102,6 +102,8 @@ Item {
   // The Mini line after a catch-up jump (Catchup.jumpNote), cleared after
   // NOTE_MS or by a new pick.
   property string catchupNote: ""
+  // The Mini line after a run of `stale` pushes (P6, Sync.staleNotice).
+  readonly property string staleNotice: sync.staleNotice
 
   // The book that is loaded and the last position seen for it. Kept so a
   // switch or a crash can still save where the old book stopped.
@@ -1036,7 +1038,8 @@ Item {
       return root.run("get", [asin, "--fake-fail", mode], "download") ? "ok" : "refused"
     }
     function autoRemove(value: string): string { root.autoRemoveFinished = value === "on"; return "ok" }
-    function pushState(): string { return JSON.stringify({ "queue": sync.queue, "flushing": sync.flushing, "last": sync.lastResult }) }
+    function pushState(): string { return JSON.stringify({ "queue": sync.queue, "flushing": sync.flushing, "last": sync.lastResult,
+      "staleCount": sync.consecutiveStale, "staleNotice": sync.staleNotice }) }
     // Opens the panel on a view (Onboarding.view still decides: Mini or Full
     // with nothing loaded shows the Library). Returns the view shown. Fake
     // mode only: opening the panel can read positions or start a sync.

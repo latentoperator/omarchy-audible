@@ -22,6 +22,10 @@ Item {
   property var lastPushed: ({})
   property bool flushing: false
   property string lastResult: ""
+  // Pushes refused as `stale` in a row (P6). In memory only: a restart starts
+  // the count again. Mini shows `staleNotice` while it is non-empty.
+  property int consecutiveStale: 0
+  readonly property string staleNotice: Sync.staleNotice(consecutiveStale)
 
   property var deferred: []
   property var requested: []
@@ -101,6 +105,7 @@ Item {
     } else if (job.purpose === "push") {
       var entry = current
       current = null
+      consecutiveStale = Sync.staleCountAfter(consecutiveStale, outcome)
       if (outcome.ok || outcome.code === "stale") {
         // Sent, or the account moved past it: either way it leaves the queue.
         store.setQueue(Sync.removeEntry(queue, entry))
