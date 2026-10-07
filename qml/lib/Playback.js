@@ -8,6 +8,10 @@
 // Pure ECMAScript for the Qt JS engine: no imports, no Qt types, and nothing
 // here throws on bad input.
 
+// A position within this many milliseconds of the end counts as finished.
+// Matches `Positions.FINISH_TRAILING_MS` and `LibraryUi.FINISH_TRAILING_MS`.
+var FINISH_TRAILING_MS = 30000;
+
 // The ASIN of the book mpv has loaded: the directory above the audio file,
 // whether it is an old `book.m4b` or a locked `book.aaxc`/`book.aax` (B11).
 // Returns "" for anything else.
@@ -34,8 +38,12 @@ function parseJson(text, fallback) {
 
 // A copy of `state` with the book's local position recorded: `ms`, the write
 // time, the last-played time, and `played_since_download` (which is what lets
-// the position be pushed). The finished flag is kept. A bad ASIN or position
-// returns `state` unchanged.
+// the position be pushed). A bad ASIN or position returns `state` unchanged.
+//
+// `finished` stops being sticky (F16): a book that was finished is no longer
+// finished once it is listened to again, which is Start over (a position of 0)
+// or any move more than `FINISH_TRAILING_MS` back from the position it finished
+// at. `markFinished` sets the flag again when playback reaches EOF.
 function recordPosition(state, asin, ms, nowIso) {
   if (typeof asin !== "string" || asin.length === 0 || typeof ms !== "number" || !isFinite(ms) || ms < 0) {
     return state;
@@ -50,12 +58,17 @@ function recordPosition(state, asin, ms, nowIso) {
     books[name] = current[name];
   }
   var previous = isObject(books[asin]) ? books[asin] : {};
+  var recorded = Math.round(ms);
+  // The position the book finished at: a finished entry carries the end (or a
+  // position within `FINISH_TRAILING_MS` of it), and `markFinished` keeps it.
+  var finishPoint = typeof previous.ms === "number" && isFinite(previous.ms) ? previous.ms : 0;
+  var finished = previous.finished === true && finishPoint > 0 && finishPoint - recorded <= FINISH_TRAILING_MS;
   books[asin] = {
-    "ms": Math.round(ms),
+    "ms": recorded,
     "updated_at": nowIso,
     "last_played_at": nowIso,
     "played_since_download": true,
-    "finished": previous.finished === true
+    "finished": finished
   };
   next.books = books;
   return next;

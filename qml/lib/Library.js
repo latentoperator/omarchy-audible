@@ -1,17 +1,21 @@
 .pragma library
+.import "Positions.js" as Positions
 
 // Library logic for the player service: one row per catalog book, the row's
 // state machine (ARCHITECTURE 5.3), sorting, filtering and search, and the
 // `state.json` schema v1 (ARCHITECTURE 3).
 //
-// This is pure ECMAScript for the Qt JS engine: no imports, no Qt types, and
-// nothing here throws on bad input. `LibraryModel.qml` (the laptop task P3)
-// feeds it the parsed `catalog.json`, `remote.json`, `state.json`, the `local`
-// scan and the in-memory job states, and binds views to the returned rows.
+// This is pure ECMAScript for the Qt JS engine: no Qt types, and nothing here
+// throws on bad input. `LibraryModel.qml` (the laptop task P3) feeds it the
+// parsed `catalog.json`, `remote.json`, `state.json`, the `local` scan and the
+// in-memory job states, and binds views to the returned rows.
 //
-// The newest-wins position merge mirrors `backend/omarchy_audible/positions.py`
-// (`merge`/`parse_updated_at`). P4a exposes the public port in
-// `qml/lib/Positions.js`; these helpers must stay in step with it.
+// The newest-wins position merge and the timestamp parse come from
+// `qml/lib/Positions.js` (P4a, the public port of
+// `backend/omarchy_audible/positions.py`). `_p.timeKey` and `_p.mergePosition`
+// are thin calls into it, so there is only one implementation (F20): a
+// malformed `updated_at` cannot make the row's `positionMs` and `resumeChoice`
+// disagree.
 //
 // The public surface is the constants and the six functions below. Everything
 // else lives on the private `_p` namespace so it cannot leak into QML.
@@ -48,10 +52,6 @@ _p.QUEUE_KEYS = ["asin", "ms", "at"];
 
 // The job states a book can be in, least to most advanced.
 _p.JOB_STATES = [STATE_QUEUED, STATE_DOWNLOADING, STATE_CONVERTING, STATE_ERROR];
-
-_p.TZ_TAIL = /(z|[+-]\d{2}:?\d{2})$/i;
-_p.DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
-_p.OFFSET_NO_COLON = /([+-]\d{2})(\d{2})$/;
 
 _p.isNull = function (value) {
   return value === null || value === undefined;
@@ -168,28 +168,11 @@ _p.authorKey = function (value) {
 };
 
 // Parse a timestamp into epoch milliseconds, or null when it is unparseable.
-// Mirrors `positions.parse_updated_at`: a value with no timezone (the Audible
-// `YYYY-MM-DD HH:MM:SS.f` shape) is UTC, and anything bad sorts as the oldest.
+// Thin call into `Positions.parseUpdatedAt`, the single implementation (F20):
+// the Audible no-timezone form is UTC, dates are validated against the
+// calendar, and anything bad sorts as the oldest.
 _p.timeKey = function (value) {
-  if (typeof value !== "string") {
-    return null;
-  }
-  var text = value.replace(/^\s+|\s+$/g, "");
-  if (!text) {
-    return null;
-  }
-  text = text.replace(" ", "T");
-  if (_p.DATE_ONLY.test(text)) {
-    text = text + "T00:00:00Z";
-  } else if (!_p.TZ_TAIL.test(text)) {
-    text = text + "Z";
-  }
-  var offset = _p.OFFSET_NO_COLON.exec(text);
-  if (offset) {
-    text = text.slice(0, offset.index) + offset[1] + ":" + offset[2];
-  }
-  var parsed = Date.parse(text);
-  return isNaN(parsed) ? null : parsed;
+  return Positions.parseUpdatedAt(value);
 };
 
 _p.numberOrNull = function (value) {
@@ -259,38 +242,11 @@ _p.emptyState = function (recovered) {
   };
 };
 
-// One `{ms, updated_at}` position entry, cleaned the way `positions._clean`
-// does.
-_p.cleanEntry = function (entry) {
-  if (!_p.isObject(entry)) {
-    return null;
-  }
-  return {
-    "ms": _p.nonNegativeInt(entry.ms, 0),
-    "updated_at": _p.stringOrNull(entry.updated_at)
-  };
-};
-
-// Newest-wins merge of two position entries (ARCHITECTURE 4.6). A missing
-// entry or timestamp loses; an equal `updated_at` goes to the local entry.
+// Newest-wins merge of two position entries (ARCHITECTURE 4.6). Thin call into
+// `Positions.merge`, the single implementation (F20): a missing entry or
+// timestamp loses, and an equal `updated_at` goes to the local entry.
 _p.mergePosition = function (local, remote) {
-  var localEntry = _p.cleanEntry(local);
-  var remoteEntry = _p.cleanEntry(remote);
-  if (localEntry === null) {
-    return remoteEntry === null ? { "ms": 0, "updated_at": null } : remoteEntry;
-  }
-  if (remoteEntry === null) {
-    return localEntry;
-  }
-  var localKey = _p.timeKey(localEntry.updated_at);
-  var remoteKey = _p.timeKey(remoteEntry.updated_at);
-  if (remoteKey === null) {
-    return localEntry;
-  }
-  if (localKey === null) {
-    return remoteEntry;
-  }
-  return remoteKey > localKey ? remoteEntry : localEntry;
+  return Positions.merge(local, remote);
 };
 
 // The newer of two timestamps, by parsed time. Ties and missing values favour
