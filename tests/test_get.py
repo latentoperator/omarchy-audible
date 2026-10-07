@@ -284,6 +284,90 @@ def test_aax_fallback_progress_has_no_aaxc_total(monkeypatch, tmp_path):
     assert totals == [("aaxc", 779090696), ("aax", 0)]
 
 
+def test_aax_fallback_only_happens_on_no_voucher(monkeypatch, tmp_path):
+    """F8: any aaxc failure other than ``no_voucher`` is reported as it is."""
+    attempts: list[str] = []
+
+    def fake_download(cli, env, partial, asin, fmt, emit, children, total):
+        attempts.append(fmt)
+        raise PipelineError(dl.protocol.ErrorCode.NETWORK, "simulated network failure")
+
+    monkeypatch.setattr(dl, "_audible_cli", lambda paths: "audible")
+    monkeypatch.setattr(dl, "_audible_env", lambda paths: {})
+    monkeypatch.setattr(dl, "_audible_download", fake_download)
+    partial = tmp_path / ".partial"
+    partial.mkdir()
+
+    with pytest.raises(PipelineError) as excinfo:
+        dl._real_fetch(ASIN, partial, None, lambda *a, **k: None, None, 0)
+
+    assert excinfo.value.code == "network"
+    assert attempts == ["aaxc"], "aaxc was not retried as aax"
+
+
+def _stderr_script(tmp_path: Path) -> Path:
+    """A fake ``audible`` that writes two stderr lines and fails."""
+    script = tmp_path / "fake-audible"
+    script.write_text(
+        "#!/bin/sh\n"
+        "echo 'earlier line' >&2\n"
+        "echo 'download failed: store_authentication_cookie=FAKE-COOKIE-VALUE' >&2\n"
+        "exit 3\n",
+        encoding="utf-8",
+    )
+    script.chmod(0o755)
+    return script
+
+
+def test_audible_cli_stderr_is_staged_inside_the_partial_dir(tmp_path):
+    """F9: audible-cli's stderr lands in ``.partial/audible.stderr``."""
+    partial = tmp_path / ".partial"
+    partial.mkdir()
+    script = _stderr_script(tmp_path)
+
+    with pytest.raises(PipelineError) as excinfo:
+        dl._audible_download(
+            str(script),
+            {},
+            partial,
+            ASIN,
+            "aaxc",
+            lambda *a, **k: None,
+            dl.ChildTracker(),
+            0,
+        )
+
+    assert excinfo.value.code == "network"
+    staged = partial / dl.AUDIBLE_STDERR
+    assert staged.is_file()
+    assert "download failed" in staged.read_text(encoding="utf-8")
+
+
+def test_only_the_scrubbed_last_stderr_line_is_logged(tmp_path, capsys):
+    """F9: one log line, the last one, and scrubbed."""
+    partial = tmp_path / ".partial"
+    partial.mkdir()
+    script = _stderr_script(tmp_path)
+
+    with pytest.raises(PipelineError):
+        dl._audible_download(
+            str(script),
+            {},
+            partial,
+            ASIN,
+            "aaxc",
+            lambda *a, **k: None,
+            dl.ChildTracker(),
+            0,
+        )
+
+    err = capsys.readouterr().err
+    assert "download failed" in err
+    assert "store_authentication_cookie" in err
+    assert "FAKE-COOKIE-VALUE" not in err, "the cookie value reached the log"
+    assert "earlier line" not in err, "more than the last line was logged"
+
+
 def test_get_novoucher_stores_a_reference_only(run_cli, events, ffmpeg_bin, fake_paths):
     result = run_cli("get", ASIN, "--fake-fail", "novoucher", fake=True)
     assert result.returncode == 0, result.stderr
@@ -382,11 +466,11 @@ class _RecordingTracker(dl.ChildTracker):
         self.argvs: list[list[str]] = []
         self._spawn = spawn
 
-    def spawn(self, argv, *, env=None, quiet=False):  # type: ignore[override]
+    def spawn(self, argv, *, env=None, quiet=False, stderr=None):  # type: ignore[override]
         self.argvs.append(list(argv))
         if not self._spawn:
             raise AssertionError(f"unexpected subprocess: {argv}")
-        return super().spawn(argv, env=env, quiet=quiet)
+        return super().spawn(argv, env=env, quiet=quiet, stderr=stderr)
 
 
 def _assert_no_key_material(argvs: list[list[str]], secrets: tuple[str, ...]) -> None:
@@ -437,7 +521,7 @@ class _AudibleTracker(dl.ChildTracker):
         self._key = key
         self._iv = iv
 
-    def spawn(self, argv, *, env=None, quiet=False):  # type: ignore[override]
+    def spawn(self, argv, *, env=None, quiet=False, stderr=None):  # type: ignore[override]
         self.argvs.append(list(argv))
         output = Path(argv[argv.index("-o") + 1])
         (output / f"{self._asin}.aaxc").write_bytes(b"aaxc-bytes")

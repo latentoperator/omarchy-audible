@@ -253,7 +253,7 @@ Placed by Dante. Order: B14 lands on `b11` before it merges, then the rest in th
   Acceptance: a test with the device clock behind the server by more than the push interval keeps pushing; vectors shared by Python and JS.
   *Hopebox half done in #65; desktop wiring of `staleNotice` pending.*
 - [x] **B15 — Confirm `last_updated` is UTC** (maintainer; F2). Folded into B11's desktop acceptance (one real push read back against the wall clock); record the result in SPIKE-RESULTS S3. *Done 2026-10-07: UTC, offset about +1 s.*
-- [ ] **B12 — Backend hardening** (tier B; Hopebox; F3 if not in P6, F4, F6, F8, F9, F13, F14, **F34, F35**). Tests first.
+- [x] **B12 — Backend hardening** (tier B; Hopebox; F3 if not in P6, F4, F6, F8, F9, F13, F14, **F34, F35**). Tests first.
 - [ ] **B13 — Login saves before fetching activation bytes** (tier A; Hopebox; F5). No orphan device registration when the activation-bytes fetch fails.
 - [ ] **P7 — Finished flag and one merge** (tier B; Hopebox JS; F16, F20). Start over clears `finished`; `Library.js` has one timestamp merge. Vectors.
 - [ ] **P8 — Service and player fixes** (tier B; desktop; F17, F18, F19, F21, F22, F23). F17 must land with or before R1.

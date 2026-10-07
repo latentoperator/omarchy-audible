@@ -4,13 +4,16 @@ Pipeline, in order:
 
 1. Pre-flight: require 1.1x the content size in free space (B11: there is no
    decrypt pass, so the peak is the book itself, not twice it). A re-download
-   counts the bytes its replacement frees — the old audio and an abandoned
-   ``.partial/`` — so it is not refused for space the previous copy holds (B14,
-   F10).
+   may count an abandoned ``.partial/``, which is removed before the fetch;
+   the old copy stays on disk until the commit, so its bytes are *not* free
+   during the fetch and do not count (F34, B14). The peak for a re-download is
+   therefore the old copy plus 1.1x the new one.
 2. ``<booksDir>/<asin>/.partial/`` is created and the whole book is built
    there: the raw download, a ``0600`` ``key.json``, ``chapters.txt`` and the
    audio renamed to its final ``book.aaxc``/``book.aax`` name.
-3. Download with audible-cli, aaxc first and aax if no voucher is offered. A
+3. Download with audible-cli, aaxc first and aax only if no voucher is offered
+   (F8). Its stderr is staged as ``.partial/audible.stderr`` so a real failure
+   has a reason to log, and that reason is the scrubbed last line only (F9). A
    byte count is reported by polling the partial directory.
 4. No decrypt (D7). The book directory ends up with the original audio moved
    out of ``.partial/`` unchanged as ``book.aaxc``/``book.aax``, a ``0600``
@@ -19,13 +22,16 @@ Pipeline, in order:
 5. A ``ffprobe`` duration check with **no key argument**, run inside
    ``.partial/``: the header opens without one (S7). An aax whose duration
    cannot be read without activation bytes is skipped and logged.
-6. Only once everything in ``.partial/`` checks out: the directory's previous
-   audio, ``key.json``, ``chapters.txt`` and ``meta.json`` are cleared, the new
-   files are moved in (the audio last, so "local" flips at one moment) and
-   ``meta.json`` is written. An old ``book.m4b`` therefore never sits beside a
-   locked file (B14).
-7. On any failure or SIGTERM before that commit, ``.partial/`` and every temp
-   file are removed and the book directory is left exactly as it was, so a
+6. Only once everything in ``.partial/`` checks out, the commit: the previous
+   copy's audio, ``key.json``, ``chapters.txt`` and ``meta.json`` are moved
+   aside, the new files are moved in (the audio last, so "local" flips at one
+   moment) and ``meta.json`` is written. SIGTERM is blocked for the whole
+   commit, so a cancel that lands in it is delivered only once the book is
+   whole (F35). An old ``book.m4b`` therefore never sits beside a locked file
+   (B14).
+7. On any failure or SIGTERM, ``.partial/`` and every temp file are removed and
+   the book directory is left exactly as it was: nothing new reaches it before
+   the commit, and a failure inside the commit puts the old files back, so a
    failed or cancelled re-download never costs the user a playable book
    (ARCHITECTURE 4.3, 4.8).
 
@@ -42,12 +48,13 @@ import json
 import math
 import os
 import shutil
+import signal
 import subprocess
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 from . import fakestate, fsutil, protocol
 from .chapters import Chapter, build_ffmetadata, parse_chapters
@@ -90,6 +97,13 @@ _REAL_POLL_SECONDS = 0.5
 # A temp name inside ``.partial/``: the audio is moved here, checked, then
 # renamed onto ``book.<ext>`` there in one step.
 _AUDIO_TMP = "book.audio.tmp"
+# audible-cli's stderr is staged here, inside ``.partial/``, so its reason for a
+# failure has somewhere to live that goes away with the rest of the staging
+# directory (F9).
+AUDIBLE_STDERR = "audible.stderr"
+# The commit moves the previous copy in here before installing the new one, so
+# a failure partway through can put the old files back (F35).
+_OLD_DIRNAME = "old"
 _Emit = Callable[..., None]
 
 
@@ -180,9 +194,15 @@ class ChildTracker:
         self._children: list[subprocess.Popen[bytes]] = []
 
     def spawn(
-        self, argv: list[str], *, env: dict[str, str] | None = None, quiet: bool = False
+        self,
+        argv: list[str],
+        *,
+        env: dict[str, str] | None = None,
+        quiet: bool = False,
+        stderr: int | BinaryIO | None = None,
     ) -> subprocess.Popen[bytes]:
-        stderr = subprocess.DEVNULL if quiet else subprocess.PIPE
+        if stderr is None:
+            stderr = subprocess.DEVNULL if quiet else subprocess.PIPE
         proc = subprocess.Popen(
             argv,
             env=env,
@@ -218,33 +238,51 @@ def _unlink(path: Path) -> None:
         pass
 
 
-def _clear_local(directory: Path) -> None:
-    """Remove a previous download's audio, key, chapters and meta.
+def _clear_local(directory: Path, aside: Path) -> list[str]:
+    """Move a previous copy's audio, key, chapters and meta into ``aside``.
 
     Called only at the commit step of a download, once everything in
     ``.partial/`` has been built and checked, so a directory never holds a
-    ``.m4b`` beside a locked file (B11, B14). Until then the previous copy is
-    left untouched and a failure costs the user nothing.
+    ``.m4b`` beside a locked file (B11, B14). The files are renamed, not
+    deleted, so :func:`_restore_local` can put the previous copy back byte for
+    byte when the commit fails partway; ``aside`` lives inside ``.partial/``,
+    so it goes away with the rest of the staging directory (F35).
+
+    Returns the names that were moved.
+    """
+    moved: list[str] = []
+    for name in (*AUDIO_FILENAMES, KEY_FILENAME, CHAPTERS_FILENAME, META_FILENAME):
+        source = directory / name
+        if source.is_file():
+            os.replace(source, aside / name)
+            moved.append(name)
+    return moved
+
+
+def _restore_local(directory: Path, aside: Path, moved: Iterable[str]) -> None:
+    """Put back exactly what :func:`_clear_local` moved aside (F35).
+
+    Anything the failed commit installed is removed first, then the previous
+    files are renamed back, so the directory is left as it was: same files,
+    sizes, mtimes and modes (B14).
     """
     for name in (*AUDIO_FILENAMES, KEY_FILENAME, CHAPTERS_FILENAME, META_FILENAME):
-        _unlink(directory / name)
+        if name not in moved:
+            _unlink(directory / name)
+    for name in moved:
+        os.replace(aside / name, directory / name)
 
 
-def _reclaimable_bytes(target_dir: Path, partial: Path) -> int:
-    """The bytes a replacement frees: the old audio plus an abandoned ``.partial/``.
+def _reclaimable_bytes(partial: Path) -> int:
+    """The bytes the pre-flight may count as free: an abandoned ``.partial/``.
 
-    Counted into the free-space pre-flight so a retry is not refused for space
-    the previous copy itself holds (B14, F10).
+    ``.partial/`` is removed before the fetch, so its bytes are genuinely
+    reclaimable by the download about to start. The old copy's audio is not:
+    since B14 it stays on disk until the commit, which runs after the whole new
+    download has been staged, so those bytes are not free while the fetch runs
+    (F34).
     """
-    total = 0
-    for name in AUDIO_FILENAMES:
-        try:
-            total += (target_dir / name).stat().st_size
-        except OSError:
-            continue
-    if partial.is_dir():
-        total += dir_size(partial)
-    return total
+    return dir_size(partial) if partial.is_dir() else 0
 
 
 def _free_bytes(path: Path) -> int:
@@ -502,7 +540,9 @@ def _real_content_metadata(asin: str, paths: Paths) -> dict[str, Any]:
                 chapter_titles_type="Flat",
             )
     except Exception as exc:
-        log(f"content metadata request failed: {exc!r}")
+        # The exception type only: a repr could carry the request URL, and the
+        # message could echo credentials back (F4).
+        log(f"content metadata request failed: {type(exc).__name__}")
         raise PipelineError(
             protocol.ErrorCode.NETWORK,
             "could not read the book's metadata",
@@ -559,6 +599,16 @@ def _metadata_acr(metadata: dict[str, Any]) -> str | None:
     return acr if isinstance(acr, str) and acr else None
 
 
+def _last_stderr_line(path: Path) -> str:
+    """The last non-empty line of a staged stderr file, or ``""`` (F9)."""
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    return lines[-1] if lines else ""
+
+
 def _audible_download(
     cli: str,
     env: dict[str, str],
@@ -587,11 +637,18 @@ def _audible_download(
         "-o",
         str(partial),
     ]
-    proc = children.spawn(argv, env=env, quiet=True)
-    while proc.poll() is None:
-        emit("progress", stage="download", bytes=dir_size(partial), total=total)
-        time.sleep(_REAL_POLL_SECONDS)
+    # audible-cli's stderr is the only record of *why* a download failed, so it
+    # is staged as ``.partial/audible.stderr``; only its scrubbed last line is
+    # logged. It disappears with ``.partial/`` (F9).
+    stderr_path = partial / AUDIBLE_STDERR
+    with open(stderr_path, "wb") as handle:
+        proc = children.spawn(argv, env=env, stderr=handle)
+        while proc.poll() is None:
+            emit("progress", stage="download", bytes=dir_size(partial), total=total)
+            time.sleep(_REAL_POLL_SECONDS)
     if proc.returncode != 0:
+        detail = _last_stderr_line(stderr_path)
+        log(f"audible download ({fmt}) failed: {detail}")
         raise PipelineError(
             protocol.ErrorCode.NETWORK,
             f"audible download ({fmt}) failed",
@@ -667,9 +724,12 @@ def _real_fetch(
             voucher_iv=iv,
         )
     except PipelineError as exc:
-        # aaxc first, aax fallback (G0 decision): an aaxc failure, including a
-        # book that offers no voucher, is retried as aax.
-        log(f"aaxc download failed ({exc.code}); retrying as aax")
+        # aaxc first, aax fallback (G0 decision). Only a book that offers no
+        # voucher is retried as aax: any other aaxc failure (a network error,
+        # say) is the real problem and is reported as it is (F8).
+        if exc.code != protocol.ErrorCode.NO_VOUCHER:
+            raise
+        log("the aaxc download offered no voucher; retrying as aax")
     _rmtree(partial)
     partial.mkdir(parents=True, exist_ok=True)
     # The metadata size is the aaxc file's; the aax file's size is not known
@@ -765,15 +825,16 @@ def run_get(
         duration_ms = _metadata_duration_ms(metadata)
         acr = _metadata_acr(metadata)
 
-    # A re-download may count the bytes it will free (the old audio, and an
-    # abandoned ``.partial/``) as available, so it is not refused for space the
-    # previous copy itself holds (B14, F10).
+    # The free-space pre-flight: 1.1x the new audio must fit. A re-download may
+    # also count an abandoned ``.partial/``, which is removed before the fetch;
+    # the old copy's bytes are not free until the commit, after the fetch, so
+    # they do not count (F34, B14).
     check_free_space(
-        _free_bytes(target_dir) + _reclaimable_bytes(target_dir, partial),
-        content_size,
+        _free_bytes(target_dir) + _reclaimable_bytes(partial), content_size
     )
 
     final: Path | None = None
+    committed = False
     try:
         # The book directory is untouched from here until the commit below: a
         # failure at any earlier step leaves the previous copy exactly as it was.
@@ -805,22 +866,42 @@ def run_get(
         staged_audio = partial / f"book.{raw.container}"
         fsutil.atomic_replace(staged_tmp, staged_audio)
 
-        # Everything checked out: clear the previous contents, then move the
-        # new files in, the audio last, so "local" flips at one moment and an
-        # old ``book.m4b`` never sits beside a locked file (B14).
-        _clear_local(target_dir)
-        os.replace(staged_key, target_dir / KEY_FILENAME)
-        if raw.chapters:
-            os.replace(staged_chapters, target_dir / CHAPTERS_FILENAME)
-        final = target_dir / f"book.{raw.container}"
-        os.replace(staged_audio, final)
-        if fake:
-            fakestate.ensure_activation_bytes(paths)
-        write_meta(target_dir, _meta_payload(asin, paths, raw, final, duration_ms, acr))
+        # Everything checked out: the commit. SIGTERM is blocked for the whole
+        # window, so a cancel that lands in it stays pending and is delivered
+        # at the unblock, once the book is whole (F35). The previous copy is
+        # moved aside rather than deleted, so a failure inside the commit puts
+        # it back byte for byte (B14).
+        signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM})
+        try:
+            aside = partial / _OLD_DIRNAME
+            aside.mkdir(parents=True, exist_ok=True)
+            moved = _clear_local(target_dir, aside)
+            try:
+                os.replace(staged_key, target_dir / KEY_FILENAME)
+                if raw.chapters:
+                    os.replace(staged_chapters, target_dir / CHAPTERS_FILENAME)
+                final = target_dir / f"book.{raw.container}"
+                os.replace(staged_audio, final)
+                if fake:
+                    fakestate.ensure_activation_bytes(paths)
+                write_meta(
+                    target_dir,
+                    _meta_payload(asin, paths, raw, final, duration_ms, acr),
+                )
+                committed = True
+            except BaseException:
+                _restore_local(target_dir, aside, moved)
+                raise
+        finally:
+            signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGTERM})
+    except Cancelled:
+        if not committed:
+            raise
+        # The SIGTERM was pending across the commit and was delivered at the
+        # unblock above. The new book is already whole and local, so the run is
+        # a success, not a cancel (F35).
     finally:
         tracker.terminate_all()
         _rmtree(partial)
-        # A failure or a cancel before the commit leaves the previous copy
-        # byte-identical: nothing new ever reached the book directory (B14).
     assert final is not None
     return final

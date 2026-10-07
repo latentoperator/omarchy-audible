@@ -3,8 +3,9 @@
 F7: a failed or cancelled ``get`` of an already-local book must leave the old
 book byte-identical (same files, sizes, mtimes and modes) and still listed by
 ``local`` — the previous copy is only replaced once the new download has been
-built and verified in ``.partial/``. F10: the free-space pre-flight counts the
-bytes the replacement frees (the old audio and an abandoned ``.partial/``).
+built and verified in ``.partial/``. F10/F34: the free-space pre-flight counts
+an abandoned ``.partial/`` (removed before the fetch), never the old copy, which
+stays on disk until the commit. F35: the commit itself is cancel-safe.
 
 Fake mode only: no account, no network.
 """
@@ -12,16 +13,20 @@ Fake mode only: no account, no network.
 from __future__ import annotations
 
 import json
+import os
+import signal
 import stat
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
 import pytest
+from omarchy_audible import commands, fsutil
 from omarchy_audible import download as dl
-from omarchy_audible import fsutil
-from omarchy_audible.errors import PipelineError
+from omarchy_audible.errors import Cancelled, PipelineError
+from omarchy_audible.library import local_audio_file
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER = REPO_ROOT / "bin" / "omarchy-audible"
@@ -237,7 +242,8 @@ def test_a_failed_sanity_check_keeps_the_old_book(monkeypatch, ffmpeg_bin, fake_
     assert not list(directory.glob("*.tmp"))
 
 
-def test_reclaimable_bytes_counts_the_old_audio_and_the_abandoned_partial(tmp_path):
+def test_reclaimable_bytes_counts_only_the_abandoned_partial(tmp_path):
+    """F34: only an abandoned ``.partial/`` counts; the old copy does not."""
     target = tmp_path / ASIN
     partial = target / ".partial"
     partial.mkdir(parents=True)
@@ -245,22 +251,43 @@ def test_reclaimable_bytes_counts_the_old_audio_and_the_abandoned_partial(tmp_pa
     (target / "key.json").write_bytes(b"not audio")
     (partial / "chunk").write_bytes(b"y" * 250)
 
-    assert dl._reclaimable_bytes(target, partial) == 1250
+    assert dl._reclaimable_bytes(partial) == 250
 
 
-def test_free_space_counts_the_bytes_the_old_copy_frees(
-    monkeypatch, ffmpeg_bin, fake_paths
-):
-    """1.0 MB free + the old book's 1.5 MB covers the 2.2 MB the fake needs."""
+def test_free_space_does_not_count_the_old_copy(monkeypatch, fake_paths):
+    """F34: 1.0 MB free plus a 1.5 MB old book cannot cover the 2.0 MB download.
+
+    The old copy stays on disk until the commit, which runs after the fetch, so
+    its bytes are not free while the fetch runs: the pre-flight must refuse and
+    leave the old book alone.
+    """
     directory = fake_paths.books_dir / ASIN
     directory.mkdir(parents=True)
     (directory / "book.m4b").write_bytes(b"x" * 1_500_000)
+    before = _snapshot(directory)
     monkeypatch.setattr(dl, "_free_bytes", lambda path: 1_000_000)
 
+    with pytest.raises(PipelineError) as excinfo:
+        dl.run_get(ASIN, fake_paths, fake=True, emit=lambda *a, **k: None)
+
+    assert excinfo.value.code == "disk_space"
+    assert _snapshot(directory) == before
+    assert not (directory / ".partial").exists()
+
+
+def test_free_space_counts_an_abandoned_partial(monkeypatch, ffmpeg_bin, fake_paths):
+    """F34: an abandoned ``.partial/`` is rmtree'd before the fetch, so it counts."""
+    directory = fake_paths.books_dir / ASIN
+    partial = directory / ".partial"
+    partial.mkdir(parents=True)
+    (partial / "chunk").write_bytes(b"y" * 1_500_000)
+    monkeypatch.setattr(dl, "_free_bytes", lambda path: 1_000_000)
+
+    # 1.0 MB free + 1.5 MB of abandoned staging covers the 2.2 MB the fake needs.
     final = dl.run_get(ASIN, fake_paths, fake=True, emit=lambda *a, **k: None)
 
     assert final.name == "book.aaxc"
-    assert not (directory / "book.m4b").exists()
+    assert not (directory / ".partial").exists()
 
 
 def test_free_space_still_refuses_when_nothing_is_freed(monkeypatch, fake_paths):
@@ -270,3 +297,102 @@ def test_free_space_still_refuses_when_nothing_is_freed(monkeypatch, fake_paths)
         dl.run_get(ASIN, fake_paths, fake=True, emit=lambda *a, **k: None)
 
     assert excinfo.value.code == "disk_space"
+
+
+# --- F35: the commit is cancel-safe -----------------------------------------
+
+
+def test_a_cancel_on_the_audio_move_keeps_a_playable_copy(
+    monkeypatch, ffmpeg_bin, fake_paths
+):
+    """F35: a ``Cancelled`` raised inside the commit leaves the old book whole."""
+    directory = _seed("locked", fake_paths.books_dir)
+    before = _snapshot(directory)
+    real_replace = os.replace
+
+    def replace_or_cancel(src, dst):
+        # Only the commit's own audio move: `_restore_local` moves the old audio
+        # back out of `.partial/old/` and that must be allowed to run.
+        if Path(src) == directory / dl.PARTIAL_DIRNAME / "book.aaxc":
+            raise Cancelled()
+        real_replace(src, dst)
+
+    monkeypatch.setattr(dl.os, "replace", replace_or_cancel)
+
+    with pytest.raises(Cancelled):
+        dl.run_get(ASIN, fake_paths, fake=True, emit=lambda *a, **k: None)
+
+    assert _snapshot(directory) == before
+    assert local_audio_file(directory) is not None
+    assert not (directory / ".partial").exists()
+
+
+def test_a_sigterm_in_the_commit_window_is_reported_as_done(
+    monkeypatch, ffmpeg_bin, fake_paths, capsys
+):
+    """F35: SIGTERM is blocked for the commit; the run still ends ``done``.
+
+    The signal is sent for real from inside the commit (a patched
+    ``_clear_local``). It stays pending while the book is being put together and
+    is delivered at the unblock, after which the new book is already local, so
+    the download counts as a success rather than a cancel.
+    """
+    directory = _seed("locked", fake_paths.books_dir)
+    real_clear = dl._clear_local
+    sent: list[int] = []
+
+    def clear_and_sigterm(*args):
+        sent.append(1)
+        os.kill(os.getpid(), signal.SIGTERM)  # lands inside the commit window
+        return real_clear(*args)
+
+    monkeypatch.setattr(dl, "_clear_local", clear_and_sigterm)
+
+    code = commands.cmd_get([ASIN], command="get", fake=True, paths=fake_paths)
+
+    assert sent == [1]
+    assert code == 0
+    events = [
+        json.loads(line)
+        for line in capsys.readouterr().out.splitlines()
+        if line.strip()
+    ]
+    assert events, "the run produced no events"
+    assert events[-1]["type"] == "done", events[-1]
+    assert Path(events[-1]["path"]).is_file()
+    assert not (directory / ".partial").exists()
+    assert local_audio_file(directory) == directory / "book.aaxc"
+    assert json.loads((directory / "key.json").read_text(encoding="utf-8")) == FAKE_KEY
+
+
+def test_a_second_sigterm_cannot_abort_the_cleanup(monkeypatch, ffmpeg_bin, fake_paths):
+    """F6: the cancel handler ignores every SIGTERM after the first one."""
+    directory = _seed("locked", fake_paths.books_dir)
+    before = _snapshot(directory)
+    real_rmtree = dl._rmtree
+    calls: list[str] = []
+
+    def rmtree_and_second_sigterm(path):
+        calls.append(str(path))
+        if len([call for call in calls if call.endswith(".partial")]) == 2:
+            os.kill(os.getpid(), signal.SIGTERM)  # during the first one's cleanup
+        real_rmtree(path)
+
+    monkeypatch.setattr(dl, "_rmtree", rmtree_and_second_sigterm)
+
+    def first_sigterm_mid_download():
+        partial = directory / ".partial"
+        deadline = time.time() + 20
+        while time.time() < deadline and not partial.exists():
+            time.sleep(0.01)
+        time.sleep(0.05)  # into the middle of the fake download
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    thread = threading.Thread(target=first_sigterm_mid_download, daemon=True)
+    with pytest.raises(Cancelled), commands._sigterm_cancels():
+        thread.start()
+        dl.run_get(ASIN, fake_paths, fake=True, emit=lambda *a, **k: None)
+
+    # The cleanup finished: `.partial/` is gone and the old copy is untouched.
+    assert not (directory / ".partial").exists()
+    assert _snapshot(directory) == before
