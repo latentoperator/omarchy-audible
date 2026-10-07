@@ -65,7 +65,7 @@ The user is an Omarchy user with an Audible account who works at the computer an
 - **FR-U1 Bar widget:** a book icon. It shows play/pause state when a book is loaded, and an optional title (setting). The tooltip shows "Title — Author · 3h 12m left". Left click opens the panel: the Mini view if a book is loaded, the Library view if not. Middle click toggles play/pause.
 - **FR-U2 Library view (drawer):** search, sort, filter, storage line, and the book list. Enter plays the highlighted row. Arrow keys navigate. Esc closes. A now-playing strip is pinned at the bottom when a book is loaded.
 - **FR-U3 Mini view:** cover thumbnail, title, author, current chapter (tap for the chapter list), scrub bar with elapsed and remaining time, ⏮ ⏪15 ⏯ ⏩15 ⏭, speed pill, a maximize button, a library button, and a dismiss ✕.
-- **FR-U4 Full view:** large cover, chapter list (current highlighted, click to jump), speed presets, sleep timer, book details (narrator, runtime, % complete), Remove from this device, and a collapse button.
+- **FR-U4 Full view:** large cover, chapter list (current highlighted, click to jump), speed presets, sleep timer, book details (narrator, runtime, % complete), Remove from this device, a collapse button, and a Library button (as in Mini, FR-U3).
 - **FR-U5 Dismissing** (✕, Esc, click-away) hides the panel and never stops playback.
 - **FR-U6 Theme:** every color, font, radius, and border comes from the shell's `Style`/theme singletons. No hard-coded colors. It must be checked against at least three Omarchy themes (one light, two dark) and a live theme switch while open.
 - **FR-U7 States:** every view has designed empty, loading, offline, and error states (see §6).
