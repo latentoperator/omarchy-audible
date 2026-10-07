@@ -1112,7 +1112,8 @@ Item {
     }
     function autoRemove(value: string): string { if (!root.fake) return Ipc.DEV_ONLY; root.autoRemoveFinished = value === "on"; return "ok" }
     function pushState(): string { return JSON.stringify({ "queue": sync.queue, "flushing": sync.flushing, "last": sync.lastResult,
-      "staleCount": sync.consecutiveStale, "staleNotice": sync.staleNotice }) }
+      "staleCount": sync.consecutiveStale, "staleNotice": sync.staleNotice,
+      "failedFlushes": sync.failedFlushes, "retryMs": sync.retryIntervalMs }) }
     // Opens the panel on a view (Onboarding.view still decides: Mini or Full
     // with nothing loaded shows the Library). Returns the view shown. Fake
     // mode only: opening the panel can read positions or start a sync.
