@@ -11,11 +11,17 @@ Every file written here lives in the plugin config directory (``0700``) and is
 created ``0600`` under a ``077`` umask:
 
 * ``auth.json`` — the device credentials (written by ``Authenticator.to_file``)
-* ``activation_bytes`` — the account-wide legacy AAX key
 * ``config.toml`` — an audible-cli profile pointing at ``auth.json``
 * ``account.json`` — ``{origin, marketplace, account}``; ``origin`` records
   whether this login was created here (``login``) or imported from an existing
   audible-cli login (``import``)
+* ``activation_bytes`` — the account-wide legacy AAX key, fetched **after** the
+  files above are saved and best effort (B13)
+
+``login-finish`` persists ``auth.json``, ``config.toml`` and ``account.json``
+**before** the activation-bytes fetch, so a failure there cannot leave a
+registered device with nothing saved. The fetch is reported through the ``done``
+event (``warning``) and lazily retried by ``play-info`` at play time (F5, B13).
 
 ``logout`` deregisters the device **only** when ``origin`` is ``login``: an
 imported auth file is the user's existing device, so deregistering it would
@@ -36,6 +42,7 @@ import secrets
 import time
 import tomllib
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import parse_qs, urlsplit
@@ -68,11 +75,28 @@ DEFAULT_MARKETPLACE = "us"
 SESSION_TTL_S = 600
 ACCOUNT_SCHEMA = 1
 ACCOUNT_FILENAME = "account.json"
+# ``done`` warning code for a login whose activation-bytes fetch failed (B13).
+# The login itself succeeded, so this is never an error and never asks the user
+# to sign in again (each retry would register another device).
+WARNING_ACTIVATION_BYTES = "activation_bytes"
 
 _SESSION_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 _AUTH_CODE_KEY = "openid.oa2.authorization_code"
 
 Emitter = Callable[..., None]
+
+
+@dataclass(frozen=True)
+class LoginResult:
+    """What ``login_finish`` reports back to its caller (B13).
+
+    ``clipboard_contains_code`` is the ARCHITECTURE 4.7 clipboard-hygiene flag;
+    ``warning`` is the optional ``done`` warning code (``None`` when the login
+    is fully saved, including the activation bytes).
+    """
+
+    clipboard_contains_code: bool
+    warning: str | None = None
 
 
 class AudiblePort(Protocol):
@@ -274,10 +298,16 @@ def read_account_record(paths: Paths) -> dict[str, Any]:
 def _persist_login(
     paths: Paths,
     auth: Any,
-    activation_bytes: Any,
     marketplace: str,
     account: str | None,
 ) -> None:
+    """Write the credential files, ``0600``, before any later network call (B13).
+
+    ``auth.json``, ``config.toml`` and ``account.json`` land here; the
+    account-wide activation bytes are fetched afterwards and are deliberately
+    not part of this step, so a failure there cannot leave a registered device
+    with nothing saved.
+    """
     _ensure_private_dir(paths.config_dir)
     previous = os.umask(0o077)
     try:
@@ -287,12 +317,62 @@ def _persist_login(
     finally:
         os.umask(previous)
     os.chmod(paths.auth_file, 0o600)
-    if isinstance(activation_bytes, str) and activation_bytes:
-        _write_private_text(paths.activation_bytes_file, activation_bytes)
     _write_private_text(paths.config_toml, config_toml(marketplace))
     _write_private_json(
         paths.account_file, _account_payload("login", marketplace, account)
     )
+
+
+def _store_activation_bytes(paths: Paths, value: Any) -> bool:
+    """Write the account AAX key ``0600`` when ``value`` is usable (B13)."""
+    if isinstance(value, str) and value:
+        _write_private_text(paths.activation_bytes_file, value)
+        return True
+    return False
+
+
+def fetch_activation_bytes(
+    paths: Paths, *, api: AudiblePort | None = None
+) -> str | None:
+    """Fetch the account-wide AAX key from the saved login and store it (B13).
+
+    Real mode's lazy fill for a legacy aax book: it loads the saved
+    ``auth.json``, makes one network call, writes the key ``0600`` and returns
+    it. Returns ``None`` when there is no saved login or the fetch fails; only
+    the exception type is logged, never its message (which could carry a
+    credential), so the caller keeps its ``decrypt`` error.
+    """
+    if not paths.auth_file.is_file():
+        return None
+    port = api or RealAudible()
+    try:
+        auth = port.authenticator_from_file(paths.auth_file)
+        value = auth.get_activation_bytes()
+    except Exception as exc:  # noqa: BLE001 - best effort, e.g. offline
+        log(f"activation bytes fetch failed: {type(exc).__name__}")
+        return None
+    if not _store_activation_bytes(paths, value):
+        log("activation bytes fetch returned nothing")
+        return None
+    return value if isinstance(value, str) else None
+
+
+def _fetch_login_activation_bytes(paths: Paths, auth: Any) -> str | None:
+    """Store the AAX key best effort after a login; return a warning code (B13).
+
+    Runs only once ``auth.json``/``config.toml``/``account.json`` are saved, and
+    never raises: a failure here must not fail the login, because a retry would
+    register yet another device. Only the exception type is logged.
+    """
+    try:
+        activation = auth.get_activation_bytes()
+    except Exception as exc:  # noqa: BLE001 - the login already succeeded
+        log(f"activation bytes fetch failed: {type(exc).__name__}")
+        return WARNING_ACTIVATION_BYTES
+    if not _store_activation_bytes(paths, activation):
+        log("activation bytes fetch returned nothing")
+        return WARNING_ACTIVATION_BYTES
+    return None
 
 
 def _persist_import(
@@ -440,13 +520,12 @@ def login_finish(
     api: AudiblePort | None = None,
     clipboard_check: bool = True,
     now: float | None = None,
-) -> bool:
+) -> LoginResult:
     """Redeem the pasted redirect URL and save the credentials.
 
-    Returns whether Omarchy's clipboard history still holds the (already
-    redeemed) code, so the UI can tell the user to clear it
-    (ARCHITECTURE 4.7). The session file is deleted on success and on any
-    auth failure; a malformed URL keeps it, so the user can paste again.
+    Returns the clipboard-hygiene flag (ARCHITECTURE 4.7) and the optional
+    ``done`` warning code (B13). The session file is deleted on success and on
+    any auth failure; a malformed URL keeps it, so the user can paste again.
     """
     session_path = paths.login_session(session_id)
     payload = _read_session(session_path)
@@ -475,7 +554,7 @@ def login_finish(
     if fake:
         _unlink(session_path)
         fakestate.mark_signed_in(paths)
-        return False
+        return LoginResult(False)
 
     port = api or RealAudible()
     try:
@@ -509,20 +588,25 @@ def login_finish(
         auth = port.authenticator()
         auth.locale = locale
         auth._update_attrs(with_username=False, **registration)
-        activation = auth.get_activation_bytes()
         account = account_from_info(getattr(auth, "customer_info", None))
-        _persist_login(paths, auth, activation, str(payload["marketplace"]), account)
+        _persist_login(paths, auth, str(payload["marketplace"]), account)
     except Exception as exc:
         log(f"saving the login failed: {type(exc).__name__}")
         raise PipelineError(
             protocol.ErrorCode.AUTH_FAILED,
             "the sign-in succeeded but the credentials could not be saved",
-            hint="start the login again",
+            hint="check that the plugin config directory is writable",
         ) from exc
+
+    # Best effort, and only after the three files above exist: the device is
+    # already registered, so a failure here must not fail the login and must
+    # never advise signing in again (that would register another device). It is
+    # surfaced as a ``done`` warning and retried lazily by ``play-info`` (B13).
+    warning = _fetch_login_activation_bytes(paths, auth)
 
     contains = _clipboard_contains(code) if clipboard_check else False
     del code
-    return contains
+    return LoginResult(contains, warning)
 
 
 def _read_cli_profile(source_dir: Path) -> dict[str, Any]:
