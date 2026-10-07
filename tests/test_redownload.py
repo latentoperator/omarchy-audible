@@ -216,6 +216,27 @@ def test_real_redownload_that_fails_keeps_the_old_book(paths, monkeypatch):
     assert not list(directory.glob("*.tmp"))
 
 
+def test_a_failed_sanity_check_keeps_the_old_book(monkeypatch, ffmpeg_bin, fake_paths):
+    """An exception in the key-free duration check happens before the commit."""
+    directory = _seed("locked", fake_paths.books_dir)
+    before = _snapshot(directory)
+
+    def boom(path, container, expected_duration_ms):
+        raise PipelineError(
+            dl.protocol.ErrorCode.CONVERT, "simulated duration mismatch"
+        )
+
+    monkeypatch.setattr(dl, "_verify_duration", boom)
+
+    with pytest.raises(PipelineError) as excinfo:
+        dl.run_get(ASIN, fake_paths, fake=True, emit=lambda *a, **k: None)
+
+    assert excinfo.value.code == "convert"
+    assert _snapshot(directory) == before
+    assert not (directory / ".partial").exists()
+    assert not list(directory.glob("*.tmp"))
+
+
 def test_reclaimable_bytes_counts_the_old_audio_and_the_abandoned_partial(tmp_path):
     target = tmp_path / ASIN
     partial = target / ".partial"
