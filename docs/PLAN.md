@@ -233,7 +233,7 @@ Depends on S5/S6 results and the fake backend.
 - [x] **U8 — Library button in the Full view** (tier A; Chris, G4) — Full has collapse, ✕ and Backspace but no way to reach the Library directly; add the same library button Mini has (FR-U3), and add it to FR-U4. *Done on `u8-full-library` (2026-10-07); FR-U4 is Dante's to update at merge.*
   Acceptance: one click from Full opens Library with playback untouched; the now-playing strip still leads back to Mini.
 
-- [ ] **U9 — Pause lag check** (tier B; G4 finding) — audio carries on for about a second after ⏯. The plugin sends one `set pause` over IPC, so first measure the gap (IPC send → `pause` property change → silence) and try mpv's `--audio-buffer` and PipeWire latency. Change something only if the cause is in our hands and the fix doesn't cause dropouts.
+- [x] **U9 — Pause lag check** (tier B; G4 finding) — audio carries on for about a second after ⏯. The plugin sends one `set pause` over IPC, so first measure the gap (IPC send → `pause` property change → silence) and try mpv's `--audio-buffer` and PipeWire latency. Change something only if the cause is in our hands and the fix doesn't cause dropouts. *Measured on `u9-pause-lag` (2026-10-07): about 40 ms from ⏯ to silence in PipeWire's mix; the rest comes after it, unmeasured (likely the speakers). No code change (SPIKE-RESULTS U9).*
   Acceptance: a measured cause is written down; pause is clearly faster, or the reason it can't be is written down.
 
 **GATE G4** — all journeys J1–J7 pass in `docs/MANUAL-TEST.md` under three themes (one light, two dark) plus a live theme switch while the panel is open.
