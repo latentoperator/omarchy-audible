@@ -12,11 +12,18 @@ Values cross the boundary as JSON. Python arguments are encoded with
 through ``JSON.stringify``. Objects that keep state between calls (a splitter,
 a queue) are instead kept alive on the engine's global object and passed around
 as :class:`JsRef`, so in-place mutations stick.
+
+``Library.js`` imports ``Positions.js`` with the QML engine's
+``.import "file.js" as Qualifier`` syntax (P7, F20). ``QJSEngine`` does not
+resolve that itself, so this loader does: the imported file is evaluated in an
+isolated function scope and bound to its qualifier, matching what the QML
+loader hands the library at runtime.
 """
 
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +36,14 @@ from PySide6.QtQml import QJSEngine  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LIB_DIR = REPO_ROOT / "qml" / "lib"
+
+# The QML engine's JavaScript import: `.import "Positions.js" as Positions`.
+_IMPORT = re.compile(
+    r'^[ \t]*\.import[ \t]+"([^"]+)"[ \t]+as[ \t]+([A-Za-z_$][\w$]*)[ \t]*;?[ \t]*$',
+    re.MULTILINE,
+)
+# A top-level declaration in a library: column 0 `function name`/`var name`.
+_DECLARATION = re.compile(r"^(?:function|var)[ \t]+([A-Za-z_$][\w$]*)", re.MULTILINE)
 
 _APP: QCoreApplication | None = None
 
@@ -50,6 +65,28 @@ def _strip_pragma(source: str) -> str:
     return "\n".join(
         line for line in source.splitlines() if not line.strip().startswith(".pragma")
     )
+
+
+def _resolve_imports(source: str, path: Path) -> tuple[str, list[tuple[str, str]]]:
+    """Pull ``.import "file.js" as Qualifier`` lines out of a library.
+
+    Returns the source without those lines and the ``(qualifier, source)`` pairs
+    for the loader to bind. Only one level is supported; none of the libraries
+    imports another library that itself imports one.
+    """
+    imports: list[tuple[str, str]] = []
+    for match in _IMPORT.finditer(source):
+        relative, qualifier = match.group(1), match.group(2)
+        imported_path = (path.parent / relative).resolve()
+        if not imported_path.is_file():
+            raise JsError(f"{path.name} imports a missing file: {imported_path}")
+        imported_source = _strip_pragma(imported_path.read_text(encoding="utf-8"))
+        if _IMPORT.search(imported_source):
+            raise JsError(
+                f"{relative} imports another library; only one level is supported"
+            )
+        imports.append((qualifier, imported_source))
+    return _IMPORT.sub("", source), imports
 
 
 class JsRef:
@@ -81,12 +118,33 @@ class JsModule:
         path = LIB_DIR / f"{self.name}.js"
         if not path.is_file():
             raise FileNotFoundError(f"no such qml/lib file: {path}")
+        source, imports = _resolve_imports(path.read_text(encoding="utf-8"), path)
+        for qualifier, imported_source in imports:
+            self._bind_import(qualifier, imported_source)
+        # The imported aliases are part of the evaluation scope, not the
+        # module's own surface, so they are bound before the diff is taken.
         before = self._globals()
-        value = self._engine.evaluate(_strip_pragma(path.read_text(encoding="utf-8")))
+        value = self._engine.evaluate(_strip_pragma(source))
         self._check(value, f"loading {self.name}.js")
         # Top-level function/var declarations become global properties; the diff
         # is the module's public surface, which keeps the API assertion honest.
         self.functions = sorted(self._globals() - before)
+
+    def _bind_import(self, qualifier: str, source: str) -> None:
+        """Bind an imported library as ``qualifier``, isolated from this one.
+
+        The imported file's top-level declarations are scoped to the wrapper,
+        so its private ``_p`` cannot collide with the importing library's, and
+        only its qualifier becomes a global.
+        """
+        names = sorted(set(_DECLARATION.findall(source)))
+        exports = ", ".join(f"{name}: {name}" for name in names)
+        wrapped = (
+            f"var {qualifier} = (function () {{\n{source}\n"
+            f"return {{ {exports} }};\n}})();"
+        )
+        value = self._engine.evaluate(wrapped)
+        self._check(value, f"importing {qualifier}")
 
     def _globals(self) -> set[str]:
         value = self._engine.evaluate(

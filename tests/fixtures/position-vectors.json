@@ -450,8 +450,132 @@
         "ms": 100,
         "updated_at": "2026-02-02 00:00:00.0"
       }
+    },
+    {
+      "name": "invalid_calendar_local_timestamp_loses",
+      "local": {
+        "ms": 5000,
+        "updated_at": "2026-02-30 00:00:00.0"
+      },
+      "remote": {
+        "ms": 1000,
+        "updated_at": "2026-03-01 00:00:00.0"
+      },
+      "expected": {
+        "ms": 1000,
+        "updated_at": "2026-03-01 00:00:00.0"
+      }
+    },
+    {
+      "name": "invalid_calendar_remote_timestamp_loses",
+      "local": {
+        "ms": 2000,
+        "updated_at": "2026-03-01 00:00:00.0"
+      },
+      "remote": {
+        "ms": 9000,
+        "updated_at": "2026-02-30 00:00:00.0"
+      },
+      "expected": {
+        "ms": 2000,
+        "updated_at": "2026-03-01 00:00:00.0"
+      }
+    },
+    {
+      "name": "rolled_second_local_timestamp_loses",
+      "local": {
+        "ms": 5000,
+        "updated_at": "2026-10-04T12:00:60Z"
+      },
+      "remote": {
+        "ms": 1000,
+        "updated_at": "2026-10-04T12:00:30Z"
+      },
+      "expected": {
+        "ms": 1000,
+        "updated_at": "2026-10-04T12:00:30Z"
+      }
+    },
+    {
+      "name": "rolled_second_remote_timestamp_loses",
+      "local": {
+        "ms": 2000,
+        "updated_at": "2026-10-04T12:00:30Z"
+      },
+      "remote": {
+        "ms": 9000,
+        "updated_at": "2026-10-04T12:00:60Z"
+      },
+      "expected": {
+        "ms": 2000,
+        "updated_at": "2026-10-04T12:00:30Z"
+      }
     }
   ],
+  "finished_sequence": {
+    "note": "F16: finish -> start over -> listen -> pause. `previous_ms`/`previous_finished` are the book's entry before the record, `recorded_ms` is the position handed to Playback.recordPosition, and `finished` is what the entry keeps. `trailing` pins the FINISH_TRAILING_MS boundary.",
+    "duration_ms": 9000000,
+    "steps": [
+      {
+        "name": "finish",
+        "previous_ms": 9000000,
+        "previous_finished": true,
+        "recorded_ms": 9000000,
+        "finished": true
+      },
+      {
+        "name": "start_over",
+        "previous_ms": 9000000,
+        "previous_finished": true,
+        "recorded_ms": 0,
+        "finished": false
+      },
+      {
+        "name": "listen",
+        "previous_ms": 0,
+        "previous_finished": false,
+        "recorded_ms": 600000,
+        "finished": false
+      },
+      {
+        "name": "pause",
+        "previous_ms": 600000,
+        "previous_finished": false,
+        "recorded_ms": 601000,
+        "finished": false
+      }
+    ],
+    "trailing": [
+      {
+        "name": "at_the_end_stays_finished",
+        "previous_ms": 9000000,
+        "previous_finished": true,
+        "recorded_ms": 9000000,
+        "finished": true
+      },
+      {
+        "name": "within_the_trailing_window_stays_finished",
+        "previous_ms": 9000000,
+        "previous_finished": true,
+        "recorded_ms": 8970000,
+        "finished": true
+      },
+      {
+        "name": "just_outside_the_trailing_window_clears",
+        "previous_ms": 9000000,
+        "previous_finished": true,
+        "recorded_ms": 8969999,
+        "finished": false
+      },
+      {
+        "name": "an_unfinished_book_stays_unfinished",
+        "previous_ms": 1000,
+        "previous_finished": false,
+        "recorded_ms": 900000,
+        "finished": false
+      }
+    ]
+  },
   "push_decision": [
     {
       "name": "own_echo_behind_clock_is_not_stale",

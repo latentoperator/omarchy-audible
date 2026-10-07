@@ -4,10 +4,12 @@
 //
 // This is the JS port of `backend/omarchy_audible/positions.py`: the timestamp
 // parse, the newest-wins merge, and the push rules that decide what may be
-// written back to Audible. `Library.js` has a private copy of the *parse* and
-// *merge* helpers; this module is the public, tested port, and the shared
-// vectors in `tests/fixtures/position-vectors.json` are asserted against the
-// Python implementation and this file, so the two stay in step.
+// written back to Audible. This module is the single, tested implementation:
+// `Library.js` imports it (`.import "Positions.js" as Positions`) and its
+// `_p.timeKey`/`_p.mergePosition` are thin calls into `parseUpdatedAt`/`merge`
+// (F20). The shared vectors in `tests/fixtures/position-vectors.json` are
+// asserted against the Python implementation and this file, so the two stay in
+// step.
 //
 // Push rules (D4, G0): only positions produced by listening on this machine are
 // pushed, and a queued push is dropped when the account's position moved past

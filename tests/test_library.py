@@ -9,6 +9,7 @@ fixture goes through ``catalog.build_catalog`` exactly as ``sync`` would.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -249,6 +250,47 @@ def test_build_rows_never_throws_on_bad_input(library: qjs.JsModule) -> None:
 
 
 # --- position merge (newest wins) -------------------------------------------
+VECTORS_PATH = Path(__file__).resolve().parent / "fixtures" / "position-vectors.json"
+POSITION_VECTORS = json.loads(VECTORS_PATH.read_text(encoding="utf-8"))
+PARSE_VECTORS = POSITION_VECTORS["parse_updated_at"]
+MERGE_VECTORS = POSITION_VECTORS["merge"]
+
+
+@pytest.fixture(scope="module")
+def positions() -> qjs.JsModule:
+    return qjs.load("Positions")
+
+
+# F20: Library.js has one timestamp parse and one merge, both from Positions.js.
+# These walk every shared vector through Library's own helpers and require exact
+# agreement with Positions -- the old private copy mis-parsed an invalid
+# calendar date (Feb 30 rolled over to Mar 2) and disagreed on merge winners.
+@pytest.mark.parametrize(
+    "case", PARSE_VECTORS, ids=[case["name"] for case in PARSE_VECTORS]
+)
+def test_library_parse_agrees_with_positions(
+    library: qjs.JsModule, positions: qjs.JsModule, case: dict
+) -> None:
+    expected = positions.call("parseUpdatedAt", case["value"])
+    assert library.evaluate(f"_p.timeKey({json.dumps(case['value'])})") == expected
+    assert expected == case["epoch_ms"]
+
+
+@pytest.mark.parametrize(
+    "case", MERGE_VECTORS, ids=[case["name"] for case in MERGE_VECTORS]
+)
+def test_library_merge_agrees_with_positions(
+    library: qjs.JsModule, positions: qjs.JsModule, case: dict
+) -> None:
+    expression = (
+        f"_p.mergePosition({json.dumps(case['local'])}, {json.dumps(case['remote'])})"
+    )
+    assert library.evaluate(expression) == positions.call(
+        "merge", case["local"], case["remote"]
+    )
+    assert library.evaluate(expression) == case["expected"]
+
+
 def merged_position(
     library: qjs.JsModule,
     catalog: dict,
