@@ -29,8 +29,7 @@ URL = (
     f"?openid.oa2.authorization_code={CODE}&openid.mode=checkid_setup"
 )
 DECOY_URL = (
-    "https://www.amazon.com/ap/maplanding"
-    f"?openid.oa2.authorization_code={DECOY_CODE}"
+    f"https://www.amazon.com/ap/maplanding?openid.oa2.authorization_code={DECOY_CODE}"
 )
 ACCOUNT = "fake@example.com"
 DEFAULT_INFO = {"email": ACCOUNT, "user_id": "amzn1.account.FAKEUSER"}
@@ -66,7 +65,10 @@ class FakeAuth:
         self.to_file_calls.append((Path(path), encryption))
         Path(path).write_text(
             json.dumps(
-                {"fake": True, "locale_code": getattr(self.locale, "country_code", None)}
+                {
+                    "fake": True,
+                    "locale_code": getattr(self.locale, "country_code", None),
+                }
             ),
             encoding="utf-8",
         )
@@ -317,7 +319,11 @@ def test_login_finish_rejects_an_expired_session(paths: Paths):
 def test_login_finish_with_no_session_is_expired(paths: Paths):
     with pytest.raises(PipelineError) as info:
         auth.login_finish(
-            paths, session_id="nosuchsession", pasted_url=URL, fake=False, api=FakeAudible()
+            paths,
+            session_id="nosuchsession",
+            pasted_url=URL,
+            fake=False,
+            api=FakeAudible(),
         )
     assert info.value.code == "expired"
 

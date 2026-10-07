@@ -17,7 +17,9 @@ BACKEND_DIR = REPO_ROOT / "backend" / "omarchy_audible"
 LAUNCHER = REPO_ROOT / "bin" / "omarchy-audible"
 
 _MUTATING_METHOD = re.compile(r"\.(put|post|delete|patch)\s*\(", re.IGNORECASE)
-_MUTATING_ENDPOINT = re.compile(r"[\"']1\.0/[^\"']*(delete|return|remove)", re.IGNORECASE)
+_MUTATING_ENDPOINT = re.compile(
+    r"[\"']1\.0/[^\"']*(delete|return|remove)", re.IGNORECASE
+)
 _ALLOWED_MUTATION = "1.0/lastpositions"
 
 

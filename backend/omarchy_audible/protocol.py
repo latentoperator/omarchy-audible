@@ -52,7 +52,9 @@ class ErrorCode:
 
 def write_event(event: dict[str, Any]) -> None:
     """Write one already-formed event as a single NDJSON line."""
-    sys.stdout.write(json.dumps(event, separators=(",", ":"), ensure_ascii=False) + "\n")
+    sys.stdout.write(
+        json.dumps(event, separators=(",", ":"), ensure_ascii=False) + "\n"
+    )
     sys.stdout.flush()
 
 

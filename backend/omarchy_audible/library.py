@@ -140,7 +140,11 @@ def scan_local(books_dir: Path) -> list[dict[str, Any]]:
         if not isinstance(downloaded_at, str) or not downloaded_at:
             downloaded_at = _iso_from_mtime(audio)
         books.append(
-            {"asin": entry.name, "size": dir_size(entry), "downloaded_at": downloaded_at}
+            {
+                "asin": entry.name,
+                "size": dir_size(entry),
+                "downloaded_at": downloaded_at,
+            }
         )
     return books
 
@@ -197,7 +201,9 @@ def play_info_payload(paths: Paths, asin: str) -> dict[str, Any]:
     }
 
 
-def validate_asin(books_dir: Path, asin: str, *, code: str = ErrorCode.BAD_ASIN) -> Path:
+def validate_asin(
+    books_dir: Path, asin: str, *, code: str = ErrorCode.BAD_ASIN
+) -> Path:
     """Resolve ``<booksDir>/<asin>`` or refuse it (ARCHITECTURE 4.4).
 
     The one ASIN check shared by every command that turns an ASIN into a path:

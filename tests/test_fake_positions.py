@@ -101,8 +101,12 @@ def test_push_without_at_stamps_now(run_cli, fake_paths: Paths):
 
 
 def test_push_keeps_the_other_stored_books(run_cli, fake_paths: Paths):
-    assert run_cli("position-push", OTHER, "10", "--at", OLDER, fake=True).returncode == 0
-    assert run_cli("position-push", ASIN, "20", "--at", NEWER, fake=True).returncode == 0
+    assert (
+        run_cli("position-push", OTHER, "10", "--at", OLDER, fake=True).returncode == 0
+    )
+    assert (
+        run_cli("position-push", ASIN, "20", "--at", NEWER, fake=True).returncode == 0
+    )
 
     stored = _read_store(fake_paths)
     assert stored[OTHER] == {"ms": 10, "updated_at": OLDER}
@@ -112,7 +116,9 @@ def test_push_keeps_the_other_stored_books(run_cli, fake_paths: Paths):
 def test_a_push_older_than_the_stored_one_is_refused_as_stale(
     run_cli, validate_stream, fake_paths: Paths
 ):
-    assert run_cli("position-push", ASIN, "5000", "--at", NEWER, fake=True).returncode == 0
+    assert (
+        run_cli("position-push", ASIN, "5000", "--at", NEWER, fake=True).returncode == 0
+    )
 
     stale = run_cli("position-push", ASIN, "1000", "--at", OLDER, fake=True)
     assert stale.returncode == protocol.EXIT_ERROR
@@ -126,9 +132,9 @@ def test_a_push_older_than_the_stored_one_is_refused_as_stale(
 def test_sync_fake_writes_the_stored_positions_into_remote_json(
     run_cli, fake_paths: Paths
 ):
-    assert run_cli(
-        "position-push", ASIN, "4321", "--at", NEWER, fake=True
-    ).returncode == 0
+    assert (
+        run_cli("position-push", ASIN, "4321", "--at", NEWER, fake=True).returncode == 0
+    )
     assert run_cli("sync", fake=True).returncode == 0
 
     remote = json.loads(fake_paths.remote_file.read_text(encoding="utf-8"))
@@ -138,9 +144,7 @@ def test_sync_fake_writes_the_stored_positions_into_remote_json(
     assert remote[empty] == {"ms": 0, "updated_at": None}
 
 
-def test_a_fresh_fake_tree_has_no_stored_positions_file(
-    run_cli, fake_paths: Paths
-):
+def test_a_fresh_fake_tree_has_no_stored_positions_file(run_cli, fake_paths: Paths):
     assert run_cli("position-get", ASIN, fake=True).returncode == 0
     assert not _store(fake_paths).exists()
 
@@ -170,7 +174,9 @@ def test_real_mode_push_uses_the_real_port_and_no_fake_store(
         paths=paths,
     )
     events = [
-        json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()
+        json.loads(line)
+        for line in capsys.readouterr().out.splitlines()
+        if line.strip()
     ]
     assert code == protocol.EXIT_OK
     assert events[-1]["type"] == "done"

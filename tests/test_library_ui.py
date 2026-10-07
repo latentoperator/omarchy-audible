@@ -177,12 +177,16 @@ def test_constant_values(ui: qjs.JsModule) -> None:
 
 
 # --- badge -------------------------------------------------------------------
-def test_badge_cloud_online(ui: qjs.JsModule, library: qjs.JsModule, catalog: dict) -> None:
+def test_badge_cloud_online(
+    ui: qjs.JsModule, library: qjs.JsModule, catalog: dict
+) -> None:
     row = row_in_state(library, catalog, "cloud")
     assert ui.call("badge", row, None, False) == {"kind": "cloud", "label": "Cloud"}
 
 
-def test_badge_cloud_offline(ui: qjs.JsModule, library: qjs.JsModule, catalog: dict) -> None:
+def test_badge_cloud_offline(
+    ui: qjs.JsModule, library: qjs.JsModule, catalog: dict
+) -> None:
     row = row_in_state(library, catalog, "cloud")
     assert ui.call("badge", row, None, True) == {"kind": "offline", "label": "Offline"}
 
@@ -391,7 +395,13 @@ def test_resume_choice_bad_input_resumes(ui: qjs.JsModule) -> None:
 
 # --- listState ---------------------------------------------------------------
 def test_list_state_defaults_to_loading(ui: qjs.JsModule) -> None:
-    for value in (None, "garbage", {}, {"catalogLoaded": False}, {"catalogLoaded": "yes"}):
+    for value in (
+        None,
+        "garbage",
+        {},
+        {"catalogLoaded": False},
+        {"catalogLoaded": "yes"},
+    ):
         assert ui.call("listState", value) == {"state": "loading", "banner": None}
 
 
@@ -403,15 +413,17 @@ def test_list_state_empty(ui: qjs.JsModule) -> None:
 
 
 def test_list_state_no_results(ui: qjs.JsModule) -> None:
-    assert ui.call(
-        "listState", {"catalogLoaded": True, "total": 5, "shown": 0}
-    ) == {"state": "no-results", "banner": None}
+    assert ui.call("listState", {"catalogLoaded": True, "total": 5, "shown": 0}) == {
+        "state": "no-results",
+        "banner": None,
+    }
 
 
 def test_list_state_list(ui: qjs.JsModule) -> None:
-    assert ui.call(
-        "listState", {"catalogLoaded": True, "total": 5, "shown": 3}
-    ) == {"state": "list", "banner": None}
+    assert ui.call("listState", {"catalogLoaded": True, "total": 5, "shown": 3}) == {
+        "state": "list",
+        "banner": None,
+    }
 
 
 def test_list_state_error_before_the_catalog_loads(ui: qjs.JsModule) -> None:
@@ -433,7 +445,9 @@ def test_list_state_auth_failed_is_reconnect(ui: qjs.JsModule) -> None:
     ) == {"state": "list", "banner": "reconnect"}
 
 
-def test_list_state_loaded_with_a_background_error_still_lists(ui: qjs.JsModule) -> None:
+def test_list_state_loaded_with_a_background_error_still_lists(
+    ui: qjs.JsModule,
+) -> None:
     assert ui.call(
         "listState",
         {"catalogLoaded": True, "total": 5, "shown": 5, "errorCode": "network"},
@@ -460,7 +474,8 @@ def test_list_state_banner_precedence(ui: qjs.JsModule) -> None:
         {"catalogLoaded": True, "total": 5, "shown": 5, "offline": True},
     ) == {"state": "list", "banner": "offline"}
     assert ui.call(
-        "listState", {"catalogLoaded": False, "offline": True, "errorCode": "auth_failed"}
+        "listState",
+        {"catalogLoaded": False, "offline": True, "errorCode": "auth_failed"},
     ) == {"state": "error", "banner": "reconnect"}
 
 
@@ -468,12 +483,14 @@ def test_list_state_ignores_bad_counts(ui: qjs.JsModule) -> None:
     assert ui.call(
         "listState", {"catalogLoaded": True, "total": "5", "shown": "3"}
     ) == {"state": "empty", "banner": None}
-    assert ui.call(
-        "listState", {"catalogLoaded": True, "total": -3, "shown": 0}
-    ) == {"state": "empty", "banner": None}
-    assert ui.call(
-        "listState", {"catalogLoaded": True, "total": 5, "shown": -1}
-    ) == {"state": "no-results", "banner": None}
+    assert ui.call("listState", {"catalogLoaded": True, "total": -3, "shown": 0}) == {
+        "state": "empty",
+        "banner": None,
+    }
+    assert ui.call("listState", {"catalogLoaded": True, "total": 5, "shown": -1}) == {
+        "state": "no-results",
+        "banner": None,
+    }
 
 
 # --- moveSelection -----------------------------------------------------------
@@ -561,7 +578,9 @@ def test_storage_from_the_local_scan(ui: qjs.JsModule) -> None:
     assert ui.call("storage", items) == {"count": 2, "bytes": 12 * 1024 * 1024 + 5}
 
 
-def test_storage_from_library_rows(ui: qjs.JsModule, library: qjs.JsModule, catalog: dict) -> None:
+def test_storage_from_library_rows(
+    ui: qjs.JsModule, library: qjs.JsModule, catalog: dict
+) -> None:
     local = [
         {"asin": A2, "size": 100, "downloaded_at": "2026-01-01T00:00:00Z"},
         {"asin": A4, "size": 250, "downloaded_at": "2026-02-01T00:00:00Z"},
@@ -685,4 +704,3 @@ def test_confirm_stays_only_for_a_downloadable_cloud_book(ui, library, catalog) 
     assert ui.call("confirmValid", "", cloud, False) is False
     assert ui.call("confirmValid", None, cloud, False) is False
     assert ui.call("confirmValid", cloud["asin"], None, False) is False
-

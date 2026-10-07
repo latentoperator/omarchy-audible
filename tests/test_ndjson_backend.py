@@ -58,13 +58,17 @@ def test_recorded_fake_output_reproduces_the_b7_contract(
             ndjson.call("feed", splitter, chunk)
         ndjson.call("flush", splitter)
         parsed = ndjson.read(splitter)["events"]
-        assert parsed == expected, f"{command}: parsing differed for {len(strategy)} chunks"
+        assert parsed == expected, (
+            f"{command}: parsing differed for {len(strategy)} chunks"
+        )
 
     outcome = ndjson.call("finish", result.returncode, expected)
 
     terminals = [event for event in expected if event["type"] in TERMINAL_TYPES]
     assert len(terminals) == 1, f"{command}: expected exactly one terminal event"
-    assert expected[-1]["type"] in TERMINAL_TYPES, f"{command}: last event is not terminal"
+    assert expected[-1]["type"] in TERMINAL_TYPES, (
+        f"{command}: last event is not terminal"
+    )
     assert outcome["mismatch"] is False
     assert outcome["busy"] is False
 

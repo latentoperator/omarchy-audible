@@ -26,7 +26,9 @@ EXPECTED_TITLES = [f"Chapter {index + 1}" for index in range(dl.FAKE_CHAPTERS_DE
 
 
 def _meta(paths, asin: str = ASIN) -> dict:
-    return json.loads((paths.books_dir / asin / "meta.json").read_text(encoding="utf-8"))
+    return json.loads(
+        (paths.books_dir / asin / "meta.json").read_text(encoding="utf-8")
+    )
 
 
 def _layout(paths, asin: str = ASIN) -> list[str]:
@@ -149,12 +151,21 @@ def test_get_failure_removes_everything_and_never_leaves_a_book(
     assert last["code"] == code
 
     book_dir = fake_paths.books_dir / ASIN
-    for name in ("book.m4b", "book.aaxc", "book.aax", "key.json", "chapters.txt", ".partial"):
+    for name in (
+        "book.m4b",
+        "book.aaxc",
+        "book.aax",
+        "key.json",
+        "chapters.txt",
+        ".partial",
+    ):
         assert not (book_dir / name).exists(), name
     assert not list(book_dir.glob("*.tmp"))
 
 
-def test_get_disk_failure_refuses_before_writing(run_cli, events, ffmpeg_bin, fake_paths):
+def test_get_disk_failure_refuses_before_writing(
+    run_cli, events, ffmpeg_bin, fake_paths
+):
     result = run_cli("get", ASIN, "--fake-fail", "disk", fake=True)
     assert result.returncode != 0
     assert events(result)[-1]["code"] == "disk_space"
@@ -174,13 +185,42 @@ def test_free_space_preflight_requires_1_1x():
     ("metadata", "size"),
     [
         # The shape the real account returns (G3 finding 4: total was 0).
-        ({"content_metadata": {"content_reference": {"content_size_in_bytes": 779090696}}}, 779090696),
+        (
+            {
+                "content_metadata": {
+                    "content_reference": {"content_size_in_bytes": 779090696}
+                }
+            },
+            779090696,
+        ),
         ({"content_metadata": {"content_size_in_bytes": 1234}}, 1234),
         ({"content_metadata": {"content_url": {"content_size_in_bytes": 99}}}, 99),
-        ({"content_metadata": {"content_reference": {"content_size_in_bytes": 5}, "content_size_in_bytes": 7}}, 5),
+        (
+            {
+                "content_metadata": {
+                    "content_reference": {"content_size_in_bytes": 5},
+                    "content_size_in_bytes": 7,
+                }
+            },
+            5,
+        ),
         ({"content_metadata": {"content_reference": {"content_size_in_bytes": 0}}}, 0),
-        ({"content_metadata": {"content_reference": {"content_size_in_bytes": "779"}}}, 0),
-        ({"content_metadata": {"content_reference": {"content_size_in_bytes": True}}}, 0),
+        (
+            {
+                "content_metadata": {
+                    "content_reference": {"content_size_in_bytes": "779"}
+                }
+            },
+            0,
+        ),
+        (
+            {
+                "content_metadata": {
+                    "content_reference": {"content_size_in_bytes": True}
+                }
+            },
+            0,
+        ),
         ({"content_metadata": {"content_reference": None}}, 0),
         ({"content_metadata": {"content_reference": []}}, 0),
         ({}, 0),
@@ -191,9 +231,23 @@ def test_free_space_preflight_requires_1_1x():
         ("x", 0),
         (None, 0),
         ([], 0),
-        ({"content_metadata": {"content_reference": {"content_size_in_bytes": 10**400}}}, 0),
+        (
+            {
+                "content_metadata": {
+                    "content_reference": {"content_size_in_bytes": 10**400}
+                }
+            },
+            0,
+        ),
         ({"content_metadata": {"content_reference": {"content_size_in_bytes": -5}}}, 0),
-        ({"content_metadata": {"content_reference": {"content_size_in_bytes": 1.5e9}}}, 0),
+        (
+            {
+                "content_metadata": {
+                    "content_reference": {"content_size_in_bytes": 1.5e9}
+                }
+            },
+            0,
+        ),
     ],
 )
 def test_content_size_reads_content_reference(metadata, size):
@@ -212,12 +266,18 @@ def test_aax_fallback_progress_has_no_aaxc_total(monkeypatch, tmp_path):
     monkeypatch.setattr(dl, "_audible_cli", lambda paths: "audible")
     monkeypatch.setattr(dl, "_audible_env", lambda paths: {})
     monkeypatch.setattr(dl, "_audible_download", fake_download)
-    monkeypatch.setattr(dl, "_find_raw", lambda partial, fmt: (partial / "x.aax") if fmt == "aax" else None)
+    monkeypatch.setattr(
+        dl,
+        "_find_raw",
+        lambda partial, fmt: (partial / "x.aax") if fmt == "aax" else None,
+    )
     monkeypatch.setattr(dl, "_find_voucher", lambda partial: None)
     monkeypatch.setattr(dl, "_read_chapters", lambda partial, asin: [])
     partial = tmp_path / ".partial"
     partial.mkdir()
-    raw = dl._real_fetch("B0FAKE0001", partial, None, lambda *a, **k: None, None, 779090696)
+    raw = dl._real_fetch(
+        "B0FAKE0001", partial, None, lambda *a, **k: None, None, 779090696
+    )
     assert raw.container == "aax"
     # The aax path stores a reference, not a copy of the activation bytes (D7).
     assert raw.voucher_key is None and raw.voucher_iv is None
@@ -257,12 +317,16 @@ def test_fake_chapters_flag_and_env(run_cli, events, ffmpeg_bin, fake_paths):
     assert _meta(fake_paths)["duration_ms"] == 120_000
 
 
-def test_fake_chapters_env_var_is_honoured(run_cli, events, ffmpeg_bin, fake_paths, env):
+def test_fake_chapters_env_var_is_honoured(
+    run_cli, events, ffmpeg_bin, fake_paths, env
+):
     result = run_cli(
         "get", ASIN, fake=True, extra_env={"OMARCHY_AUDIBLE_FAKE_CHAPTERS": "7"}
     )
     assert result.returncode == 0, result.stderr
-    chapters = (fake_paths.books_dir / ASIN / "chapters.txt").read_text(encoding="utf-8")
+    chapters = (fake_paths.books_dir / ASIN / "chapters.txt").read_text(
+        encoding="utf-8"
+    )
     assert chapters.count("[CHAPTER]") == 7
 
 
@@ -414,7 +478,9 @@ def test_real_get_never_puts_key_material_in_a_subprocess_argv(paths, monkeypatc
     monkeypatch.setattr(dl, "_real_content_metadata", lambda asin, paths: metadata)
 
     tracker = _AudibleTracker("B0REAL0001", key, iv)
-    final = dl.run_get("B0REAL0001", paths, fake=False, emit=lambda *a, **k: None, children=tracker)
+    final = dl.run_get(
+        "B0REAL0001", paths, fake=False, emit=lambda *a, **k: None, children=tracker
+    )
 
     assert final.name == "book.aaxc"
     assert tracker.argvs, "the audible-cli download argv should have been recorded"
@@ -432,7 +498,9 @@ def test_real_get_never_puts_key_material_in_a_subprocess_argv(paths, monkeypatc
 # booksDir. `get` reports a rejected ASIN as error(code=bad_asin).
 
 
-def test_get_refuses_a_path_outside_books_dir(run_cli, validate_stream, paths, tmp_path):
+def test_get_refuses_a_path_outside_books_dir(
+    run_cli, validate_stream, paths, tmp_path
+):
     outside = tmp_path / "outside"
     outside.mkdir()
     (outside / "keep.txt").write_text("keep", encoding="utf-8")
@@ -445,7 +513,9 @@ def test_get_refuses_a_path_outside_books_dir(run_cli, validate_stream, paths, t
     assert not (outside / "book.aaxc").exists()
 
 
-def test_get_dotdot_never_deletes_the_parent_partial(run_cli, validate_stream, fake_paths):
+def test_get_dotdot_never_deletes_the_parent_partial(
+    run_cli, validate_stream, fake_paths
+):
     # `get ..` must not rmtree `<booksRoot>/../.partial/`, a directory the
     # command does not own (the review's F1 reproduction).
     parent_partial = fake_paths.books_dir.parent / ".partial"
@@ -484,7 +554,9 @@ def test_get_refuses_a_symlink_inside_books_dir(run_cli, validate_stream, fake_p
     assert (real / "book.m4b").is_file()
 
 
-def test_get_refuses_a_symlink_pointing_outside(run_cli, validate_stream, fake_paths, tmp_path):
+def test_get_refuses_a_symlink_pointing_outside(
+    run_cli, validate_stream, fake_paths, tmp_path
+):
     victim = tmp_path / "victim"
     victim.mkdir()
     (victim / "keep.txt").write_text("keep", encoding="utf-8")

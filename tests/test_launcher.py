@@ -93,7 +93,11 @@ def test_backend_does_not_import_audible_eagerly(env):
     )
 
     result = subprocess.run(
-        [sys.executable, "-c", code], env=env, capture_output=True, text=True, check=False
+        [sys.executable, "-c", code],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     assert result.returncode == 0, result.stderr
 
@@ -210,4 +214,3 @@ def test_launcher_marker_name_matches_the_backend():
     from omarchy_audible import bootstrap
 
     assert _load_launcher().VENV_MARKER == bootstrap.MARKER_NAME
-

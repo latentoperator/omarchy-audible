@@ -46,11 +46,15 @@ def test_merge_vectors_exercise_real_entries() -> None:
     assert len(both) >= 5
 
 
-@pytest.mark.parametrize("case", PARSE_CASES, ids=[case["name"] for case in PARSE_CASES])
+@pytest.mark.parametrize(
+    "case", PARSE_CASES, ids=[case["name"] for case in PARSE_CASES]
+)
 def test_parse_updated_at_matches_the_vector(case: dict) -> None:
     assert to_ms(positions.parse_updated_at(case["value"])) == case["epoch_ms"]
 
 
-@pytest.mark.parametrize("case", MERGE_CASES, ids=[case["name"] for case in MERGE_CASES])
+@pytest.mark.parametrize(
+    "case", MERGE_CASES, ids=[case["name"] for case in MERGE_CASES]
+)
 def test_merge_matches_the_vector(case: dict) -> None:
     assert positions.merge(case["local"], case["remote"]) == case["expected"]

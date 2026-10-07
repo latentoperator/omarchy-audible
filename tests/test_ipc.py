@@ -32,7 +32,23 @@ def test_good_input(ipc, text, expected):
 
 @pytest.mark.parametrize(
     "text",
-    ["", "   ", "abc", "NaN", "Infinity", "-Infinity", "0x10", "0b10", "1.2.3", "30s", "1e3", "+", ".", None, 30],
+    [
+        "",
+        "   ",
+        "abc",
+        "NaN",
+        "Infinity",
+        "-Infinity",
+        "0x10",
+        "0b10",
+        "1.2.3",
+        "30s",
+        "1e3",
+        "+",
+        ".",
+        None,
+        30,
+    ],
 )
 def test_bad_input_is_null(ipc, text):
     assert ipc.call("parseSeconds", text) is None

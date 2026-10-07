@@ -82,7 +82,9 @@ def test_schema_files_cover_the_documented_protocol(schemas_dir):
 
 
 @pytest.mark.parametrize("command,args,stdin", COMMAND_CASES, ids=CASE_IDS)
-def test_command_writes_only_valid_events(command, args, stdin, run_cli, events, validate_event):
+def test_command_writes_only_valid_events(
+    command, args, stdin, run_cli, events, validate_event
+):
     result = run_cli(command, *args, fake=True, stdin=stdin)
 
     lines = [line for line in result.stdout.splitlines() if line.strip()]
@@ -97,7 +99,9 @@ def test_command_writes_only_valid_events(command, args, stdin, run_cli, events,
 
     terminals = [event for event in parsed if event["type"] in TERMINAL_TYPES]
     assert len(terminals) == 1, f"{command}: expected exactly one terminal event"
-    assert parsed[-1]["type"] in TERMINAL_TYPES, f"{command}: last event is not terminal"
+    assert parsed[-1]["type"] in TERMINAL_TYPES, (
+        f"{command}: last event is not terminal"
+    )
 
     if result.returncode == 0:
         assert parsed[-1]["type"] == "done"
@@ -126,7 +130,9 @@ def test_validator_rejects_an_unknown_done_payload_field(validate_event):
 def test_progress_schema_accepts_the_documented_shapes(validate_event):
     jsonschema = pytest.importorskip("jsonschema")
     validate_event({"type": "progress", "stage": "library", "n": 40, "of": 91})
-    validate_event({"type": "progress", "stage": "download", "bytes": 123, "total": 456})
+    validate_event(
+        {"type": "progress", "stage": "download", "bytes": 123, "total": 456}
+    )
     validate_event({"type": "progress", "stage": "convert", "bytes": 0, "total": 456})
     # A documented stage without its counters is malformed.
     with pytest.raises(jsonschema.ValidationError):

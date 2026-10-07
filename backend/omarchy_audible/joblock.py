@@ -79,9 +79,7 @@ def job_lock(
         release(fd)
 
 
-def write_job_json(
-    path: Path, pid: int, command: str, asin: str | None = None
-) -> None:
+def write_job_json(path: Path, pid: int, command: str, asin: str | None = None) -> None:
     """Atomically write ``{pid, command, asin}`` for the running job."""
     data: dict[str, Any] = {"pid": int(pid), "command": str(command)}
     if asin is not None:

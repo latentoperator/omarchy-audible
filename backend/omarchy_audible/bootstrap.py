@@ -242,7 +242,15 @@ def run_setup(
         emit("progress", stage="requirements", n=2, of=total)
         _check(
             runner(
-                [str(venv_python), "-m", "pip", "install", *_PIP_FLAGS, "-r", str(requirements)],
+                [
+                    str(venv_python),
+                    "-m",
+                    "pip",
+                    "install",
+                    *_PIP_FLAGS,
+                    "-r",
+                    str(requirements),
+                ],
                 step_env,
             ),
             "could not install the pinned dependencies",
@@ -251,7 +259,14 @@ def run_setup(
         emit("progress", stage="backend", n=3, of=total)
         _check(
             runner(
-                [str(venv_python), "-m", "pip", "install", *_PIP_FLAGS, str(backend_dir())],
+                [
+                    str(venv_python),
+                    "-m",
+                    "pip",
+                    "install",
+                    *_PIP_FLAGS,
+                    str(backend_dir()),
+                ],
                 step_env,
             ),
             "could not install the backend package",
