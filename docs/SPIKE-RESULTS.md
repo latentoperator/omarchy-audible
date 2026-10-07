@@ -8,6 +8,33 @@ Environment for S5 and S6: HMSP-OMARCHYXPS, Omarchy 4.0.4, quickshell 0.3.1, mpv
 
 ---
 
+## U9 — Pause lag (G4 finding) — measured; nothing in our launch options to change
+
+**Question.** Chris hears about a second of audio after ⏯. Is any of it in the plugin or in how we start mpv?
+
+**Method.** HMSP-OMARCHYBEE, mpv 0.41.0 on PipeWire (`ao=pipewire`, quantum 1024 at 48 kHz), 2026-10-07, in fake mode. Two parts, each five times (scripts in `spikes/u9_*.py`):
+1. *The plugin's part:* time the public `omarchy-shell latentoperator.audible playPause` call against mpv's `pause` property-change event, read by a second client on the fake mpv's socket.
+2. *mpv and PipeWire:* a standalone mpv with the plugin's exact launch arguments (`PlayerController.launchMpv`) playing a 440 Hz sine into a temporary null sink (`pactl load-module module-null-sink`, removed afterwards; the default sink was never changed). `parec` records the sink's monitor in 10 ms blocks stamped on arrival; the gap is from the `set pause yes` send to the last block with any signal. Repeated with `--audio-buffer=0.05` (default 0.2 s) and `--pipewire-buffer=20` (default `native`).
+
+**Result.**
+
+| Gap | Median | Range |
+|---|---|---|
+| IPC `playPause` call → mpv reports `pause` (includes the `omarchy-shell` CLI's own start-up) | 31 ms | 31–32 ms |
+| `set pause yes` → silence, default arguments | 10 ms | 10–15 ms |
+| same, `--audio-buffer=0.05` | 10 ms | 7–15 ms |
+| same, `--pipewire-buffer=20` | 10 ms | 9–15 ms |
+
+mpv does not play out its audio buffer on pause, so neither option changes anything, and no underrun was logged in any run. Everything between ⏯ and the sound card's input is about 45 ms.
+
+**What's left is past PipeWire's graph:** the line-out sink (Realtek ALC897 on `snd_hda_intel`, `alsa_output.pci-0000_04_00.6.HiFi__Line2__sink`) and whatever is attached to it. A monitor recording can't see that buffer, and measuring it needs a loopback cable or ears. A plain PipeWire ALSA sink buffers tens of milliseconds, not a second, so the likely place for most of the second is the speakers themselves, for example powered speakers with their own processing.
+
+Also seen: while a Moonlight session is connected, Sunshine makes `sink-sunshine-stereo` the default (muted locally) and both mpv streams follow it. Audio heard through Moonlight then also carries Sunshine's encode and the network, which no player option can remove.
+
+**Decision.** No change to `launchMpv`. The check for Chris (FOLLOWUPS-desktop §5, item 7): at BEE, with no Moonlight session, play any file in plain `mpv` and press Space. If the same second is there, it's the speakers or the sound card, not the plugin.
+
+---
+
 ## S7 — Play locked files, keep no decrypted copy ✅ (go)
 
 **Question.** Can mpv play the aaxc/aax file exactly as Audible sent it, unlocking it only in memory, so no DRM-free `.m4b` ever lands on disk, without the key ever appearing in a process's argv?
