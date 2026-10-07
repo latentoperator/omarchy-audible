@@ -324,3 +324,82 @@ def test_load_options_chapters_only(mpv):
         "lavf": "",
         "chaptersFile": "/b/chapters.txt",
     }
+
+
+# --- F23: a minutes timer doesn't count paused time -------------------------
+def test_pause_two_minutes_inside_a_one_minute_timer(mpv):
+    timer = mpv.call("minutesSleepTimer", 1, 0, True)
+    assert timer == {"mode": "minutes", "endsAtMs": 60000}
+    # 20 s of listening, then pause for two minutes.
+    held = mpv.call("holdSleepTimer", timer, 20000)
+    assert held == {"mode": "minutes", "remainingMs": 40000}
+    assert mpv.call("sleepRemainingMs", held, 140000, 0, 1) == 40000
+    # Resume: it has its 40 s left, not -80 s (the old code fired at once).
+    resumed = mpv.call("resumeSleepTimer", held, 140000)
+    assert mpv.call("sleepRemainingMs", resumed, 140000, 0, 1) == 40000
+    assert mpv.call("sleepRemainingMs", resumed, 180000, 0, 1) == 0
+
+
+def test_a_timer_set_while_paused_starts_on_resume(mpv):
+    held = mpv.call("minutesSleepTimer", 15, 5000, False)
+    assert held == {"mode": "minutes", "remainingMs": 900000}
+    assert mpv.call("resumeSleepTimer", held, 70000) == {
+        "mode": "minutes",
+        "endsAtMs": 970000,
+    }
+
+
+def test_hold_and_resume_leave_other_timers_alone(mpv):
+    chapter = {"mode": "chapter", "endMs": 60000}
+    assert mpv.call("holdSleepTimer", chapter, 5) == chapter
+    assert mpv.call("resumeSleepTimer", chapter, 5) == chapter
+    assert mpv.call("holdSleepTimer", None, 5) is None
+    assert mpv.call("resumeSleepTimer", None, 5) is None
+    # A timer already held stays held; one already running stays running.
+    held = {"mode": "minutes", "remainingMs": 10}
+    running = {"mode": "minutes", "endsAtMs": 10}
+    assert mpv.call("holdSleepTimer", held, 5) == held
+    assert mpv.call("resumeSleepTimer", running, 5) == running
+    # Past its end it holds nothing negative.
+    assert mpv.call("holdSleepTimer", running, 50) == {
+        "mode": "minutes",
+        "remainingMs": 0,
+    }
+
+
+def test_minutes_sleep_timer_rejects_nonsense(mpv):
+    assert mpv.call("minutesSleepTimer", 0, 0, True) is None
+    assert mpv.call("minutesSleepTimer", -5, 0, True) is None
+    assert mpv.call("minutesSleepTimer", "x", 0, True) is None
+
+
+# --- F21: saved volume and speed --------------------------------------------
+def test_user_volume_ignores_a_fade(mpv):
+    assert mpv.call("userVolume", 40, -1) == 40
+    assert mpv.call("userVolume", 12, 80) == 80
+    assert mpv.call("userVolume", 55, None) == 55
+
+
+@pytest.mark.parametrize(
+    "saved,fallback,expected",
+    [
+        (70, 100, 70),
+        (0, 100, 0),
+        (130, 100, 130),
+        (64.6, 100, 65),
+        (131, 100, 100),
+        (-1, 100, 100),
+        (None, 15, 15),
+        ("80", 100, 100),
+    ],
+)
+def test_start_volume(mpv, saved, fallback, expected):
+    assert mpv.call("startVolume", saved, fallback) == expected
+
+
+@pytest.mark.parametrize(
+    "saved,expected",
+    [(1.5, 1.5), (0.5, 0.5), (3.0, 3.0), (3.5, 1), (0.25, 1), (None, 1), ("2", 1)],
+)
+def test_start_speed(mpv, saved, expected):
+    assert mpv.call("startSpeed", saved) == expected

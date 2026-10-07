@@ -17,6 +17,8 @@ Item {
   // $XDG_RUNTIME_DIR/omarchy-audible[-fake]/mpv.sock, from the `status` event.
   property string socketPath: ""
   property int initialVolume: 100
+  // The speed a new mpv starts at (F21: the saved one).
+  property real initialSpeed: 1
   // The systemd scope mpv runs in. The fixed name refuses a second mpv; each
   // mode has its own, so a fake-mode mpv never blocks the real one.
   property string unitName: "omarchy-audible-mpv"
@@ -90,6 +92,9 @@ Item {
     } else if (connection === "connected") {
       mpvState = Mpv.emptyState()
       sleepTimer = null
+      // A fade's base volume belongs to the mpv that is gone; a later
+      // cancelSleep() must not send it to a new one (F22).
+      fadeBaseVolume = -1
       if (quitting) {
         quitting = false
         connection = "idle"
@@ -188,7 +193,7 @@ Item {
   function launchMpv() {
     var mpv = ["mpv", "--no-config", "--no-video", "--idle=yes", "--keep-open=yes",
       "--no-terminal", "--audio-display=no", "--force-window=no",
-      "--volume=" + initialVolume, "--input-ipc-server=" + socketPath]
+      "--volume=" + initialVolume, "--speed=" + initialSpeed, "--input-ipc-server=" + socketPath]
     var command = useScope
       ? ["systemd-run", "--user", "--scope", "--quiet", "--collect",
          "--unit=" + unitName].concat(mpv)
@@ -284,7 +289,7 @@ Item {
 
   function setSleepTimer(minutes) {
     cancelSleep()
-    if (minutes > 0) sleepTimer = { "mode": "minutes", "endsAtMs": Date.now() + minutes * 60000 }
+    sleepTimer = Mpv.minutesSleepTimer(minutes, Date.now(), playing)
   }
 
   function setSleepEndOfChapter() {
@@ -318,9 +323,13 @@ Item {
     }
   }
 
-  // Paused or gone: end a fade in progress and put the volume back.
+  // Paused or gone: end a fade in progress and put the volume back. A
+  // minutes timer stops counting while paused and goes on from where it was
+  // on resume (F23).
   onPlayingChanged: {
     if (!playing && sleepTimer !== null && fadeBaseVolume >= 0) cancelSleep()
+    else if (!playing) sleepTimer = Mpv.holdSleepTimer(sleepTimer, Date.now())
+    else sleepTimer = Mpv.resumeSleepTimer(sleepTimer, Date.now())
   }
 
   Timer {

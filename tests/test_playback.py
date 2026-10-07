@@ -182,3 +182,28 @@ def test_with_queue_replaces_the_queue_only(playback):
     assert after["push_queue"] == [{"asin": "B0B", "ms": 1, "at": None}]
     assert after["volume"] == 3 and state["push_queue"] == [{"asin": "B0A"}]
     assert playback.call("withQueue", state, None)["push_queue"] == []
+
+
+# --- F21: volume and speed in state.json -------------------------------------
+def test_with_player_settings(playback):
+    state = {"schema": 1, "books": {}, "push_queue": [], "volume": None, "speed": None}
+    out = playback.call("withPlayerSettings", state, 64.6, 1.5)
+    assert out["volume"] == 65 and out["speed"] == 1.5
+    assert out["books"] == {} and state["volume"] is None
+
+
+def test_with_player_settings_keeps_range(playback):
+    state = {"schema": 1, "volume": 70, "speed": 1.25}
+    out = playback.call("withPlayerSettings", state, 500, 9)
+    assert out == state
+    out = playback.call("withPlayerSettings", state, -3, 0.1)
+    assert out == state
+    out = playback.call("withPlayerSettings", state, 0, 3)
+    assert out["volume"] == 0 and out["speed"] == 3
+
+
+def test_with_player_settings_unchanged_is_the_same_object(playback):
+    assert playback.evaluate(
+        "(function(){ var s = {volume: 70, speed: 1.25};"
+        " return withPlayerSettings(s, 70, 1.25) === s; })()"
+    )

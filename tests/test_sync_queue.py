@@ -104,3 +104,34 @@ def test_stale_run_reaches_the_notice(sync):
     assert "Check this computer's clock" in sync.call("staleNotice", count)
     count = sync.call("staleCountAfter", count, {"ok": True})
     assert sync.call("staleNotice", count) == ""
+
+
+# --- F18: the offline retry backs off ----------------------------------------
+def test_retry_delay_grows_and_caps(sync):
+    delays = [sync.call("retryDelayMs", n) for n in range(8)]
+    assert delays[0] == 60000
+    assert delays[1] == 120000
+    assert delays[2] == 240000
+    assert delays == sorted(delays)
+    assert max(delays) == 1800000
+    assert sync.call("retryDelayMs", 1000) == 1800000
+    assert sync.call("retryDelayMs", None) == 60000
+    assert sync.call("retryDelayMs", -2) == 60000
+
+
+def test_overnight_offline_spawns_far_fewer_reads(sync):
+    # The old timer read every 60 s: about 480 reads in 8 hours.
+    elapsed, failures, reads = 0, 0, 0
+    while elapsed < 8 * 3600 * 1000:
+        elapsed += sync.call("retryDelayMs", failures)
+        failures = sync.call("failuresAfter", failures, "offline")
+        reads += 1
+    assert reads < 25
+
+
+def test_failures_after(sync):
+    assert sync.call("failuresAfter", 0, "offline") == 1
+    assert sync.call("failuresAfter", 3, "network") == 4
+    assert sync.call("failuresAfter", 3, "refused") == 4
+    assert sync.call("failuresAfter", 5, "done") == 0
+    assert sync.call("failuresAfter", None, "offline") == 1

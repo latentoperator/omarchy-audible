@@ -268,12 +268,70 @@ function sleepRemainingMs(timer, nowMs, positionMs, speed) {
     return -1;
   }
   if (timer.mode === "minutes") {
+    // Held while paused (F23): the time left doesn't move.
+    if (typeof timer.remainingMs === "number") {
+      return timer.remainingMs;
+    }
     return timer.endsAtMs - nowMs;
   }
   if (timer.mode === "chapter" && typeof timer.endMs === "number") {
     return (timer.endMs - positionMs) / (speed > 0 ? speed : 1);
   }
   return -1;
+}
+
+// A minutes timer that is set now. While paused it holds its length and
+// starts counting on resume (F23); playing, it ends `minutes` from now.
+function minutesSleepTimer(minutes, nowMs, playing) {
+  var ms = Number(minutes) * 60000;
+  if (!isFinite(ms) || ms <= 0) {
+    return null;
+  }
+  return playing === true ? { "mode": "minutes", "endsAtMs": nowMs + ms } : { "mode": "minutes", "remainingMs": ms };
+}
+
+// Pausing: a running minutes timer keeps the time it has left instead of its
+// wall-clock end, so time spent paused doesn't count (F23). Anything else is
+// returned as it is.
+function holdSleepTimer(timer, nowMs) {
+  if (isNull(timer) || timer.mode !== "minutes" || typeof timer.endsAtMs !== "number") {
+    return timer;
+  }
+  return { "mode": "minutes", "remainingMs": Math.max(0, timer.endsAtMs - nowMs) };
+}
+
+// Resuming: a held minutes timer ends the time it had left from now.
+function resumeSleepTimer(timer, nowMs) {
+  if (isNull(timer) || timer.mode !== "minutes" || typeof timer.remainingMs !== "number") {
+    return timer;
+  }
+  return { "mode": "minutes", "endsAtMs": nowMs + timer.remainingMs };
+}
+
+// ---- saved volume and speed (F21) ----
+
+// The volume to save: the one before a sleep fade began, if one is running,
+// so a fade never becomes the saved volume.
+function userVolume(volume, fadeBaseVolume) {
+  return typeof fadeBaseVolume === "number" && fadeBaseVolume >= 0 ? fadeBaseVolume : volume;
+}
+
+// The volume a new mpv starts with: the saved one if it is a number in
+// mpv's 0–130 range, else `fallback`.
+function startVolume(saved, fallback) {
+  if (typeof saved === "number" && isFinite(saved) && saved >= 0 && saved <= 130) {
+    return Math.round(saved);
+  }
+  return fallback;
+}
+
+// The speed a new mpv starts with: the saved one if it is a number in range
+// (MIN_SPEED–MAX_SPEED), else 1.
+function startSpeed(saved) {
+  if (typeof saved === "number" && isFinite(saved) && saved >= MIN_SPEED && saved <= MAX_SPEED) {
+    return saved;
+  }
+  return 1;
 }
 
 function isNull(value) {

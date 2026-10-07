@@ -14,6 +14,28 @@ var BATCH_SIZE = 25;
 // behind the server's.
 var STALE_NOTICE_AFTER = 2;
 
+// The offline retry (F18): a minute after the first failed flush, doubling
+// with each failure after it, and never more than half an hour apart.
+var RETRY_BASE_MS = 60000;
+var RETRY_CAP_MS = 1800000;
+
+// How long to wait before the next flush after `failures` failed ones in a
+// row. Zero or nonsense failures is the base delay.
+function retryDelayMs(failures) {
+  var count = typeof failures === "number" && isFinite(failures) && failures > 0 ? Math.floor(failures) : 0;
+  // 2^5 already passes the cap; stop doubling there so nothing overflows.
+  var delay = RETRY_BASE_MS * Math.pow(2, Math.min(count, 6));
+  return Math.min(delay, RETRY_CAP_MS);
+}
+
+// The failure count after a flush ended with `result` (PositionSync.finish):
+// "done" means it got through, anything else ("offline", a push error code,
+// "refused") is one more failure.
+function failuresAfter(failures, result) {
+  var count = typeof failures === "number" && isFinite(failures) && failures > 0 ? Math.floor(failures) : 0;
+  return result === "done" ? 0 : count + 1;
+}
+
 // Up to `max` distinct ASINs from the queue, oldest first.
 function asinsOf(queue, max) {
   var limit = typeof max === "number" && max > 0 ? max : BATCH_SIZE;
