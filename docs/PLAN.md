@@ -254,8 +254,10 @@ Placed by Dante. Order: B14 lands on `b11` before it merges, then the rest in th
 - [ ] **B13 — Login saves before fetching activation bytes** (tier A; Hopebox; F5). No orphan device registration when the activation-bytes fetch fails.
 - [ ] **P7 — Finished flag and one merge** (tier B; Hopebox JS; F16, F20). Start over clears `finished`; `Library.js` has one timestamp merge. Vectors.
 - [ ] **P8 — Service and player fixes** (tier B; desktop; F17, F18, F19, F21, F22, F23). F17 must land with or before R1.
-- [ ] **H1 — Hygiene** (tier A; Hopebox; F24–F27, F30–F33). Includes adding `ruff check` to `make lint`, the `dev` extra, and the `conftest.py` ffmpeg path. **Ruff format is policy** (Dante, 2026-10-06): one mechanical `ruff format` PR after `b11` merges, with nothing else in it.
+- [ ] **H1 — Hygiene** (tier A; Hopebox; F24–F27, F30–F33). Includes adding `ruff check` to `make lint`, the `dev` extra, and the `conftest.py` ffmpeg path. **Ruff format is policy** (Dante, 2026-10-06); the one mechanical `ruff format` PR is done (#63, 2026-10-07), so H1 adds `ruff format --check` to `make lint`.
 - [ ] **P9 — Service split and orchestration reducers** (tier B, incremental; desktop + Hopebox JS; F28, F29). After U8/U9; one child object per PR.
+- [ ] **U10 — B11 acceptance findings** (tier A/B; Dante placed 2026-10-07 from MANUAL-TEST B11). (a) the debug IPC `libraryQuery` must not change the drawer's live sort, filter or search (it hid all but one book while the search field looked empty); make it read-only or route it through `libraryState`, as R6 already notes. (b) the finished-book Resume / Start over banner is easy to miss, and a row's ▶ only asks again; make the question visible on the row. Start over keeping `finished` is P7 (F16). (c) a `not_local` play error names the ASIN; the service shows the title from the catalog row. (a) and (c) go to Hopebox JS/backend; (b) is a desktop view change.
+- [ ] **R2 note (B11 d)** — no book in the library has 100+ chapters; accepted on Carl (50 through `chapters-file`) plus the 120-chapter fake book. If a 100+ chapter book is ever bought, run MANUAL-TEST B11 step 3 on it. BEE has no old-style `.m4b` left, so the `.m4b` path is covered by tests and fake mode only.
 - F15 goes on R2's sweep list.
 
 ## M5 — Polish and release
@@ -281,4 +283,4 @@ Placed by Dante. Order: B14 lands on `b11` before it merges, then the rest in th
 
 ## Suggested order for a single agent working alone
 
-A0 → S6 → S5 → S1 → S2 → S4 → S3 → (G0) → B1 → B7 → B5 → B4 → B2 → B3 → B6 → (G1) → P1 → P2 → P3 → P5 → P4 → (G2) → U4 → U1 → U2a → U2 → U3 → (G3) → U5 → U6 → U7 → (G4) → B11 (+B14) → P6 → B12 → B13 → P7 → H1 → U8 → U9 → P8 → P9 → R1 … R7.
+A0 → S6 → S5 → S1 → S2 → S4 → S3 → (G0) → B1 → B7 → B5 → B4 → B2 → B3 → B6 → (G1) → P1 → P2 → P3 → P5 → P4 → (G2) → U4 → U1 → U2a → U2 → U3 → (G3) → U5 → U6 → U7 → (G4) → B11 (+B14) → P6 → B12 → B13 → P7 → H1 → U10 → U8 → U9 → P8 → P9 → R1 … R7.
