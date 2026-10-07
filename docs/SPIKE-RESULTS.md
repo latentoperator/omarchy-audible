@@ -28,9 +28,9 @@ Environment for S5 and S6: HMSP-OMARCHYXPS, Omarchy 4.0.4, quickshell 0.3.1, mpv
 | same, `--pipewire-buffer=20` | 9 ms | 8–14 ms |
 | same, `--speed=3` | 9 ms | 9–15 ms |
 
-mpv does not play out its audio buffer on pause, so neither option changes anything. No underrun was logged in any run or in the three-minute plays at 1× and 3×. Everything between ⏯ and the sound card's input is about 40 ms. `PULSE_LATENCY_MSEC` does not apply: mpv uses its native PipeWire output, not Pulse.
+mpv does not play out its audio buffer on pause, so neither option changes anything. No underrun was logged in any run or in the three-minute plays at 1× and 3×. From ⏯ to silence on the sink's monitor (PipeWire's mix, before the ALSA device buffer) is about 40 ms. `PULSE_LATENCY_MSEC` does not apply: mpv uses its native PipeWire output, not Pulse.
 
-**What's left is past PipeWire's graph:** the line-out sink (Realtek ALC897 on `snd_hda_intel`, `alsa_output.pci-0000_04_00.6.HiFi__Line2__sink`) and whatever is attached to it. A monitor recording can't see that buffer, and measuring it needs a loopback cable or ears. A plain PipeWire ALSA sink buffers tens of milliseconds, not a second, so the likely place for most of the second is the speakers themselves, for example powered speakers with their own processing.
+**What's left is not measured here.** It would be after PipeWire's mix: the ALSA device buffer of the line-out sink (Realtek ALC897 on `snd_hda_intel`, `alsa_output.pci-0000_04_00.6.HiFi__Line2__sink`) and whatever is attached to it. A monitor recording can't see that buffer, and measuring it needs a loopback cable or ears. A plain PipeWire ALSA sink buffers tens of milliseconds, not a second, so the likely place for most of the second is the speakers themselves, for example powered speakers with their own processing. That is an inference, not a measurement, until Chris's listening check below.
 
 Also seen: while a Moonlight session is connected, Sunshine makes `sink-sunshine-stereo` the default (muted locally) and both mpv streams follow it. Audio heard through Moonlight then also carries Sunshine's encode and the network, which no player option can remove.
 
