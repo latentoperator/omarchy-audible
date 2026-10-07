@@ -14,8 +14,11 @@ def playback() -> qjs.JsModule:
 
 @pytest.mark.parametrize("path,asin", [
     ("/home/u/.local/share/omarchy-audible/books/B0FAKE0001/book.m4b", "B0FAKE0001"),
+    ("/home/u/.local/share/omarchy-audible/books/B0FAKE0001/book.aaxc", "B0FAKE0001"),
+    ("/home/u/.local/share/omarchy-audible/books/B0FAKE0001/book.aax", "B0FAKE0001"),
     ("/x/B0A/book.m4b", "B0A"),
-    ("/x/B0A/other.m4b", ""), ("book.m4b", ""), ("", ""), (None, ""), (5, ""),
+    ("/x/B0A/other.m4b", ""), ("book.m4b", ""), ("book.aaxc", ""),
+    ("/x/B0A/book.aaxcz", ""), ("", ""), (None, ""), (5, ""),
 ])
 def test_asin_from_path(playback, path, asin):
     assert playback.call("asinFromPath", path) == asin
