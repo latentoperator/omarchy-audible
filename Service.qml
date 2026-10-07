@@ -706,6 +706,10 @@ Item {
     if (!Drawer.canRemove(library.rowFor(asin))) return "error: not removable"
     // A question about a book being removed no longer has a file to play.
     if (askAsin === asin) askAsin = ""
+    // Removing is newer than a play of this book still on its way (a resume
+    // read or a play-info): drop it, or its reply would start the book again.
+    if (PlayRequest.busyAsin(playRequest) === asin) playRequest = null
+    if (pendingResume === asin) pendingResume = ""
     if (asin === loadedAsin) {
       if (removeAfterUnload.indexOf(asin) < 0) removeAfterUnload = removeAfterUnload.concat([asin])
       unloadTimer.restart()
