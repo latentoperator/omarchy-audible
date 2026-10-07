@@ -243,7 +243,7 @@ Depends on S5/S6 results and the fake backend.
 
 ## Review follow-ups (whole-repo review 2026-10-06, [briefs/REVIEW-2026-10-06.md](briefs/REVIEW-2026-10-06.md))
 
-Second review, 2026-10-07 ([briefs/REVIEW-2026-10-07.md](briefs/REVIEW-2026-10-07.md), F34–F37, placed by Dante): F34 and F35 join **B12**, F36 joins **H1**, and F37 goes in the next desktop brief with U10(c).
+Second review, 2026-10-07 ([briefs/REVIEW-2026-10-07.md](briefs/REVIEW-2026-10-07.md), F34–F37, placed by Dante): F34 and F35 join **B12** (*done in #68*), F36 joins **H1**, and F37 goes in the next desktop brief with U10(c).
 
 Placed by Dante. Order: B14 lands on `b11` before it merges, then the rest in this order, after `b11` is in `main` (B12 and P6 touch the same files as B11). Finding numbers (F1–F33) are the brief's.
 
