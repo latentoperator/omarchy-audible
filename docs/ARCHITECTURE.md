@@ -255,8 +255,9 @@ Started by the service when a book is first played, as a detached process:
 ```
 mpv --no-config --no-video --idle=yes --keep-open=yes --no-terminal --audio-display=no \
     --input-ipc-server=$XDG_RUNTIME_DIR/omarchy-audible/mpv.sock \
-    --force-window=no --volume=<saved> --speed=<default>
+    --force-window=no --volume=<saved> --speed=<saved>
 ```
+`<saved>` is `state.json`'s `volume` and `speed`, written a second after either changes (the volume from before a sleep fade, never the faded one) and range-checked on start (`Mpv.startVolume`, `Mpv.startSpeed`); without one, volume 100 (15 in fake mode) and speed 1. Until P8 (F21) neither was ever saved, so mpv always started at those defaults and this line did not match the code.
 Launched as `systemd-run --user --scope --quiet --collect --unit=omarchy-audible-mpv mpv …` (fake mode: `--unit=omarchy-audible-fake-mpv`, so a fake player never blocks the real one; real mode stops a leftover fake scope when it starts, fake mode never touches the real one) through `Quickshell.execDetached` ✅ S5 (own cgroup, survives `omarchy-restart-shell`; the fixed unit name refuses a second mpv). A player that fails to start shows a desktop notification ("Couldn't start playback") and a line in Mini. Fall back to plain `execDetached` if `systemd-run` is missing. Never use `Process`, whose child dies with the shell. P2 must handle the pitfalls listed in SPIKE-RESULTS S5.
 
 The service connects with Quickshell's unix-socket client (`Quickshell.Io` `Socket`) and speaks mpv's JSON IPC (`{"command":[…],"request_id":n}`; events as JSON lines). Observed properties: `time-pos`, `duration`, `pause`, `speed`, `chapter`, `chapter-list`, `path`, `idle-active`, `eof-reached`, `volume`.

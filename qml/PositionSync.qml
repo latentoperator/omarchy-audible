@@ -16,7 +16,9 @@ Item {
   // The StateStore, and the Service (its `run` returns false when it refuses).
   property var store: null
   property var service: null
-  property int retryIntervalMs: 60000
+  // Failed flushes in a row; the retry waits longer after each (F18).
+  property int failedFlushes: 0
+  readonly property int retryIntervalMs: Sync.retryDelayMs(failedFlushes)
 
   // Last pushed position per ASIN, in memory (state.json has no field for it).
   property var lastPushed: ({})
@@ -76,9 +78,15 @@ Item {
     if (!service.run("position-get", requested, "flush")) finish("refused")
   }
 
+  // Play and panel open retry sooner: the user is here, and maybe online.
+  function resetRetry() {
+    failedFlushes = 0
+  }
+
   function finish(result) {
     flushing = false
     lastResult = result
+    failedFlushes = Sync.failuresAfter(failedFlushes, result)
     plan = []
     current = null
     // More entries may have arrived or been beyond one batch; go again only if

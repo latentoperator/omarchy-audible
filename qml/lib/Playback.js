@@ -158,6 +158,27 @@ function markFinished(state, asin) {
 }
 
 // A copy of `state` with the push queue replaced.
+// A copy of `state` with the player's volume and speed (F21), or `state`
+// itself when both are already what it holds. Out-of-range values are not
+// saved (Mpv.startVolume / startSpeed would ignore them anyway).
+function withPlayerSettings(state, volume, speed) {
+  var base = isObject(state) ? state : {};
+  var nextVolume = typeof volume === "number" && isFinite(volume) && volume >= 0 && volume <= 130
+    ? Math.round(volume) : base.volume;
+  var nextSpeed = typeof speed === "number" && isFinite(speed) && speed >= 0.5 && speed <= 3
+    ? Math.round(speed * 100) / 100 : base.speed;
+  if (nextVolume === base.volume && nextSpeed === base.speed) {
+    return state;
+  }
+  var next = {};
+  for (var key in base) {
+    next[key] = base[key];
+  }
+  next.volume = nextVolume === undefined ? null : nextVolume;
+  next.speed = nextSpeed === undefined ? null : nextSpeed;
+  return next;
+}
+
 function withQueue(state, queue) {
   var next = {};
   for (var key in state) {

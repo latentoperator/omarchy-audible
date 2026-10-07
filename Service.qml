@@ -9,6 +9,7 @@ import "qml/lib/Format.js" as Format
 import "qml/lib/Ipc.js" as Ipc
 import "qml/lib/Library.js" as Library
 import "qml/lib/LibraryUi.js" as LibraryUi
+import "qml/lib/Mpv.js" as Mpv
 import "qml/lib/Onboarding.js" as Onboarding
 import "qml/lib/Panel.js" as Panel
 import "qml/lib/Playback.js" as Playback
@@ -145,6 +146,11 @@ Item {
   readonly property bool confirmStillValid: LibraryUi.confirmValid(confirmAsin, library.rowFor(confirmAsin), syncFailure.offline)
   onConfirmStillValidChanged: if (!confirmStillValid) Qt.callLater(dropInvalidConfirm)
   property string reopenAsin: ""
+  // The panel that was open when the book was picked (F19); reopenOnMini
+  // opens it again rather than the primary one.
+  property var reopenSurface: null
+  // Volume and speed waiting for settingsTimer (F21).
+  property var pendingSettings: null
   // Books to remove once the player has unloaded them.
   property var removeAfterUnload: []
   property real lastSyncAttemptAtMs: 0
@@ -211,6 +217,7 @@ Item {
   function viewForOpen() {
     view = Onboarding.view(onboardingStep, player.loaded, null)
     chapterListOpen = false
+    sync.resetRetry()
     prefetchCatchup()
   }
 
@@ -331,6 +338,9 @@ Item {
   // Every way into playback ends here. The backend says which file to load
   // and with which key (`play-info`, B11); startPlayInfo does the load.
   function playNow(asin, startSec) {
+    // Settings still waiting for the debounce are saved first: an mpv this
+    // play launches starts from them (F21).
+    saveSettings()
     playError = ""
     playSerial += 1
     var request = PlayRequest.create(asin, startSec, playSerial)
@@ -511,7 +521,11 @@ Item {
     var asin = removeCandidate
     removeCandidate = ""
     if (asin.length === 0) return
-    if (Positions.autoRemoveAllowed(autoRemoveFinished, atEnd(asin), player.playing)) run("remove", [asin], "autoremove")
+    if (!Positions.autoRemoveAllowed(autoRemoveFinished, atEnd(asin), player.playing)) return
+    // The loaded book goes the way the user's Remove does: unload first, then
+    // remove once mpv has let go of the file (F17).
+    if (asin === loadedAsin) removeBook(asin)
+    else run("remove", [asin], "autoremove")
   }
 
   // The saved position for a book: the library's merged one, else the local
@@ -591,6 +605,9 @@ Item {
     playRequest = null
     // Nothing is pending after Stop, so an old play failure is gone too (F37).
     playError = ""
+    // A volume or speed changed just now is saved before mpv goes, so the
+    // next one starts with it (F21).
+    saveSettings()
     player.quit()
   }
 
@@ -665,6 +682,8 @@ Item {
   function startPicked(asin, startSec, hidePanel) {
     noteIntent(asin)
     var open = anySurfaceOpen()
+    // The panel the book was picked in reopens, on its own monitor (F19).
+    reopenSurface = openSurface()
     if (hidePanel) closeSurfaces()
     reopenAsin = hidePanel || open ? asin : ""
     reopenTimer.restart()
@@ -673,6 +692,14 @@ Item {
 
   function anySurfaceOpen() {
     return surfaces.some(function(s) { return s.opened === true })
+  }
+
+  // The open panel, or null.
+  function openSurface() {
+    for (var i = 0; i < surfaces.length; i++) {
+      if (surfaces[i].opened === true) return surfaces[i]
+    }
+    return null
   }
 
   function closeSurfaces() {
@@ -685,10 +712,13 @@ Item {
     if (reopenAsin.length === 0 || !player.playing || loadedAsin !== reopenAsin) return
     reopenAsin = ""
     reopenTimer.stop()
+    var remembered = reopenSurface
+    reopenSurface = null
     if (anySurfaceOpen()) {
       showView(Panel.VIEW_MINI)
     } else {
-      var surface = primarySurface()
+      // The monitor's widget may have gone since (a monitor unplugged).
+      var surface = remembered && surfaces.indexOf(remembered) >= 0 ? remembered : primarySurface()
       if (surface) surface.open()
     }
   }
@@ -801,6 +831,21 @@ Item {
     })
   }
 
+  // The player's volume (before any sleep fade) and speed, captured now and
+  // written to state.json once they have settled for a second (F21).
+  function noteSettings() {
+    if (!player.connected) return
+    pendingSettings = { "volume": Mpv.userVolume(player.volume, player.fadeBaseVolume), "speed": player.speed }
+    settingsTimer.restart()
+  }
+
+  function saveSettings() {
+    settingsTimer.stop()
+    if (!pendingSettings) return
+    store.setPlayerSettings(pendingSettings.volume, pendingSettings.speed)
+    pendingSettings = null
+  }
+
   function logEvent(label, text) {
     var entry = { "label": label, "text": text }
     recentEvents = recentEvents.concat([entry]).slice(-maxEvents)
@@ -809,8 +854,10 @@ Item {
   PlayerController {
     id: player
     socketPath: root.runtimeDir.length > 0 ? root.runtimeDir + "/mpv.sock" : ""
-    // Low in fake mode: the fake book is a sine wave.
-    initialVolume: root.fake ? 15 : 100
+    // The saved volume and speed (F21). Without a saved volume, low in fake
+    // mode: the fake book is a sine wave.
+    initialVolume: Mpv.startVolume(store.doc.volume, root.fake ? 15 : 100)
+    initialSpeed: Mpv.startSpeed(store.doc.speed)
     unitName: root.fake ? "omarchy-audible-fake-mpv" : "omarchy-audible-mpv"
     // Reattach once the paths are known.
     onSocketPathChanged: if (socketPath.length > 0) {
@@ -861,8 +908,15 @@ Item {
         // Something plays again: an earlier play-info failure is old news.
         root.playError = ""
         root.reopenOnMini()
+        sync.resetRetry()
       }
     }
+
+    // Volume and speed are saved a moment after they settle (F21). Only an
+    // mpv that is connected reports real values; a disconnect resets them to
+    // defaults, which must not be saved.
+    function onVolumeChanged() { root.noteSettings() }
+    function onSpeedChanged() { root.noteSettings() }
 
     // A play that never started says so (G3 finding 2). lastError is set
     // after the connection changes, so read it a moment later.
@@ -932,6 +986,13 @@ Item {
     interval: 15000
     repeat: false
     onTriggered: root.reopenAsin = ""
+  }
+
+  Timer {
+    id: settingsTimer
+    interval: 1000
+    repeat: false
+    onTriggered: root.saveSettings()
   }
 
   Timer {
@@ -1051,7 +1112,8 @@ Item {
     }
     function autoRemove(value: string): string { if (!root.fake) return Ipc.DEV_ONLY; root.autoRemoveFinished = value === "on"; return "ok" }
     function pushState(): string { return JSON.stringify({ "queue": sync.queue, "flushing": sync.flushing, "last": sync.lastResult,
-      "staleCount": sync.consecutiveStale, "staleNotice": sync.staleNotice }) }
+      "staleCount": sync.consecutiveStale, "staleNotice": sync.staleNotice,
+      "failedFlushes": sync.failedFlushes, "retryMs": sync.retryIntervalMs }) }
     // Opens the panel on a view (Onboarding.view still decides: Mini or Full
     // with nothing loaded shows the Library). Returns the view shown. Fake
     // mode only: opening the panel can read positions or start a sync.
@@ -1191,6 +1253,7 @@ Item {
 
   // Shutdown: save where the book is, and wait for the write.
   Component.onDestruction: {
+    saveSettings()
     if (snapAsin.length > 0 && (snapDirty || snapUnpushed)) {
       if (snapDirty) store.record(snapAsin, snapMs)
       sync.queuePush(snapAsin)

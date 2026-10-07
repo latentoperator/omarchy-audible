@@ -73,6 +73,17 @@ Item {
     root.save()
   }
 
+  // The player's volume and speed (F21). Before the file is read the change
+  // is not kept; the next change after it is.
+  function setPlayerSettings(volume, speed) {
+    if (!root.loaded) return
+    var next = Playback.withPlayerSettings(root.doc, volume, speed)
+    if (next === root.doc) return
+    root.doc = next
+    root.dirty = true
+    root.save()
+  }
+
   function markFinished(asin) {
     var op = { "kind": "finished", "asin": asin }
     if (!root.loaded) {
