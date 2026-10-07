@@ -130,20 +130,23 @@ Rectangle {
       // "You finished this book. Resume, or start over?" (U10b): the same
       // question as the banner, on the row it is about. ▶ stays and answers
       // Resume.
-      RowLayout {
+      // The text has a line of its own and the answers sit under it, so the
+      // question stays readable beside ▶ and Remove.
+      Text {
         Layout.fillWidth: true
+        visible: root.asking
+        text: Drawer.ROW_ASK_TEXT
+        textFormat: Text.PlainText
+        wrapMode: Text.WordWrap
+        color: Color.popups.text
+        font.family: Style.font.family
+        font.pixelSize: Style.font.bodySmall
+      }
+
+      RowLayout {
         visible: root.asking
         spacing: Style.spacing.md
 
-        Text {
-          Layout.fillWidth: true
-          text: Drawer.ROW_ASK_TEXT
-          textFormat: Text.PlainText
-          wrapMode: Text.WordWrap
-          color: Color.popups.text
-          font.family: Style.font.family
-          font.pixelSize: Style.font.bodySmall
-        }
         Button {
           text: "Resume"
           onClicked: root.resumeRequested()
