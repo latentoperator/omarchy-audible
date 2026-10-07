@@ -272,9 +272,13 @@ function enqueue(queue, item) {
   return items;
 }
 
-// Split a push queue into what may be sent and what must be dropped: a queued
-// push is stale when the account's position is newer than its `at` (4.6).
-// `remoteNow` is the `positions` event's items map, `{asin: {ms, updated_at}}`.
+// Split a push queue into what may be sent and what must be dropped. A queued
+// push with no listening time is dropped: `--at` is required (F3), so such a
+// push could never succeed and would retry forever. Otherwise it is dropped
+// when the account's position is newer than its `at` (4.6) — unless the remote
+// item is this device's own echo (`own`, set by `position-get`), which the
+// account stamps with its own later clock and which is never "newer" (F1).
+// `remoteNow` is the `positions` event's items map, `{asin: {ms, updated_at, own?}}`.
 function flushPlan(queue, remoteNow) {
   var items = Array.isArray(queue) ? queue : [];
   var remote = _p.isObject(remoteNow) ? remoteNow : {};
@@ -286,9 +290,17 @@ function flushPlan(queue, remoteNow) {
       continue;
     }
     var at = parseUpdatedAt(entry.at);
+    if (at === null) {
+      drop.push(entry);
+      continue;
+    }
     var remoteEntry = remote[entry.asin];
+    if (_p.isObject(remoteEntry) && remoteEntry.own === true) {
+      send.push(entry);
+      continue;
+    }
     var remoteKey = _p.isObject(remoteEntry) ? parseUpdatedAt(remoteEntry.updated_at) : null;
-    if (at !== null && remoteKey !== null && remoteKey > at) {
+    if (remoteKey !== null && remoteKey > at) {
       drop.push(entry);
     } else {
       send.push(entry);

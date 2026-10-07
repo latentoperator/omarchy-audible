@@ -8,6 +8,12 @@
 // The `position-get` call takes at most this many ASINs.
 var BATCH_SIZE = 25;
 
+// How many `stale` refusals in a row before the user is told (P6, F1). A
+// single one is normal — another device listened; a run of them means this
+// machine's position is not reaching Audible, most often because its clock is
+// behind the server's.
+var STALE_NOTICE_AFTER = 2;
+
 // Up to `max` distinct ASINs from the queue, oldest first.
 function asinsOf(queue, max) {
   var limit = typeof max === "number" && max > 0 ? max : BATCH_SIZE;
@@ -56,4 +62,15 @@ function sendable(send, requestedAsins) {
 
 function isObject(value) {
   return value !== null && value !== undefined && typeof value === "object" && !Array.isArray(value);
+}
+
+// The Mini line to show after a run of refused pushes, or "" when there is
+// nothing to say. A single `stale` is ordinary; two or more in a row mean the
+// position is not getting through and the usual cause is this computer's clock
+// (F1). Pure: a missing, negative or nonsense count says nothing.
+function staleNotice(consecutiveStale) {
+  var count =
+    typeof consecutiveStale === "number" && isFinite(consecutiveStale) ? consecutiveStale : 0;
+  if (count < STALE_NOTICE_AFTER) return "";
+  return "Your position isn't reaching Audible. Check this computer's clock.";
 }
