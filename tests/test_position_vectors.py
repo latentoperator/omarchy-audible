@@ -21,6 +21,7 @@ EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 VECTORS = json.loads(VECTORS_PATH.read_text(encoding="utf-8"))
 PARSE_CASES = VECTORS["parse_updated_at"]
 MERGE_CASES = VECTORS["merge"]
+PUSH_CASES = VECTORS["push_decision"]
 
 
 def to_ms(parsed: datetime | None) -> int | None:
@@ -58,3 +59,22 @@ def test_parse_updated_at_matches_the_vector(case: dict) -> None:
 )
 def test_merge_matches_the_vector(case: dict) -> None:
     assert positions.merge(case["local"], case["remote"]) == case["expected"]
+
+
+def test_push_decision_vectors_cover_echoes_and_other_devices() -> None:
+    """Guard the P6 vectors: they must exercise both sides of the echo rule."""
+    names = {case["name"] for case in PUSH_CASES}
+    assert len(PUSH_CASES) >= 10
+    assert any("own_echo" in name for name in names)
+    assert any("another_device" in name for name in names)
+    assert sum(1 for case in PUSH_CASES if case["stale"]) >= 2
+    assert sum(1 for case in PUSH_CASES if not case["stale"]) >= 5
+
+
+@pytest.mark.parametrize("case", PUSH_CASES, ids=[case["name"] for case in PUSH_CASES])
+def test_push_decision_matches_the_vector(case: dict) -> None:
+    """The Python stale decision agrees with the vectors (P6, F1)."""
+    assert (
+        positions.push_is_stale(case["remote"], case["at"], case["pushed_ms"])
+        is case["stale"]
+    )

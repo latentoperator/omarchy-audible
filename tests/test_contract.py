@@ -54,7 +54,7 @@ COMMAND_CASES: tuple[tuple[str, tuple[str, ...], str | None], ...] = (
     ("login-import-cli", (), None),
     ("logout", (), None),
     ("position-get", ("B00FAKE01", "B00FAKE02"), None),
-    ("position-push", ("B00FAKE01", "1000"), None),
+    ("position-push", ("B00FAKE01", "1000", "--at", "2026-01-01T00:00:00Z"), None),
 )
 
 CASE_IDS = [name for name, _, _ in COMMAND_CASES]
@@ -151,6 +151,30 @@ def test_positions_schema_requires_an_entry_per_asin(validate_event):
     )
     with pytest.raises(jsonschema.ValidationError):
         validate_event({"type": "positions", "items": {"B00FAKE01": {"ms": 1000}}})
+
+
+def test_positions_schema_accepts_the_own_flag(validate_event):
+    """The P6 echo marker: optional, boolean, and never a made-up type."""
+    jsonschema = pytest.importorskip("jsonschema")
+    validate_event(
+        {
+            "type": "positions",
+            "items": {"B00FAKE01": {"ms": 1000, "updated_at": None, "own": True}},
+        }
+    )
+    validate_event(
+        {
+            "type": "positions",
+            "items": {"B00FAKE01": {"ms": 1000, "updated_at": None, "own": False}},
+        }
+    )
+    with pytest.raises(jsonschema.ValidationError):
+        validate_event(
+            {
+                "type": "positions",
+                "items": {"B00FAKE01": {"ms": 1000, "updated_at": None, "own": "yes"}},
+            }
+        )
 
 
 def test_play_info_schema_requires_all_three_fields(validate_event):

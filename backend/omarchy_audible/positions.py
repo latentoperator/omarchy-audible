@@ -26,6 +26,14 @@ before writing and refuses with ``error(code=stale)`` when the account's
 position is newer than the local timestamp of the listening that produced it.
 ``acr`` comes from the local ``meta.json`` when the book is downloaded, and
 otherwise from the content metadata.
+
+The account stamps a push with its own **server** clock, so a computer whose
+clock is behind can see its own previous push as newer and lock itself out.
+``pushed.json`` fixes that (P6, F1): every successful push records ``{ms, at}``
+for its ASIN, a remote entry whose ``ms`` exactly matches that record is this
+device's own echo and is never newer, and ``position-get`` marks such entries
+with ``own: true``. ``position-push`` also requires ``--at`` (F3): without the
+local listening time the stale check cannot fire.
 """
 
 from __future__ import annotations
@@ -123,6 +131,99 @@ def is_remote_newer(remote_entry: Any, local_updated_at: Any) -> bool:
         remote_entry.get("updated_at") if isinstance(remote_entry, dict) else None
     )
     return remote_key is not None and remote_key > local_key
+
+
+def _clean_pushed(entry: Any) -> dict[str, Any] | None:
+    """Normalise one ``{ms, at}`` pushed.json entry, or ``None`` when it is not one."""
+    if not isinstance(entry, dict):
+        return None
+    ms = entry.get("ms")
+    if not isinstance(ms, (int, float)) or isinstance(ms, bool):
+        return None
+    at = entry.get("at")
+    return {
+        "ms": max(0, int(ms)),
+        "at": at if isinstance(at, str) and at else None,
+    }
+
+
+def load_pushed(path: Path) -> dict[str, dict[str, Any]]:
+    """Read ``pushed.json`` as clean ``{ms, at}`` entries (P6, F1).
+
+    ``{}`` when the file is absent, unreadable or malformed. It is written only
+    by ``position-push`` and read by ``position-get`` and ``position-push``
+    (ARCHITECTURE 3, 4.8); it holds no secret.
+    """
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    entries: dict[str, dict[str, Any]] = {}
+    for asin, entry in data.items():
+        if not isinstance(asin, str):
+            continue
+        cleaned = _clean_pushed(entry)
+        if cleaned is not None:
+            entries[asin] = cleaned
+    return entries
+
+
+def record_pushed(path: Path, asin: str, ms: int, at: str | None) -> None:
+    """Remember this device's successful push for ``asin`` (atomic write)."""
+    entries = load_pushed(path)
+    entries[asin] = {"ms": max(0, int(ms)), "at": at}
+    fsutil.atomic_write_json(path, {key: entries[key] for key in sorted(entries)})
+
+
+def pushed_ms(pushed: Any, asin: str) -> int | None:
+    """The ``ms`` this device last pushed for ``asin``, or ``None``."""
+    entry = _clean_pushed(pushed.get(asin) if isinstance(pushed, dict) else None)
+    return entry["ms"] if entry is not None else None
+
+
+def is_own_echo(remote_entry: Any, own_ms: int | None) -> bool:
+    """True when ``remote_entry`` is this device's own push (P6, F1).
+
+    The account keeps a pushed value to the millisecond, so only an exact
+    ``ms`` match counts as an echo; a phone position near it is still a phone
+    position.
+    """
+    if own_ms is None:
+        return False
+    entry = _clean(remote_entry)
+    return entry is not None and entry["ms"] == own_ms
+
+
+def push_is_stale(remote_entry: Any, local_updated_at: Any, own_ms: int | None) -> bool:
+    """True when a push must be refused as ``stale`` (ARCHITECTURE 4.6).
+
+    This device's own echo is never newer, whatever its ``updated_at`` (the
+    account stamps it with the server clock, which can run ahead of this
+    computer's). Every other entry keeps the newest-wins rule.
+    """
+    if is_own_echo(remote_entry, own_ms):
+        return False
+    return is_remote_newer(remote_entry, local_updated_at)
+
+
+def mark_own_echoes(
+    items: dict[str, dict[str, Any]], pushed: Any
+) -> dict[str, dict[str, Any]]:
+    """Copy ``items`` marking the entries this device pushed itself (P6, F1).
+
+    ``own`` is added only when true, so ``position-get`` tells the service an
+    echo apart from another device's listening. ``remote.json`` never carries
+    it (``write_remote`` keeps only ``ms``/``updated_at``).
+    """
+    marked: dict[str, dict[str, Any]] = {}
+    for asin, entry in items.items():
+        copy = dict(entry)
+        if is_own_echo(entry, pushed_ms(pushed, asin)):
+            copy["own"] = True
+        marked[asin] = copy
+    return marked
 
 
 def batches(asins: Sequence[str], size: int = POSITION_BATCH_SIZE) -> list[list[str]]:
@@ -349,18 +450,23 @@ def push_position(
     books_dir: Path,
     port: PushPort,
     local_updated_at: str | None = None,
+    pushed_path: Path | None = None,
 ) -> None:
     """Write one locally-listened position back to the account (4.6).
 
     The remote position is re-read immediately before the write; when it is
     newer than ``local_updated_at`` (default: now) the push is refused as
-    ``stale``. ``acr`` is read from the local ``meta.json`` when the book is
-    downloaded, and otherwise from the content metadata; without either the
-    write is ``unsupported``.
+    ``stale``. The account stamps a push with its own server clock, so a remote
+    entry that exactly matches this device's recorded push (``pushed_path``,
+    P6/F1) is its own echo and never counts as newer. ``acr`` is read from the
+    local ``meta.json`` when the book is downloaded, and otherwise from the
+    content metadata; without either the write is ``unsupported``. A successful
+    write is recorded in ``pushed_path``; a failed one records nothing.
     """
     remote = port.fetch_batch([asin]).get(asin, empty_entry())
     listening_at = local_updated_at or iso_now()
-    if is_remote_newer(remote, listening_at):
+    own_ms = pushed_ms(load_pushed(pushed_path), asin) if pushed_path else None
+    if push_is_stale(remote, listening_at, own_ms):
         raise PipelineError(
             protocol.ErrorCode.STALE,
             f"the remote position for {asin} is newer than this listening",
@@ -374,6 +480,9 @@ def push_position(
             hint="download the book first, or retry when the network is up",
         )
     port.push(asin, acr, position_ms, updated_at=listening_at)
+    if pushed_path is not None:
+        # Only a successful write is remembered (F1).
+        record_pushed(pushed_path, asin, position_ms, listening_at)
 
 
 def write_remote(path: Path, items: dict[str, dict[str, Any]]) -> None:

@@ -201,6 +201,17 @@ def test_split_push_args_reads_the_local_timestamp():
         commands.split_push_args(["B00FAKE01", "1000", "--at=2026-01-01T00:00:00Z"])
         == expected
     )
+    # An empty value is no value: the caller refuses it (F3).
+    assert commands.split_push_args(["B00FAKE01", "1000", "--at="]) == (
+        "B00FAKE01",
+        "1000",
+        None,
+    )
+    assert commands.split_push_args(["B00FAKE01", "1000", "--at"]) == (
+        "B00FAKE01",
+        "1000",
+        None,
+    )
 
 
 # --- the CLI in fake mode ----------------------------------------------------
@@ -233,7 +244,15 @@ def test_position_get_keeps_the_other_cached_books(run_cli, fake_paths):
 
 def test_fake_position_push_succeeds(run_cli, validate_stream):
     parsed = validate_stream(
-        run_cli("position-push", "B00FAKE01", "1234", fake=True), expect_last="done"
+        run_cli(
+            "position-push",
+            "B00FAKE01",
+            "1234",
+            "--at",
+            "2026-01-01T00:00:00Z",
+            fake=True,
+        ),
+        expect_last="done",
     )
     assert [event["type"] for event in parsed] == ["done"]
 
@@ -246,7 +265,14 @@ def test_position_get_needs_an_asin(run_cli, validate_stream):
 
 
 def test_position_push_validates_its_arguments(run_cli, validate_stream):
-    bad_ms = run_cli("position-push", "B00FAKE01", "not-a-number", fake=True)
+    bad_ms = run_cli(
+        "position-push",
+        "B00FAKE01",
+        "not-a-number",
+        "--at",
+        "2026-01-01T00:00:00Z",
+        fake=True,
+    )
     assert bad_ms.returncode == protocol.EXIT_USAGE
     assert validate_stream(bad_ms, expect_last="error")[-1]["code"] == (
         protocol.ErrorCode.INVALID_ARGS
@@ -254,6 +280,23 @@ def test_position_push_validates_its_arguments(run_cli, validate_stream):
 
     missing = run_cli("position-push", "B00FAKE01", fake=True)
     assert missing.returncode == protocol.EXIT_USAGE
+
+
+def test_position_push_requires_at(run_cli, validate_stream):
+    """F3: without the local listening time the stale check cannot fire."""
+    for args in (
+        ("B00FAKE01", "1000"),
+        ("B00FAKE01", "1000", "--at="),
+        ("B00FAKE01", "1000", "--at"),
+        ("B00FAKE01", "1000", "--at", ""),
+        ("B00FAKE01", "1000", "--at", "   "),
+        ("B00FAKE01", "1000", "--at=   "),
+    ):
+        result = run_cli("position-push", *args, fake=True)
+        assert result.returncode == protocol.EXIT_USAGE, args
+        parsed = validate_stream(result, expect_last="error")
+        assert parsed[-1]["code"] == protocol.ErrorCode.INVALID_ARGS, args
+        assert "--at" in parsed[-1]["message"] or "--at" in parsed[-1]["hint"]
 
 
 def test_position_push_refuses_a_stale_local_position(monkeypatch, capsys, paths):

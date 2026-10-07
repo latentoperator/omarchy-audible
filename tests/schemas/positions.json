@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "positions event",
-  "description": "Payload of `position-get` (ARCHITECTURE 4.2, 4.6): one entry per requested ASIN, keyed by ASIN. `updated_at` is null when the account has no position for the book.",
+  "description": "Payload of `position-get` (ARCHITECTURE 4.2, 4.6): one entry per requested ASIN, keyed by ASIN. `updated_at` is null when the account has no position for the book. `own` is true when the remote ms exactly equals this device's last successful push for that ASIN (P6, F1), and is omitted otherwise.",
   "type": "object",
   "required": ["type", "items"],
   "properties": {
@@ -13,7 +13,8 @@
         "required": ["ms", "updated_at"],
         "properties": {
           "ms": { "type": "integer", "minimum": 0 },
-          "updated_at": { "type": ["string", "null"] }
+          "updated_at": { "type": ["string", "null"] },
+          "own": { "type": "boolean" }
         },
         "additionalProperties": false
       }

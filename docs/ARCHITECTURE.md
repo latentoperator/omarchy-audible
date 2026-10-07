@@ -73,6 +73,7 @@ Theming rule: import `qs.Commons` and `qs.Ui` and use `Style`/theme tokens only.
 | `~/.local/share/omarchy-audible/venv/` | Python venv: pinned `audible-cli`, `audible[cryptography]`, and this repo's `backend/` package | |
 | `~/.local/share/omarchy-audible/catalog.json` | Library metadata cache. **Written only by the backend** (`sync`) | |
 | `~/.local/share/omarchy-audible/remote.json` | Remote positions cache `{asin: {ms, updated_at}}`. **Written only by the backend** (`sync`, `position-get`) | |
+| `~/.local/share/omarchy-audible/pushed.json` | This device's own recent pushes `{asin: {ms, at}}`, so its own echo is never mistaken for a newer position (P6, F1). **Written only by the backend** (`position-push`) | |
 | `~/.local/share/omarchy-audible/state.json` | Local positions, last-played times, push queue. **Written only by `Service.qml`** | |
 | `~/.local/share/omarchy-audible/covers/<asin>.jpg` | Cover thumbnails | |
 | `<booksDir>/<asin>/book.m4b` | Decrypted audio, chapters embedded — **old downloads only**, before B11 | |
@@ -135,8 +136,8 @@ play-info <asin>            → {"type":"play_info","path":".../book.aaxc","chap
 cancel <asin>               → done | error(code=not_running)   (signals the running `get`, see §4.8)
 remove <asin>               → {"type":"done","freed_bytes":N}      (LOCAL ONLY — see §4.4)
 local                       → {"type":"local","books":[{"asin":…,"size":N,"downloaded_at":…}]}
-position-get <asin…>        → {"type":"positions","items":{"<asin>":{"ms":N,"updated_at":"…"|null}}}
-position-push <asin> <ms>   → done | error(code=unsupported|network)
+position-get <asin…>        → {"type":"positions","items":{"<asin>":{"ms":N,"updated_at":"…"|null,"own":true?}}}
+position-push <asin> <ms> --at <iso-8601> → done | error(code=invalid_args|stale|unsupported|network)
 doctor                      → {"type":"doctor","checks":[{"name":…,"ok":bool,"detail":…}]}
 ```
 
@@ -195,15 +196,18 @@ Write ✅ S3: `PUT 1.0/lastpositions/{asin}` with `{acr, asin, position_ms}`; `a
 **The phone moves to a pushed position by itself** (it shows a notice with undo, it does not ask). So a wrong push silently moves the user's phone. Push rules:
 - Push only positions produced by **listening on this machine**: on pause, stop, book switch, quit, and every ~60 s while playing.
 - Never push from `sync`, from the merge, or for a book not played locally since it was downloaded.
-- Never push a position older than the remote `updated_at` (the user listened elsewhere since). Re-read the remote position immediately before a push.
+- Never push a position older than the remote `updated_at` (the user listened elsewhere since). Re-read the remote position immediately before a push. This device's own echo is never "newer" — see below.
+- `position-push` **requires** `--at` (the local listening time the position came from). Without it the stale check cannot fire, so the command is `error(code=invalid_args)` with the usage exit code (F3).
 
 `last_updated` has no timezone (`YYYY-MM-DD HH:MM:SS.f`). It looks like UTC; B6 confirms against a write at a known time.
+
+**Own echo (P6, F1).** The account stamps a push with the **server** clock, so this device's own previous push can look newer than the next listening time whenever the computer's clock runs behind the server by more than the push interval. `position-push` therefore remembers its own writes: after every successful `port.push` it records `{ms, at}` for that ASIN in `<data dir>/pushed.json` (atomic tmp + rename; only the backend writes it, and a failed push records nothing). A re-read remote entry whose `ms` **equals** the recorded `ms` for that ASIN is this device's own echo and is never newer, whatever its `updated_at`; every other entry keeps the newest-wins rule, so a phone position with a different `ms` and a newer stamp is still `stale`. `position-get` marks the same exact match with `"own": true` in its `positions` event so the service can tell an echo from another device's listening (`qml/lib/Positions.js` `flushPlan` never drops a queued push whose remote item is `own`).
 
 Merge rule: take the entry with the newest `updated_at` between local `state.json` and remote. If remote is newer, resume there (the user listened elsewhere).
 
 When the rule runs: a Library pick always reads the account (`position-get`, purpose `resume`) before loading. ⏯ on a book already loaded and paused (Mini, Space, middle-click, IPC `playPause`, all through `Service.playPause`) reads it only after a pause of 30 s or more, or when the pause time is unknown after a shell restart; opening the drawer on such a book starts the read early (purpose `catchup`, a result is used for 60 s). ⏯ waits up to 3 s for it, showing "Checking Audible…", then resumes locally. It seeks only when the account entry is newer than the local one, at least 2 s from the player, and not exactly a position this laptop wrote (its last push or its saved pause position: the account stamps the laptop's own push with the server's later clock and keeps the value to the millisecond), so a skip made while paused is kept. A second ⏯ while it waits cancels the resume. The thresholds live in `qml/lib/Catchup.js` (G3 finding 5).
 
-Fake mode keeps its own positions in its own tree: `position-push --fake` writes `{ms, updated_at}` (`updated_at` is the `--at` value, else now) to `<fake data dir>/fake-account-positions.json`, and `position-get --fake` and `sync --fake` read it back, so the stale check and resume-from-the-account can be exercised with no account; real mode is unchanged and the file never exists in the real tree.
+Fake mode keeps its own positions in its own tree: `position-push --fake` writes `{ms, updated_at}` (`updated_at` is the `--at` value) to `<fake data dir>/fake-account-positions.json`, and `position-get --fake` and `sync --fake` read it back, so the stale check and resume-from-the-account can be exercised with no account; real mode is unchanged and the file never exists in the real tree. `pushed.json` follows the same rule: fake mode writes it under the fake data dir.
 
 "Recently listened" sort key = `max(local last_played_at, remote last_updated)`. Fetch remote positions for all catalog asins in batches during `sync` and cache them in `state.json`.
 
@@ -228,6 +232,7 @@ Existing-login import (`login-import-cli`) validates `~/.audible/<primary profil
 |---|---|---|
 | `catalog.json`, covers | backend `sync` | Service/LibraryModel |
 | `remote.json` | backend `sync`, `position-get` | Service/LibraryModel |
+| `pushed.json` | backend `position-push` | backend `position-get`, `position-push` |
 | `state.json` | `Service.qml` only (atomic `FileView` write) | Service; backend never reads it |
 | `<booksDir>/<asin>/` | backend `get`, `remove` | LibraryModel (directory scan) |
 | auth files | backend `login-*`, `logout` | backend |
