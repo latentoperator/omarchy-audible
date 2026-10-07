@@ -41,6 +41,27 @@ function playFailure(connection, lastError, playError) {
   return "";
 }
 
+// The reason a play of one book failed, naming the book by its title from the
+// catalog row (U10c). The ASIN is used only when there is no title. A book
+// that is not on this device gets its own sentence; any other message has the
+// ASIN replaced by the name, or the name put in front when it has no ASIN.
+function playErrorText(code, message, asin, title) {
+  var id = typeof asin === "string" ? asin.trim() : "";
+  var named = typeof title === "string" ? title.trim() : "";
+  var name = named.length > 0 ? named : id.length > 0 ? id : "this book";
+  if (code === "not_local") {
+    return name + " isn't downloaded on this device";
+  }
+  var text = typeof message === "string" && message.trim().length > 0 ? message.trim() : "unknown error";
+  if (id.length > 0 && text.indexOf(id) !== -1) {
+    return text.split(id).join(name);
+  }
+  if (named.length === 0 && id.length === 0) {
+    return text;
+  }
+  return name + ": " + text;
+}
+
 function isNumber(value) {
   return typeof value === "number" && isFinite(value);
 }

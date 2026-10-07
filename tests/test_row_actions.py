@@ -145,8 +145,8 @@ def test_the_question_scrolls_into_view():
     # again must never confirm a question the user can't fully see.
     library = read("qml/views/LibraryView.qml")
     assert (
-        "onHeightChanged: if (revealQuestion && confirming) books.positionViewAtIndex(index, ListView.Contain)"
-        in library
+        "onHeightChanged: if (revealQuestion && (confirming || asking)) "
+        "books.positionViewAtIndex(index, ListView.Contain)" in library
     )
     # Codex R2: only a question just opened scrolls; a delegate recreated with
     # `confirming` already true starts with revealQuestion false.
@@ -154,7 +154,10 @@ def test_the_question_scrolls_into_view():
     # Codex R3: Qt reports the initial binding as a change, so only changes
     # after the delegate is complete arm the scroll.
     assert "Component.onCompleted: created = true" in library
-    assert "onConfirmingChanged: if (created) revealQuestion = confirming" in library
+    # U10b: the finished-book question on the row scrolls the same way.
+    for signal in ("onConfirmingChanged", "onAskingChanged"):
+        line = f"{signal}: if (created) revealQuestion = confirming || asking"
+        assert line in library
 
 
 def test_finished_download_does_not_play():

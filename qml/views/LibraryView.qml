@@ -268,6 +268,7 @@ ColumnLayout {
         iconTooltip: LibraryUi.rowIcon(modelData, root.offline).tooltip
         confirming: root.service ? root.service.confirmAsin === modelData.asin : false
         questionText: confirming ? root.questionText(modelData) : ""
+        asking: root.service ? root.service.askAsin === modelData.asin : false
         onPicked: root.pickAt(index)
         onRemoveRequested: root.service.removeBook(modelData.asin)
         // The question makes the row taller; keep all of it in view. Only for
@@ -278,10 +279,13 @@ ColumnLayout {
         property bool revealQuestion: false
         property bool created: false
         Component.onCompleted: created = true
-        onConfirmingChanged: if (created) revealQuestion = confirming
-        onHeightChanged: if (revealQuestion && confirming) books.positionViewAtIndex(index, ListView.Contain)
+        onConfirmingChanged: if (created) revealQuestion = confirming || asking
+        onAskingChanged: if (created) revealQuestion = confirming || asking
+        onHeightChanged: if (revealQuestion && (confirming || asking)) books.positionViewAtIndex(index, ListView.Contain)
         onConfirmRequested: root.service.confirmDownload()
         onCancelRequested: root.service.cancelConfirm()
+        onResumeRequested: root.service.answerAsk(true)
+        onStartOverRequested: root.service.answerAsk(false)
       }
     }
   }
