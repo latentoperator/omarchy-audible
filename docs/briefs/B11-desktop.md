@@ -4,6 +4,8 @@ You are finishing B11 on Chris's desktop (HMSP-OMARCHYBEE), inside the real Omar
 
 ## 0. Before you start
 
+Work only in the live checkout and its worktrees on BEE. The Hopebox copy mounted at `~/Hopebox/...` is CIFS and can't execute anything (review brief §4.1), so treat it as read-only.
+
 1. **Don't put `b11` in the live plugin folder until you're ready to test real mode.** The live plugin is `~/.config/omarchy/plugins/latentoperator.audible`, a git checkout on `main` that Chris listens on daily. Develop in a worktree under `~/Projects/oa-wt/b11` (never inside `~/.config/omarchy/plugins/`): `git -C ~/.config/omarchy/plugins/latentoperator.audible fetch origin && git -C ~/.config/omarchy/plugins/latentoperator.audible worktree add -b b11-desktop ~/Projects/oa-wt/b11 origin/b11`.
 2. To run the shell on your branch, switch the live folder to `b11-desktop` (that branch is checked out in your worktree, so commit there and use `git checkout --detach <sha>` in the live folder), then restart once. Before you leave, put the live folder back on `main` and restart, unless Dante has already merged `b11` into `main`.
 3. Read `docs/STATE.md`, PLAN's B11 entry, `docs/SPIKE-RESULTS.md` S7 (the whole section, especially "Not covered here" and the PCM check), and `docs/ARCHITECTURE.md` §3, §4.2 (`play-info`), §4.3 and §5.1 as updated on `b11`. Then read `docs/briefs/M4-desktop.md` §0–§3 and `docs/briefs/M3-laptop.md` §2–§3. Their hard rules and dev loop apply here unchanged.
@@ -46,7 +48,8 @@ Record each step in `docs/MANUAL-TEST.md` under a new `## B11` heading: one line
 6. **Old books still play:** Carl (`book.m4b`, 50 chapters) plays, seeks and resumes as before.
 7. **J6 in full** (carried over from G4): finish a book, Remove from this device, download it again, and play. It resumes where Audible says, and the finished book's Resume / Start over prompt behaves as it did before B11.
 8. **Shell restart during playback** of a locked book: the audio continues and the service reattaches with live state.
-9. **Fake mode** still works end to end (fake get → play, including `OMARCHY_AUDIBLE_FAKE_CHAPTERS=120`), and `make test`, `make check-symlinks` and `omarchy plugin validate .` pass on the branch.
+9. **B15, `last_updated` is UTC** (review F2): during step 2 or 7, note the wall-clock UTC time of one real position push, read it back with `position-get`, and record the offset between `updated_at` and that time in `docs/SPIKE-RESULTS.md` S3 (offset in seconds only).
+10. **Fake mode** still works end to end (fake get → play, including `OMARCHY_AUDIBLE_FAKE_CHAPTERS=120`), and `make test`, `make check-symlinks` and `omarchy plugin validate .` pass on the branch.
 
 ## 5. Review and merge
 
