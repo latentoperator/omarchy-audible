@@ -17,6 +17,7 @@ import json
 import os
 import re
 import shutil
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -149,13 +150,23 @@ def scan_local(books_dir: Path) -> list[dict[str, Any]]:
     return books
 
 
-def play_info_payload(paths: Paths, asin: str) -> dict[str, Any]:
+def play_info_payload(
+    paths: Paths,
+    asin: str,
+    *,
+    fetch_activation: Callable[[], str | None] | None = None,
+) -> dict[str, Any]:
     """The ``play_info`` event payload for a local book (ARCHITECTURE 4.2, D7).
 
     ``lavf_options`` is the ready-made mpv ``demuxer-lavf-o`` value: the aaxc
     voucher key/iv, the account activation bytes for a legacy aax, or ``""``
     for an old ``book.m4b``. It is a secret; it is emitted only here, and only
-    after validating the ASIN. Real mode never makes a network call.
+    after validating the ASIN.
+
+    A legacy aax with no activation bytes on disk calls ``fetch_activation``
+    once (B13: real mode's lazy fill, a single network call that writes the key
+    ``0600`` and returns it); if that returns nothing the error stays
+    ``decrypt``. aaxc and old ``book.m4b`` books never call it.
     """
     target = validate_asin(paths.books_dir, asin)
     audio = local_audio_file(target)
@@ -186,11 +197,13 @@ def play_info_payload(paths: Paths, asin: str) -> dict[str, Any]:
             lavf = f"audible_key={voucher_key},audible_iv={iv}"
         else:
             activation = read_activation_bytes(paths)
+            if not activation and fetch_activation is not None:
+                activation = fetch_activation()
             if not activation:
                 raise PipelineError(
                     ErrorCode.DECRYPT,
                     "the account's activation bytes are missing",
-                    hint="sign in again, or run: omarchy-audible login-import-cli",
+                    hint="check the network connection and try again",
                 )
             lavf = f"activation_bytes={activation}"
     return {

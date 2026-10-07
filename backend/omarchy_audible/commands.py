@@ -10,6 +10,7 @@ job/non-job classification (ARCHITECTURE 4.8), which is what the job lock uses.
 from __future__ import annotations
 
 import contextlib
+import functools
 import os
 import shutil
 import signal
@@ -22,7 +23,9 @@ from typing import Self
 
 from . import fakestate, joblock, protocol
 from .auth import (
+    AudiblePort,
     account_from_auth_file,
+    fetch_activation_bytes,
     login_finish,
     login_import_cli,
     login_start,
@@ -440,13 +443,23 @@ def cmd_local(args: Sequence[str], *, command: str, fake: bool, paths: Paths) ->
 
 
 def cmd_play_info(
-    args: Sequence[str], *, command: str, fake: bool, paths: Paths
+    args: Sequence[str],
+    *,
+    command: str,
+    fake: bool,
+    paths: Paths,
+    api: AudiblePort | None = None,
 ) -> int:
     """Describe how to play a local book (ARCHITECTURE 4.2, D7).
 
     A non-job command: it never takes ``job.lock``, so the drawer can ask about
     a book while another one is downloading. The ``lavf_options`` value it emits
     is a secret; it is the only event that carries one.
+
+    For a legacy aax book whose ``activation_bytes`` is missing and a saved
+    login exists, real mode fetches the key once and writes it ``0600`` (B13):
+    ``play-info`` is the one non-job command that may make a single network call.
+    Fake mode never does.
     """
     positional = _positional_args(args)
     asin = positional[0] if positional else None
@@ -458,8 +471,12 @@ def cmd_play_info(
         )
         return protocol.EXIT_USAGE
 
+    fetch_activation = None
+    if not fake and paths.auth_file.is_file():
+        fetch_activation = functools.partial(fetch_activation_bytes, paths, api=api)
+
     try:
-        payload = play_info_payload(paths, asin)
+        payload = play_info_payload(paths, asin, fetch_activation=fetch_activation)
     except PipelineError as exc:
         protocol.error(exc.code, exc.message, exc.hint)
         return _error_exit(exc)
@@ -655,7 +672,7 @@ def cmd_login_finish(
     # so it is read from stdin and dropped as soon as it has been used.
     pasted = sys.stdin.read()
     try:
-        contains = login_finish(
+        outcome = login_finish(
             paths, session_id=session_id, pasted_url=pasted, fake=fake
         )
     except PipelineError as exc:
@@ -663,7 +680,12 @@ def cmd_login_finish(
         return _error_exit(exc)
     finally:
         pasted = ""
-    protocol.done(clipboard_history_contains_code=contains)
+    fields: dict[str, object] = {
+        "clipboard_history_contains_code": outcome.clipboard_contains_code
+    }
+    if outcome.warning is not None:
+        fields["warning"] = outcome.warning
+    protocol.done(**fields)
     return protocol.EXIT_OK
 
 

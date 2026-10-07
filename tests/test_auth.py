@@ -233,10 +233,11 @@ def test_login_finish_registers_and_writes_private_files(paths: Paths):
     port = FakeAudible()
     session_id = auth.login_start(paths, marketplace="us", fake=False, api=port)
 
-    contains = auth.login_finish(
+    outcome = auth.login_finish(
         paths, session_id=session_id, pasted_url=URL, fake=False, api=port
     )
-    assert contains is False
+    assert outcome.clipboard_contains_code is False
+    assert outcome.warning is None
 
     assert not paths.login_session(session_id).exists()
     for path in (
