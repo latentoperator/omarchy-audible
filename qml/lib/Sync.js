@@ -14,8 +14,9 @@ var BATCH_SIZE = 25;
 // behind the server's.
 var STALE_NOTICE_AFTER = 2;
 
-// The offline retry (F18): a minute after the first failed flush, doubling
-// with each failure after it, and never more than half an hour apart.
+// The offline retry (F18): a minute apart while no flush has failed, doubling
+// with each failed flush in a row (two minutes after the first), and never
+// more than half an hour apart.
 var RETRY_BASE_MS = 60000;
 var RETRY_CAP_MS = 1800000;
 
