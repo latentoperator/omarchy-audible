@@ -32,7 +32,9 @@ def try_acquire(lock_path: Path) -> int | None:
     Returns an open file descriptor that holds the lock, or ``None`` when it is
     already held.
     """
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    # The job lock and job.json live here; keep the directory private (0700)
+    # even when it is the /tmp fallback (F13).
+    fsutil.ensure_private_dir(lock_path.parent)
     fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
