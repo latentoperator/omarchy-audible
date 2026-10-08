@@ -16,6 +16,7 @@ import "qml/lib/Player.js" as Player
 import "qml/lib/PlayRequest.js" as PlayRequest
 import "qml/lib/Positions.js" as Positions
 import "qml/lib/Signin.js" as Signin
+import "qml/lib/Unload.js" as Unload
 
 // Headless singleton. Owns the backend, mpv and shared state in later tasks.
 // Bar widgets register as surfaces and are views only.
@@ -84,7 +85,6 @@ Item {
   // views' "Couldn't start playback" line.
   property string playError: ""
   readonly property string playFailure: Player.playFailure(player.connection, player.lastError, playError)
-  property string removeCandidate: ""
   property var resumeRemotes: ({})
 
   // ⏯ catching up with other devices (Catchup.js). `pausedAtMs` is when the
@@ -151,14 +151,15 @@ Item {
   property var reopenSurface: null
   // Volume and speed waiting for settingsTimer (F21).
   property var pendingSettings: null
-  // Books to remove once the player has unloaded them.
-  property var removeAfterUnload: []
+  // Books to remove once the player has unloaded them (Removals), for the
+  // Library's "removing" state.
+  readonly property var removeAfterUnload: removals.waiting
   property real lastSyncAttemptAtMs: 0
 
   // mpv may report playing before the new path, so check on both.
   onLoadedAsinChanged: {
     reopenOnMini()
-    flushRemovals()
+    removals.flush()
   }
 
   // Onboarding (U3). `reconnecting` reopens Connect after `auth_failed`;
@@ -497,35 +498,12 @@ Item {
     return Positions.isFinished(player.positionMs, player.durationMs, player.derived.eof && player.durationMs > 0)
   }
 
-  // Evaluated on pause, stop and every save tick. Auto-remove waits a moment
-  // and checks again, so a transient pause while mpv reloads cannot trigger it.
+  // Evaluated on pause, stop and every save tick. A finished book may then be
+  // auto-removed (Removals).
   function checkFinished(asin) {
     if (!atEnd(asin)) return
     store.markFinished(asin)
-    if (autoRemoveFinished) {
-      removeCandidate = asin
-      autoRemoveTimer.restart()
-    }
-  }
-
-  // Checked by the job runner just before a queued job starts. An auto-remove
-  // that waited behind another job must not run if the book is playing again.
-  function jobAllowed(job) {
-    // A removal queued before the book was played again must not delete it.
-    if (job.command === "remove" && job.purpose === "user") return Drawer.removalAllowed(job.args[0], busyAsins())
-    if (job.purpose !== "autoremove") return true
-    return Positions.autoRemoveAllowed(autoRemoveFinished, atEnd(job.args[0]), player.playing)
-  }
-
-  function removeIfStillFinished() {
-    var asin = removeCandidate
-    removeCandidate = ""
-    if (asin.length === 0) return
-    if (!Positions.autoRemoveAllowed(autoRemoveFinished, atEnd(asin), player.playing)) return
-    // The loaded book goes the way the user's Remove does: unload first, then
-    // remove once mpv has let go of the file (F17).
-    if (asin === loadedAsin) removeBook(asin)
-    else run("remove", [asin], "autoremove")
+    removals.noteFinished(asin)
   }
 
   // The saved position for a book: the library's merged one, else the local
@@ -594,8 +572,7 @@ Item {
     if (pendingResume !== asin) pendingResume = ""
     // A play still waiting for its play-info is overtaken by any new intent.
     playRequest = null
-    removeAfterUnload = removeAfterUnload.filter(function(a) { return a !== asin })
-    if (removeAfterUnload.length === 0) unloadTimer.stop()
+    removals.dropIntent(asin)
   }
 
   // Books a removal must not touch: loaded, resuming, waiting for play-info,
@@ -750,8 +727,9 @@ Item {
   }
 
   // Any local book can be removed (FR-S2). The loaded one is unloaded first
-  // (the player saves its position) and removed once it is gone.
-  function removeBook(asin) {
+  // (the player saves its position) and removed once it is gone (Removals).
+  // `purpose` is Unload.PURPOSE_AUTO for an auto-remove, else the user's.
+  function removeBook(asin, purpose) {
     if (!Drawer.canRemove(library.rowFor(asin))) return "error: not removable"
     // A question about a book being removed no longer has a file to play.
     if (askAsin === asin) askAsin = ""
@@ -759,34 +737,11 @@ Item {
     // read or a play-info): drop it, or its reply would start the book again.
     if (PlayRequest.busyAsin(playRequest) === asin) playRequest = null
     if (pendingResume === asin) pendingResume = ""
-    if (asin === loadedAsin) {
-      if (removeAfterUnload.indexOf(asin) < 0) removeAfterUnload = removeAfterUnload.concat([asin])
-      unloadTimer.restart()
-      player.quit()
-      return "unloading"
-    }
+    if (asin === loadedAsin) return removals.unloadThenRemove(asin, purpose === Unload.PURPOSE_AUTO ? purpose : Unload.PURPOSE_USER)
     return run("remove", [asin], "user") ? "ok" : "error: refused"
   }
 
-  function flushRemovals() {
-    var busy = busyAsins()
-    var ready = removeAfterUnload.filter(function(asin) { return Drawer.removalAllowed(asin, busy) })
-    removeAfterUnload = removeAfterUnload.filter(function(asin) { return ready.indexOf(asin) < 0 })
-    if (removeAfterUnload.length === 0) unloadTimer.stop()
-    ready.forEach(function(asin) { run("remove", [asin], "user") })
-  }
-
-  // The player never let go of a book it was asked to unload: give up.
-  function abandonRemovals() {
-    removeAfterUnload.forEach(function(asin) { logEvent("remove", "skipped " + asin + ": the player did not unload it") })
-    removeAfterUnload = []
-  }
-
-  function removeAll() {
-    var asins = Drawer.removableAsins(library.allRows)
-    asins.forEach(function(asin) { removeBook(asin) })
-    return String(asins.length)
-  }
+  function removeAll() { return removals.removeAll() }
 
 
   function onboardingFinished(job, outcome) {
@@ -877,6 +832,13 @@ Item {
     stateDoc: store.doc
     coversDir: root.dataDir.length > 0 ? root.dataDir + "/covers" : ""
     jobs: Playback.jobStates(runner.pendingJobs, runner.activeJob, runner.progress, root.failures)
+  }
+
+  Removals {
+    id: removals
+    service: root
+    player: player
+    library: library
   }
 
   PositionSync {
@@ -987,13 +949,6 @@ Item {
     }
   }
 
-  Timer {
-    id: unloadTimer
-    interval: 10000
-    repeat: false
-    onTriggered: root.abandonRemovals()
-  }
-
   // A pick whose playback never starts stops waiting to reopen the panel.
   Timer {
     id: reopenTimer
@@ -1007,13 +962,6 @@ Item {
     interval: 1000
     repeat: false
     onTriggered: root.saveSettings()
-  }
-
-  Timer {
-    id: autoRemoveTimer
-    interval: 2000
-    repeat: false
-    onTriggered: root.removeIfStillFinished()
   }
 
   // Push about once a minute while playing.
@@ -1062,7 +1010,7 @@ Item {
 
   JobRunner {
     id: runner
-    gate: root.jobAllowed
+    gate: removals.jobAllowed
     launcher: root.pluginDir + "/bin/omarchy-audible"
     environment: root.fake ? ({ "OMARCHY_AUDIBLE_FAKE": "1" }) : ({})
 
