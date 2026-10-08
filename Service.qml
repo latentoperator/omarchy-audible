@@ -6,7 +6,6 @@ import "qml/lib/Catchup.js" as Catchup
 import "qml/lib/Drawer.js" as Drawer
 import "qml/lib/EventLog.js" as EventLog
 import "qml/lib/Format.js" as Format
-import "qml/lib/Ipc.js" as Ipc
 import "qml/lib/Library.js" as Library
 import "qml/lib/LibraryUi.js" as LibraryUi
 import "qml/lib/Mpv.js" as Mpv
@@ -1025,137 +1024,15 @@ Item {
     onTriggered: root.savePosition(root.snapAsin, root.snapMs, true)
   }
 
-  // Shell IPC target (ARCHITECTURE 6). Every argument and return value is a
-  // string: "ok", or a short error string. Nothing here throws.
-  IpcHandler {
-    target: "latentoperator.audible"
-
-    function toggle(): string {
-      var surface = root.primarySurface()
-      if (!surface) return "error: no surface"
-      surface.toggle()
-      return "ok"
-    }
-
-    function openLibrary(): string {
-      var surface = root.primarySurface()
-      if (!surface) return "error: no surface"
-      surface.open()
-      root.showView(Panel.VIEW_LIBRARY)
-      return "ok"
-    }
-
-    function playPause(): string {
-      return root.playPause()
-    }
-
-    function skip(seconds: string): string {
-      var value = Ipc.parseSeconds(seconds)
-      if (value === null) return "error: bad seconds"
-      if (!player.loaded) return "error: nothing loaded"
-      player.skip(value)
-      return "ok"
-    }
-
-    function nextChapter(): string {
-      if (!player.loaded) return "error: nothing loaded"
-      player.nextChapter()
-      return "ok"
-    }
-
-    function prevChapter(): string {
-      if (!player.loaded) return "error: nothing loaded"
-      player.prevChapter()
-      return "ok"
-    }
-
-    // Test methods so agents can drive the service without input. Each one
-    // works only in fake mode and returns Ipc.DEV_ONLY otherwise (H1 F27);
-    // Ipc.js lists the public and read-only status methods that stay.
-    function play(asin: string): string { if (!root.fake) return Ipc.DEV_ONLY; root.noteIntent(asin); return root.playBook(asin, -1) }
-    function playAt(asin: string, startSec: string): string { if (!root.fake) return Ipc.DEV_ONLY; root.noteIntent(asin); return root.playBook(asin, Number(startSec) || 0) }
-    function pause(): string { if (!root.fake) return Ipc.DEV_ONLY; player.pause(); return "ok" }
-    function resume(): string { if (!root.fake) return Ipc.DEV_ONLY; player.resume(); return "ok" }
-    function chapter(index: string): string { if (!root.fake) return Ipc.DEV_ONLY; player.setChapter(Number(index) || 0); return "ok" }
-    function speed(value: string): string { if (!root.fake) return Ipc.DEV_ONLY; player.setSpeed(Number(value)); return "ok" }
-    function volume(value: string): string { if (!root.fake) return Ipc.DEV_ONLY; player.setVolume(Number(value)); return "ok" }
-    function sleepMinutes(minutes: string): string { if (!root.fake) return Ipc.DEV_ONLY; player.setSleepTimer(Number(minutes) || 0); return "ok" }
-    function sleepChapter(): string { if (!root.fake) return Ipc.DEV_ONLY; player.setSleepEndOfChapter(); return "ok" }
-    function sleepCancel(): string { if (!root.fake) return Ipc.DEV_ONLY; player.cancelSleep(); return "ok" }
-    function quitPlayer(): string { if (!root.fake) return Ipc.DEV_ONLY; root.quitPlayer(); return "ok" }
-    function playerStatus(): string { return root.playerSummary() }
-    function libraryQuery(sort: string, filter: string, search: string): string { if (!root.fake) return Ipc.DEV_ONLY; return root.libraryQuery(sort, filter, search) }
-    function flushState(): string { if (!root.fake) return Ipc.DEV_ONLY; store.flush(); return "ok" }
-    function syncNow(): string { if (!root.fake) return Ipc.DEV_ONLY; return root.run("sync", [], "ipc") ? "ok" : "refused" }
-    function pick(asin: string): string { if (!root.fake) return Ipc.DEV_ONLY; return root.pick(asin) }
-    function answer(choice: string): string { if (!root.fake) return Ipc.DEV_ONLY; return root.answerAsk(choice === "resume") }
-    function confirmDownload(): string { if (!root.fake) return Ipc.DEV_ONLY; return root.confirmDownload() }
-    function cancelConfirm(): string { if (!root.fake) return Ipc.DEV_ONLY; return root.cancelConfirm() }
-    function removeBook(asin: string): string { if (!root.fake) return Ipc.DEV_ONLY; return root.removeBook(asin) }
-    function libraryState(): string {
-      return JSON.stringify({ "list": root.listState, "ask": root.askAsin, "confirm": root.confirmAsin, "reopen": root.reopenAsin,
-        "syncing": root.syncing, "lastSyncCode": root.lastSyncCode, "count": library.count,
-        "total": library.allRows.length, "storage": LibraryUi.storage(library.localBooks) })
-    }
-    function onboardingState(): string {
-      var st = root.status || {}
-      return JSON.stringify({ "step": root.onboardingStep, "phase": root.loginPhase,
-        "reconnecting": root.reconnecting, "authFailed": root.authFailed, "error": root.onboardingError,
-        "pasteRejected": root.pasteRejected, "pasteEmpty": root.pasteEmpty, "notice": root.clipboardNotice.length > 0,
-        "authenticated": st.authenticated === true, "venvReady": st.venv_ready, "missing": st.missing || [],
-        "account": st.account || null, "marketplace": st.marketplace || null, "view": root.view,
-        "heldInputs": Object.keys(runner.inputs).length })
-    }
-    // Onboarding actions for tests: fake mode only, so IPC can never sign in,
-    // sign out or set up the real account.
-    function fakeOnboarding(action: string, arg: string): string {
-      if (!root.fake) return Ipc.DEV_ONLY
-      if (action === "status") { root.checkStatus(); return "ok" }
-      if (action === "setup") return root.startSetup()
-      if (action === "login") return root.startLogin(arg.length > 0 ? arg : Signin.DEFAULT_MARKETPLACE)
-      if (action === "finish") return root.finishLogin(arg)
-      if (action === "import") return root.importCliLogin()
-      if (action === "logout") return root.disconnect()
-      if (action === "reconnect") { root.reconnect(); return "ok" }
-      if (action === "authfail") { root.authFailed = true; return "ok" }
-      return "error: unknown action"
-    }
-    // Fake mode only: a download that fails with a `--fake-fail` mode.
-    function fakeFailGet(asin: string, mode: string): string {
-      if (!root.fake) return Ipc.DEV_ONLY
-      return root.run("get", [asin, "--fake-fail", mode], "download") ? "ok" : "refused"
-    }
-    function autoRemove(value: string): string { if (!root.fake) return Ipc.DEV_ONLY; root.autoRemoveFinished = value === "on"; return "ok" }
-    function pushState(): string { return JSON.stringify({ "queue": sync.queue, "flushing": sync.flushing, "last": sync.lastResult,
-      "staleCount": sync.consecutiveStale, "staleNotice": sync.staleNotice,
-      "failedFlushes": sync.failedFlushes, "retryMs": sync.retryIntervalMs }) }
-    // Opens the panel on a view (Onboarding.view still decides: Mini or Full
-    // with nothing loaded shows the Library). Returns the view shown. Fake
-    // mode only: opening the panel can read positions or start a sync.
-    function view(name: string): string {
-      if (!root.fake) return Ipc.DEV_ONLY
-      if (Panel.VIEWS.indexOf(name) === -1) return "error: unknown view"
-      var surface = root.primarySurface()
-      if (!surface) return "error: no surface"
-      if (!surface.opened) surface.open()
-      root.showView(name)
-      return root.view
-    }
-    function chapterList(state: string): string {
-      if (!root.fake) return Ipc.DEV_ONLY
-      if (state !== "open" && state !== "close") return "error: open or close"
-      if (state === "open" && (!player.loaded || player.chapters.length === 0)) return "error: no chapters"
-      root.chapterListOpen = state === "open"
-      return "ok"
-    }
-    function panelState(): string {
-      var open = root.surfaces.some(function(s) { return s.opened === true })
-      return JSON.stringify({ "open": open, "view": root.view, "chapterList": root.chapterListOpen,
-        "glyph": root.barGlyph, "tooltip": root.tooltipText })
-    }
-    function events(): string {
-      return root.recentEvents.map(function(e) { return e.label + "  " + e.text }).join("\n")
-    }
+  // Shell IPC target (ARCHITECTURE 6): the one IpcHandler, a child of the
+  // service (qml/ServiceIpc.qml).
+  ServiceIpc {
+    service: root
+    library: library
+    player: player
+    runner: runner
+    store: store
+    sync: sync
   }
 
   FileView {

@@ -72,12 +72,12 @@ def test_over_the_bound_is_null(ipc, text):
 
 # --- H1 F27: test-only methods work only in fake mode -----------------------
 REPO = pathlib.Path(__file__).resolve().parent.parent
-GATE = "if (!root.fake) return Ipc.DEV_ONLY"
+GATE = "if (!service.fake) return Ipc.DEV_ONLY"
 
 
 def ipc_methods() -> dict[str, str]:
-    """Each IpcHandler method in Service.qml and the text of its body."""
-    text = (REPO / "Service.qml").read_text(encoding="utf-8")
+    """Each IpcHandler method in qml/ServiceIpc.qml and the text of its body."""
+    text = (REPO / "qml" / "ServiceIpc.qml").read_text(encoding="utf-8")
     start = text.index("  IpcHandler {")
     end = text.index("\n  }\n", start)
     block = text[start:end]
@@ -140,3 +140,50 @@ def test_library_query_leaves_the_drawer_alone():
     assert "Library.queryRows(library.allRows, sort, filter, search)" in body
     for name in ("sortKey", "filterKey", "searchText"):
         assert f"library.{name} =" not in body
+
+
+def test_the_handler_is_the_services_one_child():
+    # P9 PR 3: the whole IpcHandler lives in qml/ServiceIpc.qml, declared once
+    # in Service.qml with `service: root`. A second handler, or one in the
+    # per-monitor widget, would be a duplicate target (SPIKE-RESULTS S6).
+    files = sorted(REPO.glob("*.qml")) + sorted((REPO / "qml").rglob("*.qml"))
+    handlers = {
+        str(p.relative_to(REPO)): p.read_text(encoding="utf-8").count("IpcHandler {")
+        for p in files
+    }
+    assert {name: n for name, n in handlers.items() if n} == {"qml/ServiceIpc.qml": 1}
+    text = (REPO / "qml" / "ServiceIpc.qml").read_text(encoding="utf-8")
+    assert text.count('target: "latentoperator.audible"') == 1
+    service = (REPO / "Service.qml").read_text(encoding="utf-8")
+    assert service.count("ServiceIpc {") == 1
+    start = service.index("  ServiceIpc {")
+    block = service[start : service.index("\n  }\n", start) + 1]
+    assert "service: root" in block
+    for child in ("library", "player", "runner", "store", "sync"):
+        assert f"    {child}: {child}\n" in block, child
+    # No other file declares a second instance (a view or the widget would be
+    # created once per monitor).
+    instances = {
+        str(p.relative_to(REPO)): p.read_text(encoding="utf-8").count("ServiceIpc {")
+        for p in files
+    }
+    assert {name: n for name, n in instances.items() if n} == {"Service.qml": 1}
+
+
+def test_the_handler_keeps_no_state():
+    # Each method calls the service or a child; the only properties are the
+    # references Service hands it.
+    text = (REPO / "qml" / "ServiceIpc.qml").read_text(encoding="utf-8")
+    properties = re.findall(
+        r"^\s*(?:readonly\s+)?property\s+\w+\s+(\w+)", text, re.MULTILINE
+    )
+    assert sorted(properties) == [
+        "library",
+        "player",
+        "runner",
+        "service",
+        "store",
+        "sync",
+    ]
+    assert "Timer {" not in text and "Process {" not in text
+    assert re.search(r"(?<![\w.])root\.", text) is None

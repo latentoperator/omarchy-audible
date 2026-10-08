@@ -40,12 +40,13 @@ A plugin is a git repo with `manifest.json` at its root. Users install with `oma
 ```
 omarchy-audible/                     (repo root == plugin root)
   manifest.json                      kinds: service, bar-widget  (no `panel` kind, see §6)
-  Service.qml                        singleton logic, mpv + backend control, IPC target
+  Service.qml                        singleton logic, mpv + backend control; declares the IPC target
   BarWidget.qml                      the book icon + the KeyboardPanel drawer hosting the views
   qml/
     LibraryView.qml  MiniView.qml  FullView.qml  OnboardingView.qml
     BookRow.qml  ChapterList.qml  ScrubBar.qml  Cover.qml  StateBadge.qml
     PlayerController.qml  LibraryModel.qml  JobRunner.qml  Format.js
+    ServiceIpc.qml                   the one IpcHandler (`latentoperator.audible`), a child of Service
   bin/omarchy-audible                stdlib-only Python launcher (bootstraps venv, dispatches)
   backend/omarchy_audible/           Python package (runs inside the venv)
   tests/  fixtures/
@@ -296,11 +297,11 @@ The bar widget owns a `qs.Ui` `KeyboardPanel` anchored under the book icon (✅ 
 
 Keyboard: search field focused on open; ↑/↓ move; Enter play; Esc close; Space play/pause when the search field is empty; ←/→ skip in Mini/Full; Backspace in Full collapses to Mini. In the Mini chapter popup, ↑/↓ move, Enter jumps to the chapter and Esc closes only the popup.
 
-Shell IPC target `latentoperator.audible`, registered by an `IpcHandler` in `Service.qml` (a handler in the per-monitor widget would be ignored as a duplicate) ✅ S6:
+Shell IPC target `latentoperator.audible`, registered by the one `IpcHandler`, in `qml/ServiceIpc.qml`, which `Service.qml` declares once as its child (P9; a handler in the per-monitor widget would be ignored as a duplicate) ✅ S6:
 `toggle`, `playPause`, `skip <seconds>`, `nextChapter`, `prevChapter`, `openLibrary`. Arguments and return values are strings.
 Call syntax ✅: `omarchy-shell latentoperator.audible toggle`. Example Hyprland binding: `bind = SUPER, A, exec, omarchy-shell latentoperator.audible toggle`.
 
-Which methods work in real mode (H1 F27) is listed in `qml/lib/Ipc.js`, and a test checks `Service.qml` against it:
+Which methods work in real mode (H1 F27) is listed in `qml/lib/Ipc.js`, and a test checks `qml/ServiceIpc.qml` against it:
 - **Public**, for keybindings and users: the six above.
 - **Status**, read-only, kept so a session can confirm the mode and that the service is attached: `playerStatus`, `libraryState`, `onboardingState`, `panelState`, `pushState`, `events`.
 - **Test-only**, everything else (`play`, `pause`, `quitPlayer`, `removeBook`, `syncNow`, `libraryQuery`, `view`, …): each returns `error: dev only` unless the dev-fake flag was present when the service loaded. `libraryQuery` computes its rows from a copy (`Library.queryRows`) and never changes the drawer's sort, filter or search.

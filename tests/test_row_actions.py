@@ -82,11 +82,10 @@ def test_question_goes_away_when_no_longer_valid():
 
 
 def test_ipc_exposes_the_question():
-    service = read("Service.qml")
-    ipc = service[service.index("IpcHandler {") :]
-    assert '"confirm": root.confirmAsin' in ipc
-    assert "return root.confirmDownload()" in ipc
-    assert "return root.cancelConfirm()" in ipc
+    ipc = read("qml/ServiceIpc.qml")
+    assert '"confirm": service.confirmAsin' in ipc
+    assert "return service.confirmDownload()" in ipc
+    assert "return service.cancelConfirm()" in ipc
 
 
 # ---- BookRow / LibraryView ----
