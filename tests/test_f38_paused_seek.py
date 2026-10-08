@@ -105,35 +105,43 @@ C = "/d/books/B0C/book.aaxc"
 
 
 @pytest.mark.parametrize(
-    "path,load_path,hits",
+    "path,load_path,arrived,hits",
     [
         # Nothing sent since connecting (a reattach): the book showing moves.
-        (A, "", True),
-        ("", "", True),
+        (A, "", True, True),
+        ("", "", True, True),
         # The last load has arrived.
-        (B, B, True),
+        (B, B, True, True),
         # Codex round 3: B was sent while A still shows; the move lands on B.
-        (A, B, False),
-        # Codex round 4: C overtook B before B opened; B shows, the move
-        # lands on C, whatever B's late file-loaded says.
-        (B, C, False),
-        ("", B, False),
-        (None, B, False),
-        (A, None, True),
+        (A, B, False, False),
+        # Codex round 4: C overtook B before B opened; B shows (and said
+        # file-loaded), but the move lands on C.
+        (B, C, True, False),
+        # Codex round 5: Start over sends A again while A shows; until the
+        # fresh A says file-loaded, the move lands on it, not where A was.
+        (A, A, False, False),
+        ("", B, True, False),
+        (None, B, True, False),
+        (B, B, "yes", False),
+        (A, None, False, True),
     ],
 )
-def test_move_hits_path(mpv, path, load_path, hits):
-    assert mpv.call("moveHitsPath", path, load_path) is hits
+def test_move_hits_path(mpv, path, load_path, arrived, hits):
+    assert mpv.call("moveHitsPath", path, load_path, arrived) is hits
 
 
-def test_a_move_during_a_book_swap_is_not_the_old_books():
+def test_a_move_during_a_load_is_not_the_showing_books():
     player = read("qml/PlayerController.qml")
-    assert "loadPath = load.path" in function_body(player, "flushPending")
+    flush = function_body(player, "flushPending")
+    assert "loadPath = load.path" in flush and "loadArrived = false" in flush
+    assert "loadArrived = true" in function_body(player, "handleLine")
     # A gone mpv has no load on its way: both places that reset mpvState
     # forget it too.
     assert player.count('loadPath = ""') == 2
     assert player.count("mpvState = Mpv.emptyState()") == 2
     assert player.count("loadPath = ") == 3
+    assert player.count("loadArrived = true") == 3
+    assert player.count("loadArrived = false") == 1
 
 
 def test_user_moves_say_so_and_the_catchup_jump_does_not():
@@ -143,7 +151,10 @@ def test_user_moves_say_so_and_the_catchup_jump_does_not():
         body = function_body(player, name)
         assert f'Mpv.moveTargetMs("{kind}", ' in body, name
         # Only a move that was sent says so, and only for the file showing.
-        assert ") && Mpv.moveHitsPath(path, loadPath)) userMoved(target)" in body, name
+        assert (
+            ") && Mpv.moveHitsPath(path, loadPath, loadArrived)) userMoved(target)"
+            in body
+        ), name
     # Chapter ⏮/⏭ go through setChapter.
     assert "setChapter(target)" in function_body(player, "jumpChapter")
     assert "userMoved" not in function_body(player, "jumpToMs")

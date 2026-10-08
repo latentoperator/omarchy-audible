@@ -215,16 +215,18 @@ function chapterTarget(chapterIndex, chapterCount, delta) {
 }
 
 // Whether a seek, skip or chapter jump sent now moves the file mpv shows as
-// `path` (F38). Not while a later `loadfile` this controller sent (for
-// `loadPath`) is still on its way: the move lands on that file, not on the
-// book still showing. Nothing sent since connecting ("", a reattach) means the
-// file showing is the one that moves. Comparing paths, not counting events,
-// holds when one load overtakes another before it opens.
-function moveHitsPath(path, loadPath) {
+// `path` (F38). Not while the last `loadfile` this controller sent (for
+// `loadPath`) is still on its way, which is until mpv shows that path and has
+// said `file-loaded` since (`loadArrived`): until then the move lands on the
+// new file, or on a fresh load of the same one (Start over), not where the
+// book showing is. Nothing sent since connecting ("", a reattach) means the
+// file showing is the one that moves. A load overtaken by a later one can't
+// open the gate: the path must be the later one's.
+function moveHitsPath(path, loadPath, loadArrived) {
   if (typeof loadPath !== "string" || loadPath.length === 0) {
     return true;
   }
-  return typeof path === "string" && path === loadPath;
+  return loadArrived === true && typeof path === "string" && path === loadPath;
 }
 
 // Where a user's move lands, in milliseconds, so it can be saved before mpv
