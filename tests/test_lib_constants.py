@@ -135,6 +135,7 @@ def definitions(pattern: str) -> dict[str, list[str]]:
         (r"VIEW_[A-Z_]+", "Panel"),
         (r"KEY_(?:ESCAPE|RETURN|ENTER)", "Drawer"),
         (r"(?:MIN|MAX)_(?:SPEED|VOLUME)", "Mpv"),
+        (r"FINISH_TRAILING_MS", "Positions"),
     ],
 )
 def test_each_constant_has_one_home(pattern, home):

@@ -1,17 +1,15 @@
 .pragma library
 .import "Mpv.js" as Mpv
+.import "Positions.js" as Positions
 
 // Small pure helpers between the player, the job runner and `state.json`
 // (ARCHITECTURE 3, 4.8, 5.2). `Library.js` owns the state schema and the row
 // logic; this file holds the pieces that feed it: which book a path is, how a
 // position is recorded, and which jobs the library should show.
 //
-// Pure ECMAScript for the Qt JS engine: no imports but `Mpv.js`, no Qt
-// types, and nothing here throws on bad input.
-
-// A position within this many milliseconds of the end counts as finished.
-// Matches `Positions.FINISH_TRAILING_MS` and `LibraryUi.FINISH_TRAILING_MS`.
-var FINISH_TRAILING_MS = 30000;
+// Pure ECMAScript for the Qt JS engine: no imports but `Mpv.js` and
+// `Positions.js` (`FINISH_TRAILING_MS`), no Qt types, and nothing here throws
+// on bad input.
 
 // The ASIN of the book mpv has loaded: the directory above the audio file,
 // whether it is an old `book.m4b` or a locked `book.aaxc`/`book.aax` (B11).
@@ -43,8 +41,8 @@ function parseJson(text, fallback) {
 //
 // `finished` stops being sticky (F16): a book that was finished is no longer
 // finished once it is listened to again, which is Start over (a position of 0)
-// or any move more than `FINISH_TRAILING_MS` back from the position it finished
-// at. `markFinished` sets the flag again when playback reaches EOF.
+// or any move more than `Positions.FINISH_TRAILING_MS` back from the position
+// it finished at. `markFinished` sets the flag again when playback reaches EOF.
 function recordPosition(state, asin, ms, nowIso) {
   if (typeof asin !== "string" || asin.length === 0 || typeof ms !== "number" || !isFinite(ms) || ms < 0) {
     return state;
@@ -61,9 +59,10 @@ function recordPosition(state, asin, ms, nowIso) {
   var previous = isObject(books[asin]) ? books[asin] : {};
   var recorded = Math.round(ms);
   // The position the book finished at: a finished entry carries the end (or a
-  // position within `FINISH_TRAILING_MS` of it), and `markFinished` keeps it.
+  // position within `Positions.FINISH_TRAILING_MS` of it), and `markFinished`
+  // keeps it.
   var finishPoint = typeof previous.ms === "number" && isFinite(previous.ms) ? previous.ms : 0;
-  var finished = previous.finished === true && finishPoint > 0 && finishPoint - recorded <= FINISH_TRAILING_MS;
+  var finished = previous.finished === true && finishPoint > 0 && finishPoint - recorded <= Positions.FINISH_TRAILING_MS;
   books[asin] = {
     "ms": recorded,
     "updated_at": nowIso,

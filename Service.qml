@@ -2,7 +2,6 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "qml"
-import "qml/lib/Catchup.js" as Catchup
 import "qml/lib/Drawer.js" as Drawer
 import "qml/lib/EventLog.js" as EventLog
 import "qml/lib/Format.js" as Format
@@ -87,22 +86,10 @@ Item {
   readonly property string playFailure: Player.playFailure(player.connection, player.lastError, playError)
   property var resumeRemotes: ({})
 
-  // ⏯ catching up with other devices (Catchup.js). `pausedAtMs` is when the
-  // player last paused (0 = unknown, e.g. after a shell restart);
-  // `catchupAsin` is the book waiting on an account read before it resumes;
-  // `catchupReads` the books with a read queued or running (at most one per
-  // book, so overlapping reads never share a result); `prefetched`
-  // the last finished read, `{asin, atMs, remote}`.
-  property real pausedAtMs: 0
-  property string catchupAsin: ""
-  property var catchupReads: ({})
-  property var prefetched: null
-  // Results of catch-up reads still running, by ASIN (like `resumeRemotes`),
-  // so overlapping reads of different books never touch each other's result.
-  property var catchupResults: ({})
-  // The Mini line after a catch-up jump (Catchup.jumpNote), cleared after
-  // NOTE_MS or by a new pick.
-  property string catchupNote: ""
+  // ⏯ catching up with other devices (qml/CatchupFlow.qml): the book a ⏯
+  // waits on an account read for, and the Mini line after a jump.
+  readonly property string catchupAsin: catchupFlow.catchupAsin
+  readonly property string catchupNote: catchupFlow.catchupNote
   // The Mini line after a run of `stale` pushes (P6, Sync.staleNotice).
   readonly property string staleNotice: sync.staleNotice
 
@@ -219,7 +206,7 @@ Item {
     view = Onboarding.view(onboardingStep, player.loaded, null)
     chapterListOpen = false
     sync.resetRetry()
-    prefetchCatchup()
+    catchupFlow.prefetchCatchup()
   }
 
   function showView(name) {
@@ -380,93 +367,9 @@ Item {
     return "error: " + message
   }
 
-  // Every ⏯ (Mini, Space, middle-click, the `playPause` hotkey). Pausing is
-  // immediate. Resuming after a long pause first reads the account, so a book
-  // listened to on the phone continues from there (SCOPE FR-P4); a second ⏯
-  // while that read runs cancels the resume.
-  function playPause() {
-    var asin = loadedAsin
-    var action = Catchup.pressAction({ "loaded": player.loaded, "playing": player.playing,
-      "waiting": catchupAsin.length > 0, "pendingResume": pendingResume.length > 0,
-      "needsRead": Catchup.needsRead(pausedAtMs, Date.now()),
-      "prefetchUsable": Catchup.prefetchUsable(prefetched, asin, Date.now()),
-      "reading": catchupReads[asin] === true })
-    if (action === Catchup.PRESS_NONE) return "error: nothing loaded"
-    if (action === Catchup.PRESS_PAUSE) {
-      cancelCatchup()
-      player.pause()
-      return "ok"
-    }
-    if (action === Catchup.PRESS_CANCEL) {
-      cancelCatchup()
-      return "cancelled"
-    }
-    if (action === Catchup.PRESS_BUSY) return "busy"
-    if (action === Catchup.PRESS_RESUME) {
-      player.resume()
-      return "ok"
-    }
-    if (action === Catchup.PRESS_PREFETCH) {
-      resumeCaughtUp(asin, prefetched.remote)
-      return "ok"
-    }
-    catchupAsin = asin
-    catchupTimer.restart()
-    if (action === Catchup.PRESS_READ && !readCatchup(asin)) resumeCaughtUp(asin, null)
-    return "checking"
-  }
-
-  // Drops a waiting ⏯; the read itself finishes and is kept as `prefetched`.
-  function cancelCatchup() {
-    catchupAsin = ""
-    catchupTimer.stop()
-  }
-
-  // Opening the drawer on a book paused long enough starts the read early,
-  // so ⏯ usually finds it done.
-  function prefetchCatchup() {
-    if (!player.loaded || player.playing || catchupReads[loadedAsin] === true) return
-    var asin = loadedAsin
-    if (!Catchup.needsRead(pausedAtMs, Date.now()) || Catchup.prefetchUsable(prefetched, asin, Date.now())) return
-    readCatchup(asin)
-  }
-
-  function readCatchup(asin) {
-    if (!run("position-get", [asin], "catchup")) return false
-    var reads = catchupReads
-    reads[asin] = true
-    catchupReads = reads
-    return true
-  }
-
-  // Resume `asin`, first jumping to `remote` (an account entry, or null)
-  // when it is newer than the position saved here.
-  function resumeCaughtUp(asin, remote) {
-    cancelCatchup()
-    prefetched = null
-    // An unread state.json is not "nothing saved here": resume in place.
-    var action = Catchup.resumeAction({ "loaded": player.loaded, "sameBook": loadedAsin === asin,
-      "playing": player.playing, "storeLoaded": store.loaded, "hasRemote": !!remote })
-    if (action === "none") return
-    if (action === "compare") {
-      var local = store.doc.books ? store.doc.books[asin] : null
-      var own = [sync.lastPushed[asin], local ? local.ms : null]
-      var target = Catchup.jumpTarget(player.positionMs,
-        local ? Positions.parseUpdatedAt(local.updated_at) : null,
-        remote.ms, Positions.parseUpdatedAt(remote.updated_at), own)
-      if (target >= 0) {
-        logEvent("catchup", "jump " + Math.round(player.positionMs) + " -> " + target)
-        showCatchupNote(Format.clock(player.positionMs))
-        player.jumpToMs(target)
-      }
-    }
-    player.resume()
-  }
-
-  function showCatchupNote(was) {
-    catchupNote = Catchup.jumpNote(was)
-    catchupNoteTimer.restart()
-  }
+  // Every ⏯ (Mini, Space, middle-click, the `playPause` hotkey). Resuming
+  // after a long pause first catches up with the account (CatchupFlow).
+  function playPause() { return catchupFlow.press() }
 
   function notifyPlayFailed(message) {
     var text = String(message || "").length > 0 ? String(message) : "the player did not start"
@@ -565,8 +468,7 @@ Item {
   // resume still reading its position, and a pending removal of this book.
   // A download only downloads; the user plays the book when they choose.
   function noteIntent(asin) {
-    cancelCatchup()
-    catchupNote = ""
+    catchupFlow.noteIntent()
     askAsin = ""
     confirmAsin = ""
     if (pendingResume !== asin) pendingResume = ""
@@ -834,6 +736,14 @@ Item {
     jobs: Playback.jobStates(runner.pendingJobs, runner.activeJob, runner.progress, root.failures)
   }
 
+  CatchupFlow {
+    id: catchupFlow
+    service: root
+    player: player
+    store: store
+    sync: sync
+  }
+
   Removals {
     id: removals
     service: root
@@ -878,7 +788,7 @@ Item {
     // Pause, stop or a crash: save where the book stopped.
     function onPlayingChanged() {
       if (!player.playing) {
-        root.pausedAtMs = Date.now()
+        catchupFlow.notePaused()
         root.savePosition(root.snapAsin, root.snapMs, true)
       } else {
         // Something plays again: an earlier play-info failure is old news.
@@ -899,20 +809,6 @@ Item {
     function onConnectionChanged() {
       if (player.connection === "failed") Qt.callLater(function() { root.notifyPlayFailed(player.lastError) })
     }
-  }
-
-  Timer {
-    id: catchupNoteTimer
-    interval: Catchup.NOTE_MS
-    repeat: false
-    onTriggered: root.catchupNote = ""
-  }
-
-  Timer {
-    id: catchupTimer
-    interval: Catchup.READ_TIMEOUT_MS
-    repeat: false
-    onTriggered: root.resumeCaughtUp(root.catchupAsin, null)
   }
 
   Timer {
@@ -1021,11 +917,6 @@ Item {
         root.refreshLocal()
       } else if (record.type === "local") {
         library.localBooks = record.books
-      } else if (record.type === "positions" && job.purpose === "catchup") {
-        var read = job.args[0]
-        var results = root.catchupResults
-        results[read] = { "asin": read, "atMs": Date.now(), "remote": record.items[read] || null }
-        root.catchupResults = results
       } else if (record.type === "play_info") {
         root.startPlayInfo(job, record)
       } else if (record.type === "positions" && job.purpose === "resume") {
@@ -1034,6 +925,7 @@ Item {
         remotes[resumed] = record.items[resumed] || null
         root.resumeRemotes = remotes
       }
+      catchupFlow.handleEvent(record, job)
       sync.handleEvent(record, job)
       if (job.command === "login-start" && record.type === "login_url") {
         root.loginStarting = false
@@ -1056,18 +948,7 @@ Item {
       root.logEvent(job.command + " exit", text)
       root.failures = Playback.updateFailures(root.failures, job, outcome)
       sync.handleFinished(job, outcome)
-      if (job.purpose === "catchup") {
-        var readAsin = job.args[0]
-        var reads = root.catchupReads
-        delete reads[readAsin]
-        root.catchupReads = reads
-        var result = outcome.ok ? (root.catchupResults[readAsin] || null) : null
-        delete root.catchupResults[readAsin]
-        // Only this read's own book: a failed read of A never clears B's.
-        if (result) root.prefetched = result
-        else if (root.prefetched && root.prefetched.asin === readAsin) root.prefetched = null
-        if (Catchup.readResumes(root.catchupAsin, readAsin)) root.resumeCaughtUp(readAsin, result ? result.remote : null)
-      }
+      catchupFlow.handleFinished(job, outcome)
       if (job.command === PlayRequest.COMMAND) root.finishPlayInfo(job, outcome)
       if (job.purpose === "resume") {
         var resumedAsin = job.args[0]
