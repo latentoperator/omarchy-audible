@@ -47,6 +47,7 @@ def test_batch_drops_remote_newer_entry_and_sends_remaining_entries(sync):
         items={"B": {"ms": 1500, "updated_at": "2026-10-05T15:00:00Z"}},
     )
     assert effects == [{"type": "setQueue", "queue": [entry("A"), entry("C")]}]
+    assert state["progressed"] is True
     state, effects = step(
         sync,
         state,
@@ -176,6 +177,41 @@ def test_push_error_after_partial_flush_finishes_and_schedules_remaining_queue(s
     assert state["failedFlushes"] == 1
     assert state["lastResult"] == "network"
     assert state["staleCount"] == 1
+
+
+def test_drop_counts_as_progress_when_later_push_fails(sync):
+    queue = [entry("A"), entry("B")]
+    state, _ = step(sync, sync.call("createState"), type="flush", queue=queue)
+    state, effects = step(
+        sync,
+        state,
+        type="positions",
+        purpose="flush",
+        queue=queue,
+        items={"A": {"ms": 1500, "updated_at": "2026-10-05T15:00:00Z"}},
+    )
+    assert effects == [{"type": "setQueue", "queue": [entry("B")]}]
+    state, effects = step(
+        sync,
+        state,
+        type="finished",
+        job={"purpose": "flush"},
+        outcome={"ok": True},
+        queue=[entry("B")],
+    )
+    assert effects[0]["args"] == ["B", "1000", "--at", AT]
+    state, effects = step(
+        sync,
+        state,
+        type="finished",
+        job={"purpose": "push"},
+        outcome={"ok": False, "code": "network"},
+        queue=[entry("B")],
+    )
+    assert effects == [
+        {"type": "finish", "result": "network"},
+        {"type": "flush_later"},
+    ]
 
 
 def test_refused_push_mid_flush_finishes_and_schedules_remaining_queue(sync):
@@ -344,9 +380,70 @@ def test_offline_backoff_and_successful_flush_resets_failures(sync):
         {"type": "finish", "result": "done"},
     ]
     assert state["failedFlushes"] == 0
+    assert state["lastResult"] == "done"
 
     state, _ = step(sync, state, type="reset_retry")
     assert state["failedFlushes"] == 0
+    assert state["lastResult"] == "done"
+
+    state, effects = step(sync, state, type="flush", queue=queue)
+    assert effects[0]["command"] == "position-get"
+    state, effects = step(
+        sync,
+        state,
+        type="finished",
+        job={"purpose": "flush"},
+        outcome={"ok": False, "code": "network"},
+        queue=queue,
+    )
+    assert effects == [{"type": "finish", "result": "offline"}]
+    assert state["failedFlushes"] == 1
+    assert sync.call("retryDelayMs", state["failedFlushes"]) == 120000
+
+    state, _ = step(sync, state, type="reset_retry")
+    assert state["failedFlushes"] == 0
+    assert sync.call("retryDelayMs", state["failedFlushes"]) == 60000
+    assert state["lastResult"] == "offline"
+
+
+def test_flush_start_clears_progress_before_failed_read(sync):
+    state = sync.call("createState")
+    queue = [entry("A")]
+    state, _ = step(sync, state, type="flush", queue=queue)
+    state, _ = step(
+        sync, state, type="positions", purpose="flush", queue=queue, items={}
+    )
+    state, _ = step(
+        sync,
+        state,
+        type="finished",
+        job={"purpose": "flush"},
+        outcome={"ok": True},
+        queue=queue,
+    )
+    state, effects = step(
+        sync,
+        state,
+        type="finished",
+        job={"purpose": "push"},
+        outcome={"ok": True},
+        queue=queue,
+    )
+    assert effects[-1] == {"type": "finish", "result": "done"}
+    assert state["progressed"] is True
+
+    next_queue = [entry("B")]
+    state, effects = step(sync, state, type="flush", queue=next_queue)
+    assert effects[0]["command"] == "position-get"
+    state, effects = step(
+        sync,
+        state,
+        type="finished",
+        job={"purpose": "flush"},
+        outcome={"ok": False, "code": "network"},
+        queue=next_queue,
+    )
+    assert effects == [{"type": "finish", "result": "offline"}]
 
 
 def test_flush_guard_ignores_active_flush_and_empty_queue(sync):
