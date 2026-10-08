@@ -1,12 +1,13 @@
 .pragma library
+.import "Mpv.js" as Mpv
 
 // Small pure helpers between the player, the job runner and `state.json`
 // (ARCHITECTURE 3, 4.8, 5.2). `Library.js` owns the state schema and the row
 // logic; this file holds the pieces that feed it: which book a path is, how a
 // position is recorded, and which jobs the library should show.
 //
-// Pure ECMAScript for the Qt JS engine: no imports, no Qt types, and nothing
-// here throws on bad input.
+// Pure ECMAScript for the Qt JS engine: no imports but `Mpv.js`, no Qt
+// types, and nothing here throws on bad input.
 
 // A position within this many milliseconds of the end counts as finished.
 // Matches `Positions.FINISH_TRAILING_MS` and `LibraryUi.FINISH_TRAILING_MS`.
@@ -181,15 +182,14 @@ function reportBelongs(hasPosition, reportAsin, snapAsin, loadSettled) {
     && typeof reportAsin === "string" && reportAsin.length > 0 && reportAsin === snapAsin;
 }
 
-// A copy of `state` with the push queue replaced.
 // A copy of `state` with the player's volume and speed (F21), or `state`
 // itself when both are already what it holds. Out-of-range values are not
 // saved (Mpv.startVolume / startSpeed would ignore them anyway).
 function withPlayerSettings(state, volume, speed) {
   var base = isObject(state) ? state : {};
-  var nextVolume = typeof volume === "number" && isFinite(volume) && volume >= 0 && volume <= 130
+  var nextVolume = typeof volume === "number" && isFinite(volume) && volume >= Mpv.MIN_VOLUME && volume <= Mpv.MAX_VOLUME
     ? Math.round(volume) : base.volume;
-  var nextSpeed = typeof speed === "number" && isFinite(speed) && speed >= 0.5 && speed <= 3
+  var nextSpeed = typeof speed === "number" && isFinite(speed) && speed >= Mpv.MIN_SPEED && speed <= Mpv.MAX_SPEED
     ? Math.round(speed * 100) / 100 : base.speed;
   if (nextVolume === base.volume && nextSpeed === base.speed) {
     return state;
@@ -203,6 +203,7 @@ function withPlayerSettings(state, volume, speed) {
   return next;
 }
 
+// A copy of `state` with the push queue replaced.
 function withQueue(state, queue) {
   var next = {};
   for (var key in state) {

@@ -12,7 +12,7 @@ def library_buttons(rel: str) -> list[str]:
     """Each Button block in a view that uses the Library glyph."""
     source = (REPO / rel).read_text(encoding="utf-8")
     blocks = re.findall(r"Button \{[^{}]*\}", source)
-    return [b for b in blocks if "Mini.GLYPH_LIBRARY" in b]
+    return [b for b in blocks if "Glyphs.GLYPH_LIBRARY" in b]
 
 
 def test_full_has_the_library_button():
@@ -37,6 +37,6 @@ def test_full_and_mini_buttons_do_the_same():
 
 def test_the_library_button_sits_before_collapse_and_close():
     source = (REPO / "qml/views/FullView.qml").read_text(encoding="utf-8")
-    library = source.index("Mini.GLYPH_LIBRARY")
-    assert library < source.index("Player.GLYPH_COLLAPSE")
-    assert library < source.index("Player.GLYPH_DISMISS")
+    library = source.index("Glyphs.GLYPH_LIBRARY")
+    assert library < source.index("Glyphs.GLYPH_COLLAPSE")
+    assert library < source.index("Glyphs.GLYPH_DISMISS")

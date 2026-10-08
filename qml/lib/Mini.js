@@ -1,12 +1,13 @@
 .pragma library
+.import "Glyphs.js" as Glyphs
 
 // Mini view decisions (SCOPE FR-U3, U2a subset): what the title line says,
 // the time left, and which player action a key press means while the Mini
 // (or, from U5, the Full) view is showing. The view binds to these and calls
 // the player; it decides nothing itself.
 //
-// Pure ECMAScript for the Qt JS engine: no imports, no Qt types, and nothing
-// here throws on bad input.
+// Pure ECMAScript for the Qt JS engine: no imports but `Glyphs.js`, no Qt
+// types, and nothing here throws on bad input.
 
 // Seconds one skip moves. Fixed until the setting arrives in R1.
 var SKIP_SECONDS = 15;
@@ -16,13 +17,6 @@ var UNKNOWN_TITLE = "Unknown title";
 
 // Shown when nothing is loaded.
 var NOTHING_PLAYING = "Nothing playing";
-
-// Glyphs from the theme's icon font (Font Awesome, as the bar uses).
-var GLYPH_BACK = "";
-var GLYPH_FORWARD = "";
-var GLYPH_PLAY = "";
-var GLYPH_PAUSE = "";
-var GLYPH_LIBRARY = "";
 
 // `keyAction` results.
 var ACTION_TOGGLE = "toggle";
@@ -62,7 +56,7 @@ function remainingMs(positionMs, durationMs) {
 
 // The play button's glyph: pause while playing, play otherwise.
 function playGlyph(playing) {
-  return playing === true ? GLYPH_PAUSE : GLYPH_PLAY;
+  return playing === true ? Glyphs.GLYPH_PAUSE : Glyphs.GLYPH_PLAY;
 }
 
 // What a panel key means in `view` (ARCHITECTURE 6): Space toggles, ←/→

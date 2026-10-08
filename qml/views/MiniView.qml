@@ -4,6 +4,7 @@ import qs.Commons
 import qs.Ui
 import "../components"
 import "../lib/Format.js" as Format
+import "../lib/Glyphs.js" as Glyphs
 import "../lib/Mini.js" as Mini
 import "../lib/Panel.js" as Panel
 import "../lib/Player.js" as Player
@@ -85,7 +86,7 @@ ColumnLayout {
       Layout.alignment: Qt.AlignTop
       Layout.topMargin: Style.spacing.controlPaddingY
       visible: root.player ? root.player.sleepTimer !== null : false
-      text: Player.GLYPH_MOON
+      text: Glyphs.GLYPH_MOON
       textFormat: Text.PlainText
       color: Color.popups.text
       font.family: Style.font.family
@@ -95,14 +96,14 @@ ColumnLayout {
     Button {
       Layout.alignment: Qt.AlignTop
       enabled: root.loaded
-      iconText: Player.GLYPH_MAXIMIZE
+      iconText: Glyphs.GLYPH_MAXIMIZE
       tooltipText: "Full player"
       onClicked: if (root.service) root.service.showView(Panel.VIEW_FULL)
     }
 
     Button {
       Layout.alignment: Qt.AlignTop
-      iconText: Player.GLYPH_DISMISS
+      iconText: Glyphs.GLYPH_DISMISS
       tooltipText: "Close (Esc)"
       onClicked: root.closeRequested()
     }
@@ -126,7 +127,7 @@ ColumnLayout {
       spacing: Style.spacing.controlGap
 
       Text {
-        text: Player.GLYPH_CHAPTERS
+        text: Glyphs.GLYPH_CHAPTERS
         textFormat: Text.PlainText
         color: Color.popups.text
         font.family: Style.font.family
@@ -232,7 +233,7 @@ ColumnLayout {
     }
 
     Button {
-      iconText: Mini.GLYPH_LIBRARY
+      iconText: Glyphs.GLYPH_LIBRARY
       tooltipText: "Library"
       onClicked: if (root.service) root.service.showView(Panel.VIEW_LIBRARY)
     }

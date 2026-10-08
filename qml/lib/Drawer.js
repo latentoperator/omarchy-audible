@@ -28,7 +28,8 @@ var FILTERS = [
   { "value": "in-progress", "label": "In progress" }
 ];
 
-// Qt key codes (Qt::Key) the search field reacts to.
+// Qt key codes (Qt::Key) the search field reacts to. The one home for them:
+// `Signin.js` imports Escape, Return and Enter for the paste field.
 var KEY_ESCAPE = 0x01000000;
 var KEY_RETURN = 0x01000004;
 var KEY_ENTER = 0x01000005;
@@ -43,11 +44,6 @@ var KEY_MOVE_DOWN = "down";
 var KEY_PICK = "pick";
 var KEY_TOGGLE = "toggle";
 var KEY_TYPE = "type";
-
-// Remove-from-laptop glyph (Font Awesome trash) and refresh glyph.
-var GLYPH_REMOVE = "";
-var GLYPH_REFRESH = "";
-var GLYPH_DISMISS = "";
 
 var _p = {};
 

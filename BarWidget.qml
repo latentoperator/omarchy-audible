@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import Quickshell
 import qs.Commons
 import qs.Ui
+import "qml/lib/Glyphs.js" as Glyphs
 import "qml/lib/Mini.js" as Mini
 import "qml/lib/Panel.js" as Panel
 import "qml/lib/Player.js" as Player
@@ -95,7 +96,7 @@ BarWidget {
     anchors.fill: parent
     visible: root.barTitle.length === 0
     bar: root.bar
-    text: root.service ? root.service.barGlyph : Panel.GLYPH_BOOK
+    text: root.service ? root.service.barGlyph : Glyphs.GLYPH_BOOK
     tooltipText: root.service ? root.service.tooltipText : "Omarchy Audible"
     onPressed: function(b) { root.press(b) }
   }
