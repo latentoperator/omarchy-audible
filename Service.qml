@@ -897,8 +897,10 @@ Item {
     function onPathChanged() { root.onBookSwitched() }
 
     function onPositionMsChanged() {
-      // A null time-pos (a file being swapped) is not a position.
-      if (!player.derived.hasPosition || Playback.asinFromPath(player.path) !== root.snapAsin) return
+      // A null time-pos (a file being swapped) is not a position, and nothing
+      // mpv reports while a load is on its way is the snapshot book's (F39).
+      if (!Playback.reportBelongs(player.derived.hasPosition, Playback.asinFromPath(player.path), root.snapAsin,
+          Mpv.moveHitsPath(player.path, player.loadPath, player.loadArrived))) return
       root.snapMs = player.positionMs
       if (Playback.positionCounts("report", player.playing)) root.markMoved()
     }
