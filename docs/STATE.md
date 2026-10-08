@@ -2,7 +2,7 @@
 
 Update this file in every PR that changes status. Newest first. See [WORKFLOW.md](WORKFLOW.md) for how work is run.
 
-**Last updated:** 2026-10-07 · **Phase:** B11 in `main` (#62, `5f3877e`); review follow-ups done (Hopebox #65–#74, desktop #77–#84, real-mode §5 passed #85); **P9 next** (`docs/briefs/P9-desktop.md`) · M4 done on the desktop (HMSP-OMARCHYBEE): U5 #53 and U6 #55 merged, U7 confirmed, G4 run · **Gate G4:** ✅ passed 2026-10-06 (MANUAL-TEST.md; Dante accepted the views-per-theme scope, J6 re-download moved to B11) · **Gate G3:** ✅ passed 2026-10-05 · **Gate G2:** ✅ passed 2026-10-05 · **Gate G1:** ✅ passed 2026-10-04 · **Gate G0:** ✅ passed 2026-10-04 · **M1:** ✅ B1–B7 merged
+**Last updated:** 2026-10-07 · **Phase:** B11 in `main` (#62, `5f3877e`); review follow-ups done (Hopebox #65–#74, desktop #77–#84, real-mode §5 passed #85); **P9 under way** (`docs/briefs/P9-desktop.md`; PR 1 F38 #86 merged; F39 next, then PR 2) · M4 done on the desktop (HMSP-OMARCHYBEE): U5 #53 and U6 #55 merged, U7 confirmed, G4 run · **Gate G4:** ✅ passed 2026-10-06 (MANUAL-TEST.md; Dante accepted the views-per-theme scope, J6 re-download moved to B11) · **Gate G3:** ✅ passed 2026-10-05 · **Gate G2:** ✅ passed 2026-10-05 · **Gate G1:** ✅ passed 2026-10-04 · **Gate G0:** ✅ passed 2026-10-04 · **M1:** ✅ B1–B7 merged
 
 ## Where we are
 

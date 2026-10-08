@@ -18,6 +18,7 @@ One branch and one PR each, in this order. Each PR starts from the current `orig
 | # | Branch | Gist | Changes behaviour? |
 |---|---|---|---|
 | 1 | `p9-paused-seek` | F38: a seek, skip or chapter jump while paused is saved | **yes** (fix) |
+| 1b | `p9-switch-report` | F39: a report from the next book never lands in the old book's snapshot | **yes** (fix) |
 | 2 | `p9-lib-hygiene` | One home for each duplicated constant; P8 nits 1 and 2 | no |
 | 3 | `p9-ipc` | `IpcHandler` moves to `qml/ServiceIpc.qml` | no |
 | 4 | `p9-removals` | `qml/Removals.qml` + a pure removal reducer; P8 nit 3 | nit 3 only |
@@ -27,7 +28,7 @@ One branch and one PR each, in this order. Each PR starts from the current `orig
 | 8 | `p9-store-reducer` | `StateStore` adopt, replay and backup decisions as pure functions | no |
 | 9 | `p9-player-machine` | `PlayerController` connect/launch/quit/relaunch as a pure reducer | no |
 
-Number 9 is the riskiest, because it is the code that keeps Chris's audio alive across shell restarts, so it goes last, once the pattern is proven. Tick P9 in PLAN only in PR 9.
+PR 1 (F38) merged as #86. Number 9 is the riskiest, because it is the code that keeps Chris's audio alive across shell restarts, so it goes last, once the pattern is proven. Tick P9 in PLAN only in PR 9.
 
 ## 2. Hard rules (short form; FOLLOWUPS-desktop §2 is the full list)
 
@@ -56,6 +57,11 @@ Copy `PositionSync`:
 - A paused move is saved and pushed like a played one (Dante's call: the phone should follow a skip Chris made while paused). It follows the catch-up rule ARCHITECTURE §4.6 already states, where "a skip made while paused is kept".
 - The decision goes in a lib with a test that fails on the old code. Hand check (fake mode): pause, ⏩ twice, Stop, play the book again: it resumes at the moved spot. Then restart the shell while paused, without moving anything: `state.json`'s `last_played_at` for that book doesn't change.
 - Add F38 to STATE as its own row.
+
+**1b. F39, book-switch report order (Dante placed 2026-10-07 from the PR 1 session; verify, then fix).** `Mpv.OBSERVED` puts `time-pos` at observe id 1 and `path` at id 7. If mpv sends B's `time-pos` before B's `path` in a switch from A to B, `onPositionMsChanged` still sees `path` = A, so `snapMs` takes B's position, and while playing it is marked as A's listening. `onBookSwitched` then saves and **pushes B's position as A's**, which silently moves A on the phone (ARCHITECTURE §4.6). A paused A with an F38 move has the same problem. If mpv first reports `path`/`time-pos` as null (unloaded), the existing guards hold, so whether this bites depends on mpv's real order.
+- **Verify first (fake mode):** record the raw socket lines (a tee in `handleLine` behind the fake flag, or a second observer on the socket with `socat`) for 10 switches A→B while playing and 5 while paused after a move. Report the order of `time-pos`, `path`, `idle-active` and `file-loaded` in each, and whether a null `path` or `time-pos` comes between.
+- **Fix either way, since it costs one guard:** a position report counts for the snapshot only when `Mpv.moveHitsPath(player.path, player.loadPath, player.loadArrived)` holds (F38's gate: no load on its way), so reports between sending `loadfile` and B's `path` + `file-loaded` are ignored. Reattach (`loadPath` "") keeps working. Put the decision in a lib function with vectors for both orders, and add a wiring test that fails on the old code.
+- In-shell: switch A→B while playing, then read `state.json` and the account for A: A's `ms` is where A stopped, not B's position. Add an F39 row to STATE with the observed order.
 
 **2. Lib hygiene.** F28's second half, plus P8 nits 1 and 2:
 - `VIEW_*` lives only in `Panel.js` (`Onboarding.js` uses `.import "Panel.js" as Panel`). The key codes `KEY_ESCAPE/RETURN/ENTER` live in one lib (`Drawer.js` and `Signin.js` both define them today). Each glyph is defined once: a new `qml/lib/Glyphs.js` holds every `GLYPH_*` (they are spread over `Panel`, `Mini`, `Player`, `Drawer`, and `Drawer`/`Player` both define `GLYPH_DISMISS`). Views reference `Glyphs.X`, and libs that pick a glyph in logic `.import` it.
