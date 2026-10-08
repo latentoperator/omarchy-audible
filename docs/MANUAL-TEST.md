@@ -2,6 +2,26 @@
 
 Hand-run journeys from `docs/SCOPE.md` §3, one line per run. Chris does all the clicking; the driving CLI checks state over IPC and writes the line. Real mode unless a line says otherwise.
 
+## Follow-ups (desktop) — 2026-10-07, HMSP-OMARCHYBEE (two 1920×1080 monitors, DP-4 and DP-5), live folder on `main` at `4488ef2`
+
+Brief: [briefs/FOLLOWUPS-desktop.md](briefs/FOLLOWUPS-desktop.md) §5, after #77–#84 merged. Start state: real mode (no dev-fake flag; the flag was deleted and the shell restarted on `5e5dfb8` earlier the same day), one `quickshell`, one bar per monitor, connected, 91 books, nothing playing. The live folder was pulled from `5e5dfb8` to `4488ef2` while paused (#84 is docs and spikes only, so no restart). Chris did the clicking; Claude Code drove and checked IPC state and the journal. Times are local (UTC−5).
+
+| # | Check | Steps | Result | Date |
+|---|---|---|---|---|
+| 1 | P6, push and phone | Play the current book (Dungeon Crawler Carl, chapter 15) a few minutes, pause | **Pass.** Paused at 3:54:27 (14 067 284 ms); `pushState`: `last` done, queue empty, `staleCount` 0, no stale line. The phone app showed the same spot. | 2026-10-07 |
+| 2 | P7, Start over on a finished book | Auberon (`1549170090`, 145 min) played to the end, then ▶ from the library; listen, pause | **Pass.** At the end it was finished and not under In progress. ▶ started over at 0 without asking: it was within 30 s of the end, so `LibraryUi.resumeChoice` returns start-over (SCOPE §6, as designed). Paused at 0:47: under In progress, no "You finished", `state.json` `finished: false`, push done. | 2026-10-07 |
+| 3 | U10, the row's question | Strange Dogs (`B073X5V27J`; local, finished, saved at 0): pick, then the row's ▶ while the question is up | **Pass.** The Resume / Start over question showed on Strange Dogs' own row; the row's ▶ resumed without asking again; `libraryState` `ask` empty afterwards. Resume keeps `finished` (P7 clears it only on Start over or a move back). The play-error title and Stop clearing it: **fake mode only**, since there is no safe way to cause a real play error (passed in fake mode on `u10-findings`, #79). | 2026-10-07 |
+| 4 | F27, dev IPC in real mode | `libraryQuery recent all ""`; `playerStatus`; the public methods a key binding calls | **Pass.** `libraryQuery` → `Error: dev only`. `playerStatus` works. `toggle` → `ok` twice (drawer open, closed); `playPause` → `checking`, playing, then `ok`, paused. BEE has no Hyprland bind for the plugin (the plugin adds none), so the methods were called directly. | 2026-10-07 |
+| 5 | Two monitors (F19, F25) | Pick a book from DP-5's drawer; open the chapter popup on DP-5, then on DP-4 | **Pass** (Chris's hand check). The player opened on DP-5; the chapter popup opened only on the panel in use. | 2026-10-07 |
+| 6 | F21, speed and volume survive quit | Set 1.5× and a new volume, play, Stop, start a book again | **Pass** (Chris's hand check). Both came back. Chris set them back to 1× and 100 afterwards. | 2026-10-07 |
+| 7 | U9, pause lag | — | **Answered in #84.** About 40 ms from ⏯ to silence; the second of lag Chris heard came from Moonlight, and ⏯ is fine at BEE. | 2026-10-07 |
+| 8 | Smoke | Seek, a chapter jump, then `omarchy-restart-shell` at 20:32:07 during playback (3:46:34, chapter 16) | **Pass.** Seek and chapter jump landed. The same mpv PID kept playing; the new shell (one `quickshell`, one bar per monitor) reattached, connected and playing, the position moving on (3:46:46); Chris heard no break. `journalctl --user -b --since 20:32:07`: **zero** warnings from our files (Omarchy's own `Bar.qml` `moduleName` only). | 2026-10-07 |
+| — | R2 (B13, aax) | — | **Skipped:** every local book on BEE is aaxc. | 2026-10-07 |
+
+### Notes
+
+- **Hot-reload warnings are not startup warnings.** Earlier the same day the journal showed `FullView.qml:289` (`Cannot read property 'chapters' of null`) and `ChapterList.qml:40` (`Property 'follow' … is not a function`) at 15:43:54–15:44:09 and 15:53:53. The first came from another plugin's folder changing (omamail), which reloads every plugin, and a Quickshell crash and self-restart; the second from the `git pull` into the live folder. The brief already expects these warnings during a reload. A clean restart (step 8) logs none.
+
 ## B11 — 2026-10-06/07, HMSP-OMARCHYBEE (two 1920×1080 monitors, scale 1), live folder detached at `ad190b4` (`b11-desktop`, Codex PASS)
 
 Start state: real mode (no dev-fake flag), one `quickshell`, one bar per monitor, signed in as Christopher, 91 books, nothing playing; Carl (`book.m4b`) the only local book. Chris did the clicking; Claude Code drove and checked IPC state. Key checks report counts only: the needles are the book's key and iv plus the account activation bytes, read in-process and never printed. Times are UTC.
