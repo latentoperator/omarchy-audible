@@ -43,8 +43,8 @@ def test_f17_auto_remove_unloads_the_loaded_book_first():
 
 def test_f18_the_retry_interval_follows_the_failures():
     sync = read("qml/PositionSync.qml")
-    # The transition moved into Sync.step in P9 PR 7; its offline and reset
-    # behavior is exercised by test_sync_reducer.test_offline_backoff_and_reset.
+    # The transition moved into Sync.step in P9 PR 7; failure-count growth and
+    # its reset after a successful flush are exercised by the reducer vector.
     assert "readonly property int failedFlushes: reducerState.failedFlushes" in sync
     assert "retryIntervalMs: Sync.retryDelayMs(failedFlushes)" in sync
     service = read("Service.qml")

@@ -209,7 +209,7 @@ _sync.cleanState = function (state) {
     Object.keys(state.lastPushed).forEach(function (asin) { base.lastPushed[asin] = state.lastPushed[asin]; });
   }
   base.requested = _sync.list(state.requested).slice();
-  base.plan = _sync.list(state.plan).slice();
+  base.plan = _sync.list(state.plan).filter(_sync.isObject);
   base.current = _sync.isObject(state.current) ? state.current : null;
   base.progressed = state.progressed === true;
   return base;
