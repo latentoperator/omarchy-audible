@@ -602,6 +602,30 @@ def test_queue_settings_save_failure_success_and_path_gates(store):
     saved, effects = vector(store, failed, type="saved")
     assert saved == {**failed, "lastError": ""}
     assert effects == []
+    written = {
+        "path": PATH,
+        "doc": loaded_doc,
+        "loaded": True,
+        "dirty": False,
+        "pendingOps": [],
+        "lastError": "",
+        "adoptWaiting": None,
+    }
+    failed, effects = vector(store, written, type="save_failed")
+    assert failed == {
+        **written,
+        "dirty": True,
+        "lastError": "could not save state.json",
+    }
+    assert effects == []
+    retried, effects = vector(store, failed, type="save")
+    assert retried == {**failed, "dirty": False}
+    assert effects == [
+        {
+            "type": "write",
+            "text": '{"schema":1,"books":{},"push_queue":[],"volume":null,"speed":null}',
+        }
+    ]
     settings, effects = vector(
         store, loaded, type="set_player_settings", volume=55, speed=1.5
     )
@@ -663,6 +687,14 @@ def test_malformed_inputs_never_throw(store):
         {},
         {"type": "adopt", "text": None, "path": 1},
         {"type": "backup_result", "code": "0"},
+        {"type": "backup_result", "code": 1},
+        {"type": "save"},
+        {"type": "flush"},
+        {"type": "finished", "asin": "A"},
+        {"type": "saved"},
+        {"type": "save_failed"},
+        {"type": "retry_backup"},
+        {"type": "path_changed", "path": PATH},
         {"type": "record", "asin": [], "ms": "x", "at": None},
         {"type": "set_queue", "queue": "bad"},
         {"type": "set_player_settings", "volume": [], "speed": {}},

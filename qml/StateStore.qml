@@ -47,6 +47,7 @@ Item {
   }
 
   function publish() {
+    // Listeners that mutate the store may react only to `loaded` (published last): write effects are serialized when their transition is computed.
     doc = root.reducerState.doc
     pendingOps = root.reducerState.pendingOps
     dirty = root.reducerState.dirty

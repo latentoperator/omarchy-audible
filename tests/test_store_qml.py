@@ -67,7 +67,8 @@ QtObject {
   function text() { return content }
   function setText(value) { log = log.concat([["write", value]]) }
   function waitForJob() { log = log.concat([["wait"]]) }
-  function reload() {}
+  property int reloadCount: 0
+  function reload() { reloadCount += 1 }
 }
 """,
         encoding="utf-8",
@@ -103,8 +104,11 @@ Item {
   property var serviceRef: null
   property var fileRef: null
   property var processRef: null
+  property var readRetryRef: null
+  property var backupRetryRef: null
   property bool reactToLoaded: false
   property bool flushFromLoaded: false
+  property var logAtFlushReturn: []
   QtObject {
     id: service
     property var calls: []
@@ -121,6 +125,10 @@ Item {
       for (var i = 0; i < store.data.length; i++) {
         if (store.data[i].log !== undefined) top.fileRef = store.data[i]
         if (store.data[i].command !== undefined) top.processRef = store.data[i]
+        if (store.data[i].interval === 30000 && store.data[i].running !== undefined) {
+          if (top.readRetryRef === null) top.readRetryRef = store.data[i]
+          else top.backupRetryRef = store.data[i]
+        }
       }
     }
   }
@@ -141,6 +149,7 @@ Item {
       if (top.flushFromLoaded && store.loaded) {
         store.setQueue([{ "asin": "A", "ms": 5000, "at": "queued" }])
         store.flush()
+        top.logAtFlushReturn = fileRef.log.slice()
       }
     }
   }
@@ -157,17 +166,26 @@ Item {
     store.record("A", 2000)
     fileRef.content = "broken"
     fileRef.loaded()
-    var initial = { command: processRef.command, log: fileRef.log, loaded: store.loaded }
+    var initial = {
+      command: processRef.command,
+      log: fileRef.log,
+      loaded: store.loaded,
+      backupRunning: processRef.running
+    }
     processRef.finish(1)
     var failed = { log: fileRef.log, retryRunning: backupRetryRunning(), loaded: store.loaded }
+    backupRetryRef.triggered()
+    var retried = processRef.running
     processRef.finish(0)
     return {
       command: initial.command,
       initialLog: initial.log,
       initialLoaded: initial.loaded,
+      initialBackupRunning: initial.backupRunning,
       failedLog: failed.log,
       retryRunning: failed.retryRunning,
       failedLoaded: failed.loaded,
+      retried: retried,
       finalLog: fileRef.log,
       finalLoaded: store.loaded
     }
@@ -199,7 +217,68 @@ Item {
     flushFromLoaded = true
     fileRef.content = text
     fileRef.loaded()
+    return { events: fileRef.log, atReturn: logAtFlushReturn }
+  }
+  function runSaveFailed(text) {
+    fileRef.content = text
+    fileRef.loaded()
+    store.record("A", 1000)
+    store.save()
+    var firstWrites = fileRef.log.length
+    fileRef.saveFailed(0)
+    var failureDirty = store.dirty
+    var failureText = store.lastError
+    store.save()
+    var retryWrites = fileRef.log.length
+    var retriedText = fileRef.log[1][1]
+    fileRef.saved()
+    return {
+      firstWrites: firstWrites,
+      failureDirty: failureDirty,
+      failureText: failureText,
+      retryWrites: retryWrites,
+      retriedText: retriedText,
+      clearedError: store.lastError
+    }
+  }
+  function runLoadFailures() {
+    fileRef.loadFailed(0)
+    var otherError = store.lastError
+    var readRetryRunning = readRetryRef.running
+    readRetryRef.triggered()
+    var reloads = fileRef.reloadCount
+    fileRef.loadFailed(1)
+    return {
+      otherError: otherError,
+      readRetryRunning: readRetryRunning,
+      reloads: reloads,
+      loadedAfterMissing: store.loaded,
+      writes: fileRef.log.length
+    }
+  }
+  function runFinishedLoaded(text) {
+    fileRef.content = text
+    fileRef.loaded()
+    store.markFinished("A")
+    return { writes: fileRef.log, finished: store.doc.books.A.finished }
+  }
+  function runFinishedUnloaded() {
+    store.markFinished("A")
+    return { writes: fileRef.log.length, loaded: store.loaded }
+  }
+  function runPlayerSettings(text) {
+    fileRef.content = text
+    fileRef.loaded()
+    store.setPlayerSettings(55, 1.5)
     return fileRef.log
+  }
+  function runPathChanged(text) {
+    fileRef.content = text
+    fileRef.loaded()
+    store.path = "/fake/next-state.json"
+    store.record("A", 1000)
+    store.save()
+    return { path: store.reducerState.path, writes: fileRef.log }
   }
 }
 """,
@@ -259,8 +338,10 @@ def test_corrupt_backup_retry_and_successful_replay_wiring(qml_store):
     ]
     assert result["initialLog"] == []
     assert result["initialLoaded"] is False
+    assert result["initialBackupRunning"] is True
     assert result["failedLog"] == []
     assert result["retryRunning"] is True
+    assert result["retried"] is True
     assert result["failedLoaded"] is False
     assert result["finalLoaded"] is True
     assert len(result["finalLog"]) == 1
@@ -287,6 +368,60 @@ def test_position_sync_replays_two_deferred_positions_on_load(qml_store):
 
 def test_flush_from_loaded_reaction_writes_and_waits_before_return(qml_store):
     invoke, _warnings = qml_store
-    events = invoke("runFlushFromLoadedReaction", _valid_state())
-    assert events[0][0] == "write"
-    assert events[1] == ["wait"]
+    result = invoke("runFlushFromLoadedReaction", _valid_state())
+    assert result["atReturn"][0][0] == "write"
+    assert result["atReturn"][1] == ["wait"]
+    assert result["events"] == result["atReturn"]
+
+
+def test_save_failed_from_clean_state_retries_write_and_saved_clears_error(qml_store):
+    invoke, _warnings = qml_store
+    result = invoke("runSaveFailed", _valid_state())
+    assert result["firstWrites"] == 1
+    assert result["failureDirty"] is True
+    assert result["failureText"] == "could not save state.json"
+    assert result["retryWrites"] == 2
+    assert json.loads(result["retriedText"])["books"]["A"]["ms"] == 1000
+    assert result["clearedError"] == ""
+
+
+def test_load_failure_retry_and_missing_file_wiring(qml_store):
+    invoke, _warnings = qml_store
+    result = invoke("runLoadFailures")
+    assert result == {
+        "otherError": "could not read state.json",
+        "readRetryRunning": True,
+        "reloads": 1,
+        "loadedAfterMissing": True,
+        "writes": 0,
+    }
+
+
+def test_mark_finished_saves_when_loaded(qml_store):
+    invoke, _warnings = qml_store
+    loaded = invoke("runFinishedLoaded", _valid_state())
+    assert len(loaded["writes"]) == 1
+    assert loaded["finished"] is True
+    assert json.loads(loaded["writes"][0][1])["books"]["A"]["finished"] is True
+
+
+def test_mark_finished_waits_when_unloaded(qml_store):
+    invoke, _warnings = qml_store
+    unloaded = invoke("runFinishedUnloaded")
+    assert unloaded == {"writes": 0, "loaded": False}
+
+
+def test_player_settings_are_saved(qml_store):
+    invoke, _warnings = qml_store
+    writes = invoke("runPlayerSettings", _valid_state())
+    assert len(writes) == 1
+    doc = json.loads(writes[0][1])
+    assert doc["volume"] == 55
+    assert doc["speed"] == 1.5
+
+
+def test_path_change_updates_reducer_state(qml_store):
+    invoke, _warnings = qml_store
+    result = invoke("runPathChanged", _valid_state())
+    assert result["path"] == "/fake/next-state.json"
+    assert len(result["writes"]) == 1
