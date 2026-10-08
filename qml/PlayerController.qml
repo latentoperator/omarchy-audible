@@ -66,6 +66,9 @@ Item {
   property var sleepTimer: null
   property real fadeBaseVolume: -1
 
+  // The user moved the position: a seek, skip or chapter jump was sent (F38).
+  signal userMoved()
+
   // Subscribe on the derived `connected`, not in Socket.onConnectionStateChanged:
   // the socket can connect before Loader.item is assigned (S5 pitfall 1).
   onConnectedChanged: {
@@ -239,9 +242,13 @@ Item {
   function pause() { send(Mpv.pauseCommand(true)) }
   function resume() { send(Mpv.pauseCommand(false)) }
   function toggle() { send(Mpv.pauseCommand(playing)) }
-  function skip(seconds) { send(Mpv.skipCommand(seconds)) }
-  function seekMs(ms) { send(Mpv.seekCommand(ms / 1000)) }
-  function setChapter(index) { send(Mpv.chapterCommand(index)) }
+  // A seek, skip or chapter jump the user asked for says so with `userMoved`,
+  // so a move made while paused is saved (F38). `jumpToMs` is a seek that is
+  // not the user's (the catch-up jump).
+  function skip(seconds) { if (send(Mpv.skipCommand(seconds))) userMoved() }
+  function seekMs(ms) { if (send(Mpv.seekCommand(ms / 1000))) userMoved() }
+  function jumpToMs(ms) { send(Mpv.seekCommand(ms / 1000)) }
+  function setChapter(index) { if (send(Mpv.chapterCommand(index))) userMoved() }
   function setSpeed(value) { send(Mpv.speedCommand(value)) }
   function setVolume(value) { send(Mpv.volumeCommand(value)) }
 

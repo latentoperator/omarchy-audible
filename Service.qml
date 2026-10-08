@@ -111,9 +111,10 @@ Item {
   // switch or a crash can still save where the old book stopped.
   property string snapAsin: ""
   property real snapMs: 0
-  // The loaded book advanced while playing since it was last saved. Only then
-  // is there a new listening position to record or push; a paused book that is
-  // merely switched away from must keep its old listening time.
+  // The loaded book advanced while playing, or the user moved it (F38), since
+  // it was last saved. Only then is there a new listening position to record
+  // or push; a paused book that is merely switched away from, or reattached
+  // after a shell restart, must keep its old listening time.
   property bool snapDirty: false
   // The same, for the push queue: the book advanced since its position was
   // last queued for write-back. Kept apart from `snapDirty` because the 10 s
@@ -456,7 +457,7 @@ Item {
       if (target >= 0) {
         logEvent("catchup", "jump " + Math.round(player.positionMs) + " -> " + target)
         showCatchupNote(Format.clock(player.positionMs))
-        player.seekMs(target)
+        player.jumpToMs(target)
       }
     }
     player.resume()
@@ -560,6 +561,12 @@ Item {
       snapUnpushed = false
       sync.notePlayed(asin)
     }
+  }
+
+  // The loaded book has a new listening position (Playback.positionCounts).
+  function markMoved() {
+    snapDirty = true
+    snapUnpushed = true
   }
 
   function onBookSwitched() {
@@ -893,10 +900,13 @@ Item {
       // A null time-pos (a file being swapped) is not a position.
       if (!player.derived.hasPosition || Playback.asinFromPath(player.path) !== root.snapAsin) return
       root.snapMs = player.positionMs
-      if (player.playing) {
-        root.snapDirty = true
-        root.snapUnpushed = true
-      }
+      if (Playback.positionCounts("report", player.playing)) root.markMoved()
+    }
+
+    // A seek, skip or chapter jump made while paused is saved too (F38). The
+    // new position arrives in onPositionMsChanged a moment later.
+    function onUserMoved() {
+      if (Playback.asinFromPath(player.path) === root.snapAsin && Playback.positionCounts("user", player.playing)) root.markMoved()
     }
 
     // Pause, stop or a crash: save where the book stopped.
