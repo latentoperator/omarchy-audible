@@ -1,8 +1,8 @@
 """P9 PR 2 — one home for each shared constant, and no reference to a constant that isn't there.
 
-A typo in ``Glyphs.GLYPH_X`` gives a blank icon and nothing else fails, so the first test reads every
-``.qml`` file and every ``.js`` file under ``qml/`` and checks that each ``Qualifier.UPPER_NAME``
-it uses is declared in the lib that qualifier imports.
+A typo in ``Glyphs.GLYPH_X`` gives a blank icon and nothing else fails, so the first tests read every
+``.qml`` file and every ``.js`` file under ``qml/`` and check each ``Qualifier.UPPER_NAME`` in its
+code: the qualifier must be a lib that file imports, and the name must be declared in that lib.
 """
 
 from __future__ import annotations
@@ -20,6 +20,11 @@ IMPORT = re.compile(
     r'^[ \t]*\.?import[ \t]+"([^"]*?)(\w+)\.js"[ \t]+as[ \t]+(\w+)', re.MULTILINE
 )
 DECLARED = re.compile(r"^var[ \t]+([A-Z][A-Z0-9_]*)\b", re.MULTILINE)
+# Any `Qualifier.UPPER_NAME`, whether or not the file imports the qualifier.
+# Qt's own enums (`Qt.Key_Escape`, `Text.AlignLeft`) are not all caps.
+REFERENCE = re.compile(r"(?<![\w.])([A-Z]\w*)\.([A-Z][A-Z0-9_]*)\b")
+# A `//` comment: at the start of a line or after a space, so `https://` stays.
+COMMENT = re.compile(r"(?:^|(?<=\s))//.*$", re.MULTILINE)
 
 
 def sources() -> list[pathlib.Path]:
@@ -28,40 +33,89 @@ def sources() -> list[pathlib.Path]:
 
 
 def declared(lib: str) -> set[str]:
-    return set(DECLARED.findall((LIB / f"{lib}.js").read_text(encoding="utf-8")))
+    path = LIB / f"{lib}.js"
+    return (
+        set(DECLARED.findall(path.read_text(encoding="utf-8")))
+        if path.is_file()
+        else set()
+    )
 
 
-def uses() -> list[tuple[str, str, str, str]]:
+def problems(text: str) -> list[str]:
+    """Each `Qualifier.UPPER_NAME` in `text`'s code that won't resolve at runtime."""
+    imports = {qualifier: lib for _, lib, qualifier in IMPORT.findall(text)}
     found = []
-    for path in sources():
-        text = path.read_text(encoding="utf-8")
-        qualifiers = {q: lib for _, lib, q in IMPORT.findall(text)}
-        for qualifier, lib in qualifiers.items():
-            for name in re.findall(
-                rf"(?<![\w.]){qualifier}\.([A-Z][A-Z0-9_]*)\b", text
-            ):
-                found.append((str(path.relative_to(REPO)), qualifier, lib, name))
+    for qualifier, name in REFERENCE.findall(COMMENT.sub("", text)):
+        if qualifier not in imports:
+            found.append(f"{qualifier}.{name}: {qualifier} is not imported")
+        elif name not in declared(imports[qualifier]):
+            found.append(f"{qualifier}.{name}: not declared in {imports[qualifier]}.js")
     return found
 
 
 def test_the_scan_sees_the_constants():
-    found = uses()
-    assert ("qml/views/MiniView.qml", "Glyphs", "Glyphs", "GLYPH_MOON") in found
-    assert ("qml/lib/Onboarding.js", "Panel", "Panel", "VIEW_FULL") in found
-    assert ("Service.qml", "Panel", "Panel", "VIEW_LIBRARY") in found
+    mini = (REPO / "qml/views/MiniView.qml").read_text(encoding="utf-8")
+    assert ("Glyphs", "GLYPH_MOON") in REFERENCE.findall(mini)
+    onboarding = (LIB / "Onboarding.js").read_text(encoding="utf-8")
+    assert ("Panel", "VIEW_FULL") in REFERENCE.findall(COMMENT.sub("", onboarding))
 
 
-def test_every_qualified_constant_is_declared_in_its_lib():
-    missing = sorted(
-        {(f, f"{q}.{n}") for f, q, lib, n in uses() if n not in declared(lib)}
-    )
-    assert missing == []
+def test_every_qualified_constant_resolves():
+    found = {}
+    for path in sources():
+        bad = problems(path.read_text(encoding="utf-8"))
+        if bad:
+            found[str(path.relative_to(REPO))] = bad
+    assert found == {}
 
 
-def test_the_check_catches_a_typo():
-    text = 'import "../lib/Glyphs.js" as Glyphs\nText { text: Glyphs.GLYPH_MON }\n'
-    names = re.findall(r"(?<![\w.])Glyphs\.([A-Z][A-Z0-9_]*)\b", text)
-    assert [n for n in names if n not in declared("Glyphs")] == ["GLYPH_MON"]
+@pytest.mark.parametrize(
+    "rel,old,new,problem",
+    [
+        # A typo'd name, a typo'd qualifier and a dropped import, in a view,
+        # a component and a lib (Codex, round 1).
+        (
+            "qml/views/MiniView.qml",
+            "Glyphs.GLYPH_MOON",
+            "Glyphs.GLYPH_MON",
+            "Glyphs.GLYPH_MON: not declared in Glyphs.js",
+        ),
+        (
+            "qml/views/MiniView.qml",
+            "Glyphs.GLYPH_MOON",
+            "Glyph.GLYPH_MOON",
+            "Glyph.GLYPH_MOON: Glyph is not imported",
+        ),
+        (
+            "qml/components/Cover.qml",
+            'import "../lib/Glyphs.js" as Glyphs\n',
+            "",
+            "Glyphs.GLYPH_BOOK: Glyphs is not imported",
+        ),
+        (
+            "qml/lib/Panel.js",
+            "Glyphs.GLYPH_PAUSED",
+            "Glyph.GLYPH_PAUSED",
+            "Glyph.GLYPH_PAUSED: Glyph is not imported",
+        ),
+        (
+            "qml/lib/Onboarding.js",
+            '.import "Panel.js" as Panel\n',
+            "",
+            "Panel.VIEW_ONBOARDING: Panel is not imported",
+        ),
+    ],
+)
+def test_the_check_catches_a_broken_reference(rel, old, new, problem):
+    text = (REPO / rel).read_text(encoding="utf-8")
+    assert old in text and problems(text) == []
+    assert problem in problems(text.replace(old, new, 1))
+
+
+def test_comments_are_not_code_but_code_after_a_url_is():
+    assert problems("// See `Glyph.GLYPH_X`.\nvar A = 1;  // Other.NAME\n") == []
+    text = 'var A = "https://example.com/" + Glyph.GLYPH_X;\n'
+    assert problems(text) == ["Glyph.GLYPH_X: Glyph is not imported"]
 
 
 def definitions(pattern: str) -> dict[str, list[str]]:
