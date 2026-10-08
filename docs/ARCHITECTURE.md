@@ -196,7 +196,7 @@ Read ✅: `audible api 1.0/annotations/lastpositions -p asins=A,B` returns, per 
 Write ✅ S3: `PUT 1.0/lastpositions/{asin}` with `{acr, asin, position_ms}`; `acr` comes from `1.0/content/{asin}/metadata?response_groups=content_reference` and is cached in `meta.json`. The round trip is exact, and the phone app follows it (D4: **ship write-back**, G0 decision).
 
 **The phone moves to a pushed position by itself** (it shows a notice with undo, it does not ask). So a wrong push silently moves the user's phone. Push rules:
-- Push only positions produced by **listening on this machine**: on pause, stop, book switch, quit, and every ~60 s while playing. A seek, skip or chapter jump made here while paused counts too (F38, `Playback.positionCounts`); the position a reattach reports after a shell restart does not.
+- Push only positions produced by **listening on this machine**: on pause, stop, book switch, quit, and every ~60 s while playing. A seek, skip or chapter jump made here while paused counts too, once mpv reports where it landed (F38, `Playback.positionCounts` / `moveSentAfter`); the position a reattach reports after a shell restart does not.
 - Never push from `sync`, from the merge, or for a book not played locally since it was downloaded.
 - Never push a position older than the remote `updated_at` (the user listened elsewhere since). Re-read the remote position immediately before a push. This device's own echo is never "newer" — see below.
 - `position-push` **requires** `--at` (the local listening time the position came from). Without it the stale check cannot fire, so the command is `error(code=invalid_args)` with the usage exit code (F3).

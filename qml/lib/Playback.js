@@ -157,17 +157,30 @@ function markFinished(state, asin) {
   return next;
 }
 
-// Whether a change to the loaded book's position is a new listening position,
-// to be saved and pushed (F38). `cause` is "report" for a position mpv
-// reports, which counts only while playing (a reattach after a shell restart
-// reports one too, and that is not listening), or "user" for a seek, skip or
-// chapter jump the user made, which counts paused or playing (ARCHITECTURE
-// 4.6: a skip made while paused is kept).
-function positionCounts(cause, playing) {
-  if (cause === "user") {
+// Whether a position mpv reports for the loaded book is a new listening
+// position, to be saved and pushed (F38): one reached by playing, or the
+// first report after the user's seek, skip or chapter jump, paused or playing
+// (ARCHITECTURE 4.6: a skip made while paused is kept). A report with neither,
+// such as the position a reattach reports after a shell restart, is not
+// listening.
+function positionCounts(playing, moveSent) {
+  return playing === true || moveSent === true;
+}
+
+// Whether a user's move is still waiting for mpv to report where it landed,
+// after `event`: "user" (a seek, skip or chapter jump was sent for the loaded
+// book), "report" (mpv reported a position for it, which used the move up) or
+// "switch" (another book, or none, is loaded: the move was not this book's).
+// The move is counted only when its position arrives, so a quit or a restart
+// before that never saves the old position as a new listening one.
+function moveSentAfter(moveSent, event) {
+  if (event === "user") {
     return true;
   }
-  return cause === "report" && playing === true;
+  if (event === "report" || event === "switch") {
+    return false;
+  }
+  return moveSent === true;
 }
 
 // A copy of `state` with the push queue replaced.
