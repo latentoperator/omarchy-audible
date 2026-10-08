@@ -29,12 +29,16 @@ def function_body(source: str, name: str) -> str:
 
 
 def test_f17_auto_remove_unloads_the_loaded_book_first():
-    body = function_body(read("Service.qml"), "removeIfStillFinished")
-    # The loaded book goes through removeBook (quit, then removeAfterUnload);
+    # P9 PR 4: the auto-remove path moved to qml/Removals.qml.
+    body = function_body(read("qml/Removals.qml"), "removeIfStillFinished")
+    # The loaded book goes through removeBook (quit, then the unload list);
     # only a book that isn't loaded is removed straight away.
-    assert "if (asin === loadedAsin) removeBook(asin)" in body
-    assert 'else run("remove", [asin], "autoremove")' in body
-    assert body.index("autoRemoveAllowed") < body.index("removeBook(asin)")
+    assert (
+        "if (asin === service.loadedAsin) service.removeBook(asin, Unload.PURPOSE_AUTO)"
+        in body
+    )
+    assert 'else service.run("remove", [asin], Unload.PURPOSE_AUTO)' in body
+    assert body.index("autoRemoveAllowed") < body.index("removeBook(asin")
 
 
 def test_f18_the_retry_interval_follows_the_failures():

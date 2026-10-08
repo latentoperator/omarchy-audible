@@ -47,6 +47,7 @@ omarchy-audible/                     (repo root == plugin root)
     BookRow.qml  ChapterList.qml  ScrubBar.qml  Cover.qml  StateBadge.qml
     PlayerController.qml  LibraryModel.qml  JobRunner.qml  Format.js
     ServiceIpc.qml                   the one IpcHandler (`latentoperator.audible`), a child of Service
+    Removals.qml                     books waiting to be unloaded before removal, and auto-remove
   bin/omarchy-audible                stdlib-only Python launcher (bootstraps venv, dispatches)
   backend/omarchy_audible/           Python package (runs inside the venv)
   tests/  fixtures/
@@ -273,7 +274,7 @@ Exposes: `loaded`, `playing`, `positionMs`, `durationMs`, `chapters[]`, `chapter
 
 - Position persistence: write `state.json` every 10 s while playing and on pause/switch/quit; a move made while paused is written at the next stop, switch or quit (F38). The service is the only writer, using `FileView` with atomic writes (§4.8).
 - Remote push: every ~60 s while playing and on pause/stop/switch/quit, through `position-push`, following the push rules in §4.6. Failed pushes are queued in `state.json` and retried.
-- Finished detection: `eof-reached` or position ≥ duration − 30 s ⇒ mark finished and, if `autoRemoveFinished`, call `remove`.
+- Finished detection: `eof-reached` or position ≥ duration − 30 s ⇒ mark finished and, if `autoRemoveFinished`, call `remove` (`qml/Removals.qml`). A loaded book is unloaded first and removed once mpv lets go, the same way as the user's Remove (F17). The pending-unload list is `qml/lib/Unload.js`'s reducer, and an auto-remove keeps its purpose after the unload: the event log says so, and it is cancelled if `autoRemoveFinished` is off by then (P8 nit 3).
 - Sleep timer lives in QML (a `Timer`; "end of chapter" watches `chapter`). It pauses and fades over 5 s.
 - Reattach: on service start, if the socket exists and answers, subscribe and restore state instead of spawning a new mpv.
 
