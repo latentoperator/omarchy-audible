@@ -1,4 +1,5 @@
 .pragma library
+.import "Positions.js" as Positions
 
 // Queue helpers for position write-back (ARCHITECTURE 4.6). `Positions.js`
 // decides what may be pushed (`shouldPush`, `enqueue`, `flushPlan`); this file
@@ -108,3 +109,139 @@ function staleNotice(consecutiveStale) {
   if (count < STALE_NOTICE_AFTER) return "";
   return "Your position isn't reaching Audible. Check this computer's clock.";
 }
+
+// PositionSync's flush/position-get/position-push sequence. The caller owns
+// this plain state and applies the returned effects; this reducer never runs
+// a process, writes the queue, schedules work, or throws on bad input.
+function createState() {
+  return {
+    "flushing": false,
+    "lastResult": "",
+    "failedFlushes": 0,
+    "staleCount": 0,
+    "lastPushed": {},
+    "requested": [],
+    "plan": [],
+    "current": null,
+    "progressed": false
+  };
+}
+
+// Events: flush(queue), positions(queue, items, purpose), finished(job, outcome,
+// queue), refused(purpose, queue), and reset_retry.
+// Effects: run(command, args, purpose), setQueue(queue), flush_later, and
+// finish(result). `Positions.flushPlan` remains the authority for drop/send.
+function step(state, event) {
+  var current = _sync.cleanState(state);
+  if (!_sync.isObject(event)) return _sync.result(current, []);
+  var type = event.type;
+  if (type === "reset_retry") {
+    current.failedFlushes = 0;
+    return _sync.result(current, []);
+  }
+  if (type === "flush") {
+    var queue = _sync.list(event.queue);
+    if (current.flushing || queue.length === 0) return _sync.result(current, []);
+    current.requested = asinsOf(queue, BATCH_SIZE);
+    current.plan = [];
+    current.current = null;
+    current.progressed = false;
+    current.flushing = true;
+    return _sync.result(current, [{ "type": "run", "command": "position-get", "args": current.requested.slice(), "purpose": "flush" }]);
+  }
+  if (type === "positions" && event.purpose === "flush" && current.flushing) {
+    var positionQueue = _sync.list(event.queue);
+    var split = Positions.flushPlan(positionQueue, event.items);
+    var next = positionQueue;
+    for (var d = 0; d < split.drop.length; d++) {
+      next = removeEntry(next, split.drop[d]);
+      current.progressed = true;
+    }
+    var effects = [];
+    if (split.drop.length > 0) effects.push({ "type": "setQueue", "queue": next });
+    current.plan = sendable(split.send, current.requested);
+    return _sync.result(current, effects);
+  }
+  if (type === "finished" && _sync.isObject(event.job) && event.job.purpose === "flush" && current.flushing) {
+    if (!_sync.isObject(event.outcome) || event.outcome.ok !== true) {
+      return _sync.finish(current, event.queue, "offline");
+    }
+    return _sync.sendNext(current, event.queue);
+  }
+  if (type === "finished" && _sync.isObject(event.job) && event.job.purpose === "push" && current.flushing) {
+    var entry = current.current;
+    current.current = null;
+    current.staleCount = staleCountAfter(current.staleCount, event.outcome);
+    if (_sync.isObject(event.outcome) && (event.outcome.ok === true || event.outcome.code === "stale")) {
+      var pushedQueue = removeEntry(_sync.list(event.queue), entry);
+      var pushEffects = [{ "type": "setQueue", "queue": pushedQueue }];
+      if (event.outcome.ok === true && _sync.isObject(entry)) {
+        current.lastPushed[entry.asin] = entry.ms;
+      }
+      current.progressed = true;
+      var nextSend = _sync.sendNext(current, pushedQueue);
+      return _sync.result(nextSend.state, pushEffects.concat(nextSend.effects));
+    }
+    return _sync.finish(current, event.queue, String(_sync.isObject(event.outcome) && event.outcome.code ? event.outcome.code : "error"));
+  }
+  if (type === "refused" && current.flushing) {
+    return _sync.finish(current, event.queue, "refused");
+  }
+  return _sync.result(current, []);
+}
+
+var _sync = {};
+
+_sync.isObject = function (value) {
+  return value !== null && value !== undefined && typeof value === "object" && !Array.isArray(value);
+};
+_sync.list = function (value) { return Array.isArray(value) ? value : []; };
+_sync.count = function (value) { return typeof value === "number" && isFinite(value) && value > 0 ? Math.floor(value) : 0; };
+_sync.cleanState = function (state) {
+  var base = createState();
+  if (!_sync.isObject(state)) return base;
+  base.flushing = state.flushing === true;
+  base.lastResult = typeof state.lastResult === "string" ? state.lastResult : "";
+  base.failedFlushes = _sync.count(state.failedFlushes);
+  base.staleCount = _sync.count(state.staleCount);
+  base.lastPushed = {};
+  if (_sync.isObject(state.lastPushed)) {
+    Object.keys(state.lastPushed).forEach(function (asin) { base.lastPushed[asin] = state.lastPushed[asin]; });
+  }
+  base.requested = _sync.list(state.requested).slice();
+  base.plan = _sync.list(state.plan).filter(_sync.isObject);
+  base.current = _sync.isObject(state.current) ? state.current : null;
+  base.progressed = state.progressed === true;
+  return base;
+};
+_sync.result = function (state, effects) { return { "state": state, "effects": effects }; };
+_sync.finish = function (state, queue, result) {
+  state.flushing = false;
+  state.lastResult = result;
+  state.failedFlushes = failuresAfter(state.failedFlushes, result);
+  state.requested = [];
+  state.plan = [];
+  state.current = null;
+  var effects = [{ "type": "finish", "result": result }];
+  if (state.progressed && _sync.list(queue).length > 0) effects.push({ "type": "flush_later" });
+  return _sync.result(state, effects);
+};
+_sync.sendNext = function (state, queue) {
+  var plan = state.plan.slice();
+  var items = _sync.list(queue);
+  while (plan.length > 0) {
+    var candidate = plan.shift();
+    var stillQueued = items.some(function (entry) {
+      return _sync.isObject(entry) && entry.asin === candidate.asin && entry.ms === candidate.ms && entry.at === candidate.at;
+    });
+    if (!stillQueued) {
+      state.progressed = true;
+      continue;
+    }
+    state.plan = plan;
+    state.current = candidate;
+    return _sync.result(state, [{ "type": "run", "command": "position-push", "args": pushArgs(candidate), "purpose": "push" }]);
+  }
+  state.plan = [];
+  return _sync.finish(state, items, "done");
+};

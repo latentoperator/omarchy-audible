@@ -43,10 +43,10 @@ def test_f17_auto_remove_unloads_the_loaded_book_first():
 
 def test_f18_the_retry_interval_follows_the_failures():
     sync = read("qml/PositionSync.qml")
+    # The transition moved into Sync.step in P9 PR 7; failure-count growth and
+    # its reset after a successful flush are exercised by the reducer vector.
+    assert "readonly property int failedFlushes: reducerState.failedFlushes" in sync
     assert "retryIntervalMs: Sync.retryDelayMs(failedFlushes)" in sync
-    assert "failedFlushes = Sync.failuresAfter(failedFlushes, result)" in function_body(
-        sync, "finish"
-    )
     service = read("Service.qml")
     # Reset on play and on panel open.
     assert "sync.resetRetry()" in function_body(service, "viewForOpen")

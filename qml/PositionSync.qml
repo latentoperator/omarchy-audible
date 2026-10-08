@@ -16,24 +16,19 @@ Item {
   // The StateStore, and the Service (its `run` returns false when it refuses).
   property var store: null
   property var service: null
-  // Failed flushes in a row; the retry waits longer after each (F18).
-  property int failedFlushes: 0
+  // The reducer state has one writer: apply() assigns each Sync.step result.
+  property var reducerState: Sync.createState()
+  readonly property int failedFlushes: reducerState.failedFlushes
   readonly property int retryIntervalMs: Sync.retryDelayMs(failedFlushes)
-
-  // Last pushed position per ASIN, in memory (state.json has no field for it).
-  property var lastPushed: ({})
-  property bool flushing: false
-  property string lastResult: ""
-  // Pushes refused as `stale` in a row (P6). In memory only: a restart starts
-  // the count again. Mini shows `staleNotice` while it is non-empty.
-  property int consecutiveStale: 0
+  readonly property var lastPushed: reducerState.lastPushed
+  readonly property bool flushing: reducerState.flushing
+  readonly property string lastResult: reducerState.lastResult
+  readonly property int consecutiveStale: reducerState.staleCount
   readonly property string staleNotice: Sync.staleNotice(consecutiveStale)
 
+  // Positions recorded before state.json loads wait here until the store has
+  // replayed them. Queue edits themselves remain the StateStore's contract.
   property var deferred: []
-  property var requested: []
-  property var plan: []
-  property var current: null
-  property bool progressed: false
 
   readonly property var queue: store && store.doc && store.doc.push_queue ? store.doc.push_queue : []
 
@@ -70,81 +65,42 @@ Item {
     return true
   }
 
+  function apply(event) {
+    var transition = Sync.step(reducerState, event)
+    reducerState = transition.state
+    transition.effects.forEach(function(effect) {
+      if (effect.type === "run") {
+        if (!service.run(effect.command, effect.args, effect.purpose)) {
+          apply({ "type": "refused", "purpose": effect.purpose, "queue": queue })
+        }
+      } else if (effect.type === "setQueue") {
+        store.setQueue(effect.queue)
+      } else if (effect.type === "flush_later") {
+        Qt.callLater(flush)
+      } else if (effect.type === "finish") {
+        // lastResult and retry scheduling are derived from the assigned state.
+      }
+    })
+  }
+
   function flush() {
-    if (flushing || queue.length === 0 || !service) return
-    requested = Sync.asinsOf(queue, Sync.BATCH_SIZE)
-    progressed = false
-    flushing = true
-    if (!service.run("position-get", requested, "flush")) finish("refused")
+    if (!service) return
+    apply({ "type": "flush", "queue": queue })
   }
 
   // Play and panel open retry sooner: the user is here, and maybe online.
   function resetRetry() {
-    failedFlushes = 0
-  }
-
-  function finish(result) {
-    flushing = false
-    lastResult = result
-    failedFlushes = Sync.failuresAfter(failedFlushes, result)
-    plan = []
-    current = null
-    // More entries may have arrived or been beyond one batch; go again only if
-    // this round moved something, so an offline queue does not spin.
-    if (progressed && queue.length > 0) Qt.callLater(flush)
+    apply({ "type": "reset_retry" })
   }
 
   function handleEvent(record, job) {
-    if (job.purpose !== "flush" || record.type !== "positions") return
-    var split = Positions.flushPlan(queue, record.items)
-    var next = queue
-    for (var i = 0; i < split.drop.length; i++) {
-      next = Sync.removeEntry(next, split.drop[i])
-      progressed = true
-    }
-    if (split.drop.length > 0) store.setQueue(next)
-    plan = Sync.sendable(split.send, requested)
+    if (!job || job.purpose !== "flush" || !record || record.type !== "positions") return
+    apply({ "type": "positions", "purpose": job.purpose, "queue": queue, "items": record.items })
   }
 
   function handleFinished(job, outcome) {
-    if (job.purpose === "flush") {
-      if (!outcome.ok) return finish("offline")
-      sendNext()
-    } else if (job.purpose === "push") {
-      var entry = current
-      current = null
-      consecutiveStale = Sync.staleCountAfter(consecutiveStale, outcome)
-      if (outcome.ok || outcome.code === "stale") {
-        // Sent, or the account moved past it: either way it leaves the queue.
-        store.setQueue(Sync.removeEntry(queue, entry))
-        if (outcome.ok) lastPushed[entry.asin] = entry.ms
-        progressed = true
-        sendNext()
-      } else {
-        finish(String(outcome.code))
-      }
-    }
-  }
-
-  // Sends the next planned entry that is still exactly what is queued. A
-  // newer listening may have replaced it while an earlier push was running;
-  // that one is left for the next flush instead of sending the old position.
-  function sendNext() {
-    while (plan.length > 0) {
-      var candidate = plan[0]
-      plan = plan.slice(1)
-      var stillQueued = queue.some(function(e) {
-        return e.asin === candidate.asin && e.ms === candidate.ms && e.at === candidate.at
-      })
-      if (!stillQueued) {
-        progressed = true
-        continue
-      }
-      current = candidate
-      if (!service.run("position-push", Sync.pushArgs(current), "push")) finish("refused")
-      return
-    }
-    finish("done")
+    if (!job || (job.purpose !== "flush" && job.purpose !== "push")) return
+    apply({ "type": "finished", "job": job, "outcome": outcome, "queue": queue })
   }
 
   // Entries saved by an earlier run are flushed once state.json is read.
