@@ -170,6 +170,17 @@ function positionCounts(cause, playing) {
   return cause === "report" && playing === true;
 }
 
+// Whether a position mpv reports is the snapshot book's (F39). It must be a
+// position (`hasPosition`; a file being swapped reports null), for the book
+// mpv shows (`reportAsin`) when that is the snapshot's (`snapAsin`), and no
+// load may be on its way (`loadSettled`, Mpv.moveHitsPath). In a switch from
+// A to B, mpv could report B's time-pos before B's path; without the last
+// check, that position would be saved and pushed as A's.
+function reportBelongs(hasPosition, reportAsin, snapAsin, loadSettled) {
+  return hasPosition === true && loadSettled === true
+    && typeof reportAsin === "string" && reportAsin.length > 0 && reportAsin === snapAsin;
+}
+
 // A copy of `state` with the push queue replaced.
 // A copy of `state` with the player's volume and speed (F21), or `state`
 // itself when both are already what it holds. Out-of-range values are not
