@@ -116,3 +116,43 @@ function jumpNote(wasText) {
   var base = "Continued from your other device";
   return typeof wasText === "string" && wasText.length > 0 ? base + " (was " + wasText + ")" : base;
 }
+
+// The bookkeeping when the catch-up read of `readAsin` finishes (`ok` is the
+// job's outcome). `state`: {reads (the books with a read queued or running,
+// asin -> true), results (finished reads' results by ASIN, each
+// `{asin, atMs, remote}`), prefetched (the last finished read, or null),
+// waitingAsin (the book a ⏯ waits on, or "")}. Returns the next `reads`,
+// `results` and `prefetched`, and whether the waiting ⏯ resumes now with
+// `remote` (the account entry, or null to resume in place). The read is
+// dropped and only its own result is used, so overlapping reads of different
+// books never touch each other: a failed read of A never clears B's
+// prefetched result. The inputs are not changed.
+function finishRead(state, readAsin, ok) {
+  var s = state !== null && typeof state === "object" ? state : {};
+  var reads = _copy(s.reads);
+  var results = _copy(s.results);
+  var own = ok === true && Object.prototype.hasOwnProperty.call(results, readAsin) ? results[readAsin] : null;
+  var result = own !== null && typeof own === "object" ? own : null;
+  delete reads[readAsin];
+  delete results[readAsin];
+  var prefetched = s.prefetched !== null && typeof s.prefetched === "object" ? s.prefetched : null;
+  if (result) prefetched = result;
+  else if (prefetched && prefetched.asin === readAsin) prefetched = null;
+  var resume = readResumes(s.waitingAsin, readAsin);
+  return {
+    "reads": reads,
+    "results": results,
+    "prefetched": prefetched,
+    "resume": resume,
+    "remote": resume && result ? (result.remote || null) : null
+  };
+}
+
+function _copy(object) {
+  var out = {};
+  if (object === null || typeof object !== "object" || Array.isArray(object)) return out;
+  for (var key in object) {
+    if (Object.prototype.hasOwnProperty.call(object, key)) out[key] = object[key];
+  }
+  return out;
+}

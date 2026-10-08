@@ -159,7 +159,7 @@ def test_user_moves_say_so_and_the_catchup_jump_does_not():
     assert "setChapter(target)" in function_body(player, "jumpChapter")
     assert "userMoved" not in function_body(player, "jumpToMs")
     # The catch-up jump is not the user's move.
-    resume = function_body(read("Service.qml"), "resumeCaughtUp")
+    resume = function_body(read("qml/CatchupFlow.qml"), "resumeCaughtUp")
     assert "player.jumpToMs(target)" in resume
     assert "player.seekMs(" not in resume
 

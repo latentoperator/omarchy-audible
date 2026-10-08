@@ -33,7 +33,6 @@ EXPECTED_API = {
     "CHOICE_ASK",
     "CHOICE_RESUME",
     "CHOICE_START_OVER",
-    "FINISH_TRAILING_MS",
     "ICON_DOWNLOAD",
     "ICON_PLAY",
     "ICON_RETRY",
@@ -152,7 +151,8 @@ def test_exports_the_expected_api(ui: qjs.JsModule) -> None:
 
 
 def test_constant_values(ui: qjs.JsModule) -> None:
-    assert ui.evaluate("FINISH_TRAILING_MS") == 30000
+    # One home since P9 PR 5: LibraryUi reads Positions' value.
+    assert ui.evaluate("Positions.FINISH_TRAILING_MS") == 30000
     assert ui.evaluate("BADGE_CLOUD") == "cloud"
     assert ui.evaluate("BADGE_OFFLINE") == "offline"
     assert ui.evaluate("BADGE_QUEUED") == "queued"

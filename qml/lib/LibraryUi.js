@@ -1,4 +1,5 @@
 .pragma library
+.import "Positions.js" as Positions
 
 // View logic for the Library drawer (PLAN L2, SCOPE FR-L2/FR-L6, ARCHITECTURE
 // 5.3 and 6).
@@ -10,18 +11,14 @@
 // moves and whether a sync is due. It holds no state: the same rows and flags
 // always give the same answer, so a view can bind straight to it.
 //
-// This is pure ECMAScript for the Qt JS engine: no imports, no Qt types, and
-// nothing here throws on bad input. A row whose `state` is missing or not one
-// of the six 5.3 values reads as the cloud row, which is a catalog book with no
-// local copy and no job.
+// This is pure ECMAScript for the Qt JS engine: no imports but `Positions.js`
+// (`FINISH_TRAILING_MS`: a finished book within it of the end has nothing
+// left to resume, SCOPE 6), no Qt types, and nothing here throws on bad input.
+// A row whose `state` is missing or not one of the six 5.3 values reads as the
+// cloud row, which is a catalog book with no local copy and no job.
 //
 // The public surface is the constants and the seven functions below. Everything
 // else lives on the private `_p` namespace so it cannot leak into QML.
-
-// A position within this many milliseconds of the end counts as at-the-end, so
-// a finished book there has nothing left to resume. Matches
-// `Positions.FINISH_TRAILING_MS` and SCOPE 6.
-var FINISH_TRAILING_MS = 30000;
 
 // `badge` kinds: the 5.3 state values, plus `offline` for a cloud book seen
 // while offline.
@@ -231,7 +228,7 @@ function resumeChoice(row, durationMs) {
     duration = runtime !== null && runtime > 0 ? runtime * 60000 : 0;
   }
   var position = _p.positionMs(row.positionMs);
-  if (duration > 0 && position >= duration - FINISH_TRAILING_MS) {
+  if (duration > 0 && position >= duration - Positions.FINISH_TRAILING_MS) {
     return CHOICE_START_OVER;
   }
   return CHOICE_ASK;

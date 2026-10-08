@@ -106,39 +106,47 @@ def test_play_pause_entry_points_use_the_service():
 
 
 def test_resume_reads_only_after_a_long_pause():
+    # P9 PR 5: the catch-up flow lives in qml/CatchupFlow.qml; ⏯ asks it.
     service = read("Service.qml")
-    body = function_body(service, "playPause")
+    flow = read("qml/CatchupFlow.qml")
+    assert "function playPause() { return catchupFlow.press() }" in service
+    body = function_body(flow, "press")
     assert "Catchup.needsRead(pausedAtMs, Date.now())" in body
     assert "Catchup.prefetchUsable(prefetched, asin, Date.now())" in body
-    assert 'run("position-get", [asin], "catchup")' in service
+    assert 'service.run("position-get", [asin], "catchup")' in flow
     # A pause records when it happened.
-    assert "root.pausedAtMs = Date.now()" in service
+    assert "pausedAtMs = Date.now()" in function_body(flow, "notePaused")
+    assert "catchupFlow.notePaused()" in function_body(service, "onPlayingChanged")
 
 
 def test_catch_up_falls_back_after_the_timeout():
-    service = read("Service.qml")
-    assert "interval: Catchup.READ_TIMEOUT_MS" in service
-    body = function_body(service, "resumeCaughtUp")
+    flow = read("qml/CatchupFlow.qml")
+    assert "interval: Catchup.READ_TIMEOUT_MS" in flow
+    assert "onTriggered: root.resumeCaughtUp(root.catchupAsin, null)" in flow
+    body = function_body(flow, "resumeCaughtUp")
     assert "Catchup.jumpTarget(" in body
     assert "player.jumpToMs(target)" in body
     assert "player.resume()" in body
     # A switch to another book while reading must not resume the old one.
-    assert '"sameBook": loadedAsin === asin' in body
+    assert '"sameBook": service.loadedAsin === asin' in body
 
 
 def test_a_new_pick_cancels_catch_up():
     # Codex R1 #1: a Library pick (or IPC play) wins over a waiting ⏯.
     service = read("Service.qml")
-    body = function_body(service, "noteIntent")
-    assert "cancelCatchup()" in body
-    assert "catchupTimer.stop()" in function_body(service, "cancelCatchup")
+    flow = read("qml/CatchupFlow.qml")
+    assert "catchupFlow.noteIntent()" in function_body(service, "noteIntent")
+    assert "cancelCatchup()" in function_body(flow, "noteIntent")
+    assert "catchupTimer.stop()" in function_body(flow, "cancelCatchup")
     # ⏯ while a pick is still reading its position leaves that pick alone.
-    assert "Catchup.PRESS_BUSY" in function_body(service, "playPause")
+    press = function_body(flow, "press")
+    assert "Catchup.PRESS_BUSY" in press
+    assert '"pendingResume": service.pendingResume.length > 0' in press
 
 
 def test_catch_up_needs_loaded_local_state():
     # Codex R1 #3: an unread state.json is not "nothing saved here".
-    body = function_body(read("Service.qml"), "resumeCaughtUp")
+    body = function_body(read("qml/CatchupFlow.qml"), "resumeCaughtUp")
     assert '"storeLoaded": store.loaded' in body
     assert "sync.lastPushed[asin]" in body
 
@@ -151,31 +159,41 @@ def test_library_shows_the_player_error():
 
 
 def test_overlapping_reads_keep_their_own_results():
-    # Codex R3: a failed read of book A must not clear book B's result.
-    service = read("Service.qml")
-    assert "results[read] = {" in service
-    assert "delete root.catchupResults[readAsin]" in service
-    assert "root.prefetched.asin === readAsin) root.prefetched = null" in service
-    assert "if (!outcome.ok) root.prefetched = null" not in service
+    # Codex R3: a failed read of book A must not clear book B's result. Since
+    # P9 PR 5 the finish bookkeeping is `Catchup.finishRead`, whose vectors
+    # (test_catchup_flow.py, A fails while B is prefetched) replace the greps for
+    # `delete root.catchupResults[readAsin]` and the same-book clear; this
+    # checks the wiring applies it.
+    flow = read("qml/CatchupFlow.qml")
+    assert "results[read] = {" in function_body(flow, "handleEvent")
+    finished = function_body(flow, "handleFinished")
+    assert "Catchup.finishRead(" in finished
+    for line in (
+        "catchupReads = next.reads",
+        "catchupResults = next.results",
+        "prefetched = next.prefetched",
+        "if (next.resume) resumeCaughtUp(readAsin, next.remote)",
+    ):
+        assert line in finished, line
+    assert "prefetched = null" not in finished
 
 
 def test_one_read_per_book():
     # Codex R4: two reads of the same book (A -> B -> A) must not overlap.
-    service = read("Service.qml")
-    assert "catchupReading" not in service
-    assert '"reading": catchupReads[asin] === true' in function_body(
-        service, "playPause"
+    flow = read("qml/CatchupFlow.qml")
+    assert "catchupReading" not in flow
+    assert '"reading": catchupReads[asin] === true' in function_body(flow, "press")
+    assert "catchupReads[service.loadedAsin] === true" in function_body(
+        flow, "prefetchCatchup"
     )
-    assert "catchupReads[loadedAsin] === true" in function_body(
-        service, "prefetchCatchup"
-    )
-    assert "reads[asin] = true" in function_body(service, "readCatchup")
-    assert "delete reads[readAsin]" in service
+    assert "reads[asin] = true" in function_body(flow, "readCatchup")
+    # The finished read is dropped by `Catchup.finishRead` (its vectors).
+    assert "catchupReads = next.reads" in function_body(flow, "handleFinished")
 
 
 def test_opening_the_drawer_prefetches():
     service = read("Service.qml")
-    assert "prefetchCatchup()" in function_body(service, "viewForOpen")
+    assert "catchupFlow.prefetchCatchup()" in function_body(service, "viewForOpen")
 
 
 # ---- 6: author names readable ----
@@ -203,16 +221,19 @@ def test_author_names_are_not_muted():
 
 def test_jump_sets_a_short_note():
     service = read("Service.qml")
-    body = function_body(service, "resumeCaughtUp")
+    flow = read("qml/CatchupFlow.qml")
+    body = function_body(flow, "resumeCaughtUp")
     assert "showCatchupNote(Format.clock(player.positionMs))" in body
     assert body.index("showCatchupNote(") < body.index("player.jumpToMs(target)")
-    note = function_body(service, "showCatchupNote")
+    note = function_body(flow, "showCatchupNote")
     assert "catchupNote = Catchup.jumpNote(was)" in note
     assert "catchupNoteTimer.restart()" in note
-    assert "interval: Catchup.NOTE_MS" in service
+    assert "interval: Catchup.NOTE_MS" in flow
     # A new pick or a pause drops the note.
-    assert 'catchupNote = ""' in function_body(service, "noteIntent")
+    assert 'catchupNote = ""' in function_body(flow, "noteIntent")
+    assert "catchupFlow.noteIntent()" in function_body(service, "noteIntent")
     assert '"catchupNote": root.catchupNote' in service
+    assert "readonly property string catchupNote: catchupFlow.catchupNote" in service
 
 
 def test_mini_shows_the_note():
