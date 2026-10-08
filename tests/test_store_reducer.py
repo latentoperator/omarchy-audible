@@ -590,19 +590,12 @@ def test_queue_settings_save_failure_success_and_path_gates(store):
         "path": PATH,
         "doc": {**loaded_doc, "push_queue": [{"asin": "A", "ms": 3, "at": AT1}]},
         "loaded": True,
-        "dirty": False,
+        "dirty": True,
         "pendingOps": [],
         "lastError": "old",
         "adoptWaiting": None,
     }
-    assert effects == [
-        {
-            "type": "write",
-            "text": '{"schema":1,"books":{},"push_queue":[{"asin":"A","ms":3,"at":"'
-            + AT1
-            + '"}],"volume":null,"speed":null}',
-        }
-    ]
+    assert effects == [{"type": "save_now"}]
     failed, effects = vector(store, queued, type="save_failed")
     assert failed == {**queued, "dirty": True, "lastError": "could not save state.json"}
     assert effects == []
@@ -616,17 +609,12 @@ def test_queue_settings_save_failure_success_and_path_gates(store):
         "path": PATH,
         "doc": {**loaded_doc, "volume": 55, "speed": 1.5},
         "loaded": True,
-        "dirty": False,
+        "dirty": True,
         "pendingOps": [],
         "lastError": "old",
         "adoptWaiting": None,
     }
-    assert effects == [
-        {
-            "type": "write",
-            "text": '{"schema":1,"books":{},"push_queue":[],"volume":55,"speed":1.5}',
-        }
-    ]
+    assert effects == [{"type": "save_now"}]
     unchanged, effects = vector(
         store, loaded, type="set_player_settings", volume=None, speed=None
     )
@@ -659,6 +647,13 @@ def test_malformed_inputs_never_throw(store):
         [],
         {},
         {"loaded": "yes", "pendingOps": "bad", "doc": None, "adoptWaiting": []},
+        {
+            "loaded": True,
+            "dirty": True,
+            "path": PATH,
+            "doc": {"schema": 1, "books": [], "push_queue": "bad"},
+            "pendingOps": [],
+        },
     ]
     bad_events = [
         None,
@@ -704,9 +699,10 @@ def _function_body(source: str, name: str) -> str:
     raise AssertionError(f"unterminated function {name}")
 
 
-def test_qml_applies_every_effect_and_has_one_state_assignment_path():
+def test_qml_publishes_only_after_apply_and_loaded_is_published_last():
     source = (REPO / "qml" / "StateStore.qml").read_text(encoding="utf-8")
     apply_body = _function_body(source, "apply")
+    publish_body = _function_body(source, "publish")
     for effect in (
         "backup",
         "write",
@@ -727,4 +723,13 @@ def test_qml_applies_every_effect_and_has_one_state_assignment_path():
         "lastError",
         "adoptWaiting",
     ):
+        assignments = re.findall(rf"^\s*{state_field}\s*=", source, re.MULTILINE)
+        assert len(assignments) == 1
+        assert re.search(rf"^\s*{state_field}\s*=", publish_body, re.MULTILINE)
         assert not re.search(rf"\broot\.{state_field}\s*=", source)
+    assert [
+        match.group(1)
+        for match in re.finditer(
+            r"^\s*(\w+)\s*=\s*root\.reducerState\.", publish_body, re.MULTILINE
+        )
+    ] == ["doc", "pendingOps", "dirty", "lastError", "adoptWaiting", "loaded"]

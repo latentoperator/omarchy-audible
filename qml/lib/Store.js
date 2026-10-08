@@ -56,7 +56,7 @@ function step(state, event) {
     if (!current.loaded) return _store.result(current, []);
     current.doc = Playback.withQueue(current.doc, event.queue);
     current.dirty = true;
-    return _store.save(current);
+    return _store.result(current, [{ "type": "save_now" }]);
   }
   if (type === "set_player_settings") {
     if (!current.loaded) return _store.result(current, []);
@@ -64,7 +64,7 @@ function step(state, event) {
     if (settings === current.doc) return _store.result(current, []);
     current.doc = settings;
     current.dirty = true;
-    return _store.save(current);
+    return _store.result(current, [{ "type": "save_now" }]);
   }
   if (type === "save") return _store.save(current);
   if (type === "saved") {

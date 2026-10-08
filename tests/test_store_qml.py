@@ -91,6 +91,7 @@ QtObject {
     lib_dir = app_dir / "lib"
     lib_dir.mkdir(parents=True)
     shutil.copy2(REPO / "qml/StateStore.qml", app_dir / "StateStore.qml")
+    shutil.copy2(REPO / "qml/PositionSync.qml", app_dir / "PositionSync.qml")
     for source in (REPO / "qml/lib").glob("*.js"):
         shutil.copy2(source, lib_dir / source.name)
     (app_dir / "Main.qml").write_text(
@@ -98,9 +99,20 @@ QtObject {
 Item {
   id: top
   property var storeRef: null
+  property var syncRef: null
+  property var serviceRef: null
   property var fileRef: null
   property var processRef: null
   property bool reactToLoaded: false
+  property bool flushFromLoaded: false
+  QtObject {
+    id: service
+    property var calls: []
+    function run(command, args, purpose) {
+      calls = calls.concat([[command, args, purpose]])
+      return true
+    }
+  }
   StateStore {
     id: store
     path: "/fake/state.json"
@@ -112,11 +124,24 @@ Item {
       }
     }
   }
+  PositionSync {
+    id: sync
+    store: storeRef
+    service: service
+    Component.onCompleted: {
+      top.syncRef = sync
+      top.serviceRef = service
+    }
+  }
   Connections {
     target: store
     function onLoadedChanged() {
       if (top.reactToLoaded && store.loaded)
         store.setQueue([{ "asin": "A", "ms": 5000, "at": "queued" }])
+      if (top.flushFromLoaded && store.loaded) {
+        store.setQueue([{ "asin": "A", "ms": 5000, "at": "queued" }])
+        store.flush()
+      }
     }
   }
   function clearLog() { fileRef.log = [] }
@@ -158,6 +183,22 @@ Item {
     store.record("B", 9000)
     clearLog()
     store.flush()
+    return fileRef.log
+  }
+  function runDeferredPositions() {
+    reactToLoaded = false
+    store.record("A", 1000)
+    store.record("B", 2000)
+    sync.queuePush("A")
+    sync.queuePush("B")
+    fileRef.content = ""
+    fileRef.loaded()
+    return { queue: store.doc.push_queue, calls: service.calls, writes: fileRef.log }
+  }
+  function runFlushFromLoadedReaction(text) {
+    flushFromLoaded = true
+    fileRef.content = text
+    fileRef.loaded()
     return fileRef.log
   }
 }
@@ -231,5 +272,21 @@ def test_flush_writes_then_waits_for_file(qml_store):
     invoke, _warnings = qml_store
     invoke("runLoadedReaction", _valid_state())
     events = invoke("runFlush")
+    assert events[0][0] == "write"
+    assert events[1] == ["wait"]
+
+
+def test_position_sync_replays_two_deferred_positions_on_load(qml_store):
+    invoke, warnings = qml_store
+    result = invoke("runDeferredPositions")
+    assert [entry["asin"] for entry in result["queue"]] == ["A", "B"]
+    assert len(result["writes"]) == 2
+    assert result["calls"] == [["position-get", ["A", "B"], "flush"]]
+    assert warnings == []
+
+
+def test_flush_from_loaded_reaction_writes_and_waits_before_return(qml_store):
+    invoke, _warnings = qml_store
+    events = invoke("runFlushFromLoadedReaction", _valid_state())
     assert events[0][0] == "write"
     assert events[1] == ["wait"]
