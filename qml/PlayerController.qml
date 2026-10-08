@@ -66,8 +66,9 @@ Item {
   property var sleepTimer: null
   property real fadeBaseVolume: -1
 
-  // A loadfile was sent and mpv hasn't opened the file yet (Mpv.loadingAfter).
-  property bool loading: false
+  // The file of the last loadfile sent to this mpv ("" when none since
+  // connecting). A path, never the key (Mpv.moveHitsPath).
+  property string loadPath: ""
 
   // The user moved the position: a seek, skip or chapter jump was sent (F38).
   // `targetMs` is where it lands (Mpv.moveTargetMs), or -1 when unknown.
@@ -98,7 +99,7 @@ Item {
       flushPending()
     } else if (connection === "connected") {
       mpvState = Mpv.emptyState()
-      loading = Mpv.loadingAfter(loading, "disconnected", null)
+      loadPath = ""
       sleepTimer = null
       // A fade's base volume belongs to the mpv that is gone; a later
       // cancelSleep() must not send it to a new one (F22).
@@ -140,10 +141,7 @@ Item {
       mpvState = Mpv.applyProperty(mpvState, message.name, message.data)
     } else if (message.kind === "event" && message.event === "playback-restart") {
       restarts += 1
-    } else if (message.kind === "event" && message.event === "end-file") {
-      loading = Mpv.loadingAfter(loading, message.event, message.reason)
     } else if (message.kind === "event" && message.event === "file-loaded") {
-      loading = Mpv.loadingAfter(loading, message.event, null)
       // mpv has opened the file, so it no longer needs the key: take it out
       // of the readable option (SPIKE-RESULTS S7). Once per load; harmless
       // for an old `.m4b`, and a quick switch to another book can't leave a
@@ -190,7 +188,7 @@ Item {
     attaching = false
     launching = false
     mpvState = Mpv.emptyState()
-    loading = Mpv.loadingAfter(loading, "disconnected", null)
+    loadPath = ""
     attempt = 0
   }
 
@@ -223,7 +221,7 @@ Item {
     if (!pendingLoad) return
     var load = pendingLoad
     pendingLoad = null
-    if (send(Mpv.loadCommand(load.path, load.startSec, load.options))) loading = Mpv.loadingAfter(loading, "load_sent", null)
+    if (send(Mpv.loadCommand(load.path, load.startSec, load.options))) loadPath = load.path
     send(Mpv.pauseCommand(false))
   }
 
@@ -253,20 +251,21 @@ Item {
   function toggle() { send(Mpv.pauseCommand(playing)) }
   // A seek, skip or chapter jump the user asked for says so with `userMoved`
   // and where it lands, so a move made while paused is saved (F38). A move
-  // sent while a new file is still opening lands on that file, so it isn't
-  // reported. `jumpToMs` is a seek that is not the user's (the catch-up jump).
+  // sent while another file is still on its way lands on that file, so it
+  // isn't reported. `jumpToMs` is a seek that is not the user's (the catch-up
+  // jump).
   function skip(seconds) {
     var target = Mpv.moveTargetMs("skip", Number(seconds), positionMs, durationMs, chapters)
-    if (send(Mpv.skipCommand(seconds)) && !loading) userMoved(target)
+    if (send(Mpv.skipCommand(seconds)) && Mpv.moveHitsPath(path, loadPath)) userMoved(target)
   }
   function seekMs(ms) {
     var target = Mpv.moveTargetMs("seek", Number(ms), positionMs, durationMs, chapters)
-    if (send(Mpv.seekCommand(ms / 1000)) && !loading) userMoved(target)
+    if (send(Mpv.seekCommand(ms / 1000)) && Mpv.moveHitsPath(path, loadPath)) userMoved(target)
   }
   function jumpToMs(ms) { send(Mpv.seekCommand(ms / 1000)) }
   function setChapter(index) {
     var target = Mpv.moveTargetMs("chapter", Number(index), positionMs, durationMs, chapters)
-    if (send(Mpv.chapterCommand(index)) && !loading) userMoved(target)
+    if (send(Mpv.chapterCommand(index)) && Mpv.moveHitsPath(path, loadPath)) userMoved(target)
   }
   function setSpeed(value) { send(Mpv.speedCommand(value)) }
   function setVolume(value) { send(Mpv.volumeCommand(value)) }

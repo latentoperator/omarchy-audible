@@ -99,43 +99,41 @@ def test_move_target(mpv, kind, value, position, duration, target):
     assert mpv.call("moveTargetMs", kind, value, position, duration, CHAPTERS) == target
 
 
+A = "/d/books/B0A/book.aaxc"
+B = "/d/books/B0B/book.aaxc"
+C = "/d/books/B0C/book.aaxc"
+
+
 @pytest.mark.parametrize(
-    "before,event,reason,after",
+    "path,load_path,hits",
     [
-        (False, "load_sent", None, True),
-        (True, "load_sent", None, True),
-        (True, "file-loaded", None, False),
-        (True, "disconnected", None, False),
-        (True, "end-file", "error", False),
-        # The book being replaced ends ("stop") before the new one opens.
-        (True, "end-file", "stop", True),
-        (True, "end-file", "eof", True),
-        (False, "end-file", "stop", False),
-        (True, "playback-restart", None, True),
-        (False, None, None, False),
-        ("yes", None, None, False),
+        # Nothing sent since connecting (a reattach): the book showing moves.
+        (A, "", True),
+        ("", "", True),
+        # The last load has arrived.
+        (B, B, True),
+        # Codex round 3: B was sent while A still shows; the move lands on B.
+        (A, B, False),
+        # Codex round 4: C overtook B before B opened; B shows, the move
+        # lands on C, whatever B's late file-loaded says.
+        (B, C, False),
+        ("", B, False),
+        (None, B, False),
+        (A, None, True),
     ],
 )
-def test_loading_after(mpv, before, event, reason, after):
-    assert mpv.call("loadingAfter", before, event, reason) is after
+def test_move_hits_path(mpv, path, load_path, hits):
+    assert mpv.call("moveHitsPath", path, load_path) is hits
 
 
-# Codex round 3: pick B while A is paused, then skip before mpv opens B. The
-# skip lands on B, so A must not be saved at its position plus the skip.
 def test_a_move_during_a_book_swap_is_not_the_old_books():
     player = read("qml/PlayerController.qml")
-    assert 'loading = Mpv.loadingAfter(loading, "load_sent", null)' in function_body(
-        player, "flushPending"
-    )
-    lines = function_body(player, "handleLine")
-    assert "loading = Mpv.loadingAfter(loading, message.event, message.reason)" in lines
-    assert "loading = Mpv.loadingAfter(loading, message.event, null)" in lines
-    # A gone mpv opens nothing: both places that reset mpvState drop it too.
-    assert (
-        player.count('loading = Mpv.loadingAfter(loading, "disconnected", null)') == 2
-    )
+    assert "loadPath = load.path" in function_body(player, "flushPending")
+    # A gone mpv has no load on its way: both places that reset mpvState
+    # forget it too.
+    assert player.count('loadPath = ""') == 2
     assert player.count("mpvState = Mpv.emptyState()") == 2
-    assert player.count("loading = ") == 5
+    assert player.count("loadPath = ") == 3
 
 
 def test_user_moves_say_so_and_the_catchup_jump_does_not():
@@ -144,8 +142,8 @@ def test_user_moves_say_so_and_the_catchup_jump_does_not():
     for name, kind in (("skip", "skip"), ("seekMs", "seek"), ("setChapter", "chapter")):
         body = function_body(player, name)
         assert f'Mpv.moveTargetMs("{kind}", ' in body, name
-        # Only a move that was sent says so, and not while a new file opens.
-        assert ") && !loading) userMoved(target)" in body, name
+        # Only a move that was sent says so, and only for the file showing.
+        assert ") && Mpv.moveHitsPath(path, loadPath)) userMoved(target)" in body, name
     # Chapter ⏮/⏭ go through setChapter.
     assert "setChapter(target)" in function_body(player, "jumpChapter")
     assert "userMoved" not in function_body(player, "jumpToMs")
