@@ -3,8 +3,8 @@
 .import "Playback.js" as Playback
 
 // Pure StateStore transitions (ARCHITECTURE 4.8). Effects are: backup(path,
-// destination), write(text), retry_read, retry_backup, and wait_file. The QML
-// owner performs those effects and feeds their results back as events.
+// destination), write(text), save_now, retry_read, retry_backup, and wait_file.
+// The QML owner performs those effects and feeds their results back as events.
 function createState(path) {
   return {
     "path": _store.string(path),
@@ -123,7 +123,7 @@ _store.finishAdopt = function (state, parsed) {
   state.pendingOps = [];
   for (var i = 0; i < ops.length; i++) _store.applyOp(state, ops[i]);
   state.loaded = true;
-  return state.dirty ? _store.save(state) : _store.result(state, []);
+  return _store.result(state, state.dirty ? [{ "type": "save_now" }] : []);
 };
 _store.applyOp = function (state, op) {
   if (!_store.isObject(op)) return;

@@ -15,6 +15,8 @@ Item {
 
   property string path: ""
   property var reducerState: Store.createState("")
+  property bool applying: false
+  property var queuedEvents: []
   readonly property var doc: reducerState.doc
   readonly property bool loaded: reducerState.loaded
   readonly property bool dirty: reducerState.dirty
@@ -25,22 +27,32 @@ Item {
   // The reducer owns decisions and state transitions. This is its only writer;
   // effects are limited to file/process/timer operations and return as events.
   function apply(event) {
-    var transition = Store.step(reducerState, event)
-    reducerState = transition.state
-    transition.effects.forEach(function(effect) {
-      if (effect.type === "backup") {
-        backup.command = ["cp", "-f", effect.path, effect.destination]
-        backup.running = true
-      } else if (effect.type === "write") {
-        file.setText(effect.text)
-      } else if (effect.type === "retry_read") {
-        readRetry.restart()
-      } else if (effect.type === "retry_backup") {
-        backupRetry.restart()
-      } else if (effect.type === "wait_file") {
-        file.waitForJob()
-      }
-    })
+    queuedEvents = queuedEvents.concat([event])
+    if (applying) return
+    applying = true
+    while (queuedEvents.length > 0) {
+      var nextEvent = queuedEvents[0]
+      queuedEvents = queuedEvents.slice(1)
+      var transition = Store.step(reducerState, nextEvent)
+      reducerState = transition.state
+      transition.effects.forEach(function(effect) {
+        if (effect.type === "backup") {
+          backup.command = ["cp", "-f", effect.path, effect.destination]
+          backup.running = true
+        } else if (effect.type === "write") {
+          file.setText(effect.text)
+        } else if (effect.type === "save_now") {
+          root.apply({ "type": "save" })
+        } else if (effect.type === "retry_read") {
+          readRetry.restart()
+        } else if (effect.type === "retry_backup") {
+          backupRetry.restart()
+        } else if (effect.type === "wait_file") {
+          file.waitForJob()
+        }
+      })
+    }
+    applying = false
   }
 
   // `text` is the file's content, or "" when it does not exist.

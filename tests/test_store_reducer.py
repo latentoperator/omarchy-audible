@@ -105,13 +105,15 @@ def test_pending_ops_replay_in_order_before_loaded_and_save(store):
         "path": PATH,
         "doc": doc,
         "loaded": True,
-        "dirty": False,
+        "dirty": True,
         "pendingOps": [],
         "lastError": "",
         "adoptWaiting": None,
     }
-    # The record and finish operations replay in order, and adoption writes
-    # their final document only after the adoption has completed.
+    # Adoption asks QML to decide whether to save after loaded reactions run.
+    assert effects == [{"type": "save_now"}]
+    state, effects = vector(store, state, type="save")
+    assert state["dirty"] is False
     assert effects == [
         {
             "type": "write",
@@ -170,11 +172,14 @@ def test_corrupt_file_waits_for_backup_then_replays_before_first_write(store):
         "path": PATH,
         "doc": doc,
         "loaded": True,
-        "dirty": False,
+        "dirty": True,
         "pendingOps": [],
         "lastError": "",
         "adoptWaiting": None,
     }
+    assert effects == [{"type": "save_now"}]
+    state, effects = vector(store, state, type="save")
+    assert state["dirty"] is False
     assert effects == [
         {
             "type": "write",
@@ -251,11 +256,14 @@ def test_failed_backup_writes_nothing_retries_then_adopts(store):
         "path": PATH,
         "doc": doc,
         "loaded": True,
-        "dirty": False,
+        "dirty": True,
         "pendingOps": [],
         "lastError": "could not back up the unreadable state.json",
         "adoptWaiting": None,
     }
+    assert effects == [{"type": "save_now"}]
+    state, effects = vector(store, state, type="save")
+    assert state["dirty"] is False
     assert effects == [
         {
             "type": "write",
@@ -440,12 +448,12 @@ def test_path_change_and_retry_without_a_waiting_document_are_noops(store):
     )
     assert changed == base("/next/state.json")
     assert effects == []
-    waiting_without_path = {**base(""), "adoptWaiting": empty_doc()}
-    unchanged, effects = vector(store, waiting_without_path, type="retry_backup")
-    assert unchanged == waiting_without_path
+    waiting = {**base(""), "adoptWaiting": empty_doc()}
+    unchanged, effects = vector(store, waiting, type="retry_backup")
+    assert unchanged == waiting
     assert effects == []
-    state, effects = vector(store, base(""), type="adopt", text="garbage", path="")
-    assert state == {
+    adopted, effects = vector(store, base(""), type="adopt", text="garbage", path="")
+    assert adopted == {
         "path": "",
         "doc": empty_doc(),
         "loaded": True,
@@ -455,6 +463,106 @@ def test_path_change_and_retry_without_a_waiting_document_are_noops(store):
         "adoptWaiting": None,
     }
     assert effects == []
+
+
+def test_adopt_uses_event_path_for_valid_and_corrupt_text(store):
+    path = "/adopted/state.json"
+    valid = '{"schema":1,"books":{},"push_queue":[],"volume":null,"speed":null}'
+    adopted, effects = vector(store, base(""), type="adopt", text=valid, path=path)
+    assert adopted == {
+        "path": path,
+        "doc": empty_doc() | {"recovered": False},
+        "loaded": True,
+        "dirty": False,
+        "pendingOps": [],
+        "lastError": "",
+        "adoptWaiting": None,
+    }
+    assert effects == []
+
+    corrupt, effects = vector(store, base(""), type="adopt", text="broken", path=path)
+    assert corrupt == {
+        **base(path),
+        "adoptWaiting": empty_doc(),
+    }
+    assert effects == [
+        {"type": "backup", "path": path, "destination": path + ".corrupt"}
+    ]
+
+
+def test_unloaded_save_and_flush_never_write(store):
+    unloaded = {**base(), "dirty": True}
+    saved, effects = vector(store, unloaded, type="save")
+    assert saved == unloaded
+    assert effects == []
+    flushed, effects = vector(store, saved, type="flush")
+    assert flushed == unloaded
+    assert effects == [{"type": "wait_file"}]
+
+
+def test_backup_events_without_waiting_document_are_noops(store):
+    loaded = {
+        **base(),
+        "doc": {**empty_doc(), "recovered": False},
+        "loaded": True,
+    }
+    for code in (0, 1):
+        unchanged, effects = vector(store, loaded, type="backup_result", code=code)
+        assert unchanged == loaded
+        assert effects == []
+    unchanged, effects = vector(store, loaded, type="retry_backup")
+    assert unchanged == loaded
+    assert effects == []
+
+
+def test_unknown_event_with_path_does_not_change_loaded_store(store):
+    loaded = {
+        **base(PATH),
+        "doc": {**empty_doc(), "recovered": False},
+        "loaded": True,
+    }
+    unchanged, effects = vector(store, loaded, type="nope")
+    assert unchanged == loaded
+    assert effects == []
+
+
+def test_adoption_skips_garbage_pending_ops_and_replays_valid_ops_in_order(store):
+    pending = [
+        {"kind": "record", "asin": "A", "ms": 100, "at": AT1},
+        None,
+        "garbage",
+        [],
+        {"kind": "record", "asin": "A", "ms": 250, "at": AT2},
+    ]
+    adopted, effects = vector(
+        store,
+        {**base(), "pendingOps": pending},
+        type="adopt",
+        text='{"schema":1,"books":{},"push_queue":[],"volume":null,"speed":null}',
+        path=PATH,
+    )
+    entry = {
+        "ms": 250,
+        "updated_at": AT2,
+        "last_played_at": AT2,
+        "played_since_download": True,
+        "finished": False,
+    }
+    expected_doc = {
+        **empty_doc(),
+        "books": {"A": entry},
+        "recovered": False,
+    }
+    assert adopted == {
+        "path": PATH,
+        "doc": expected_doc,
+        "loaded": True,
+        "dirty": True,
+        "pendingOps": [],
+        "lastError": "",
+        "adoptWaiting": None,
+    }
+    assert effects == [{"type": "save_now"}]
 
 
 def test_queue_settings_save_failure_success_and_path_gates(store):
@@ -599,7 +707,14 @@ def _function_body(source: str, name: str) -> str:
 def test_qml_applies_every_effect_and_has_one_state_assignment_path():
     source = (REPO / "qml" / "StateStore.qml").read_text(encoding="utf-8")
     apply_body = _function_body(source, "apply")
-    for effect in ("backup", "write", "retry_read", "retry_backup", "wait_file"):
+    for effect in (
+        "backup",
+        "write",
+        "save_now",
+        "retry_read",
+        "retry_backup",
+        "wait_file",
+    ):
         assert f'effect.type === "{effect}"' in apply_body
     assert "file.waitForJob()" in apply_body
     assert "reducerState = transition.state" in apply_body
