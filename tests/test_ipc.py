@@ -161,7 +161,13 @@ def test_the_handler_is_the_services_one_child():
     assert "service: root" in block
     for child in ("library", "player", "runner", "store", "sync"):
         assert f"    {child}: {child}\n" in block, child
-    assert "ServiceIpc" not in (REPO / "BarWidget.qml").read_text(encoding="utf-8")
+    # No other file declares a second instance (a view or the widget would be
+    # created once per monitor).
+    instances = {
+        str(p.relative_to(REPO)): p.read_text(encoding="utf-8").count("ServiceIpc {")
+        for p in files
+    }
+    assert {name: n for name, n in instances.items() if n} == {"Service.qml": 1}
 
 
 def test_the_handler_keeps_no_state():
