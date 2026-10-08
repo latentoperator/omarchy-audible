@@ -50,6 +50,8 @@ omarchy-audible/                     (repo root == plugin root)
     Removals.qml                     books waiting to be unloaded before removal, and auto-remove
     CatchupFlow.qml                  ⏯ catching up with other devices: the account reads and the jump note
     SigninFlow.qml                   onboarding and sign-in: setup, Connect, Reconnect, Disconnect, the clipboard
+    StateStore.qml                   state.json I/O; applies pure Store.js transitions
+    lib/Store.js                     state.json adoption, operation replay and save decisions
   bin/omarchy-audible                stdlib-only Python launcher (bootstraps venv, dispatches)
   backend/omarchy_audible/           Python package (runs inside the venv)
   tests/  fixtures/
@@ -78,7 +80,7 @@ Theming rule: import `qs.Commons` and `qs.Ui` and use `Style`/theme tokens only.
 | `~/.local/share/omarchy-audible/catalog.json` | Library metadata cache. **Written only by the backend** (`sync`) | |
 | `~/.local/share/omarchy-audible/remote.json` | Remote positions cache `{asin: {ms, updated_at}}`. **Written only by the backend** (`sync`, `position-get`) | |
 | `~/.local/share/omarchy-audible/pushed.json` | This device's own recent pushes `{asin: {ms, at}}`, so its own echo is never mistaken for a newer position (P6, F1). **Written only by the backend** (`position-push`) | |
-| `~/.local/share/omarchy-audible/state.json` | Local positions, last-played times, push queue. **Written only by `Service.qml`** | |
+| `~/.local/share/omarchy-audible/state.json` | Local positions, last-played times, push queue. **Written only by `StateStore.qml`** | |
 | `~/.local/share/omarchy-audible/covers/<asin>.jpg` | Cover thumbnails | |
 | `<booksDir>/<asin>/book.m4b` | Decrypted audio, chapters embedded — **old downloads only**, before B11 | |
 | `<booksDir>/<asin>/book.aaxc` \| `book.aax` | The file exactly as Audible sent it, unlocked in memory at play time (B11, D7) | |
@@ -92,7 +94,7 @@ Theming rule: import `qs.Commons` and `qs.Ui` and use `Style`/theme tokens only.
 
 Books are keyed by **ASIN directory**, not by title. That makes removal a single `rm -r` of one directory, avoids filename-encoding problems, and makes "what is local?" a directory scan. The filesystem is the source of truth for "is this book local": a directory holding `book.m4b`, or a locked `book.aaxc`/`book.aax` **plus a readable `key.json`** (B11). A locked file with no key file is not local.
 
-`state.json` (schema v1, written **only** by `Service.qml`, §4.8; parsed and serialized by `qml/lib/Library.js`):
+`state.json` (schema v1, written **only** by `StateStore.qml` (§4.8), with adoption decisions in `qml/lib/Store.js` and parsing/serialization in `qml/lib/Library.js`):
 
 ```json
 { "schema": 1,
@@ -242,9 +244,11 @@ Existing-login import (`login-import-cli`) validates `~/.audible/<primary profil
 | `catalog.json`, covers | backend `sync` | Service/LibraryModel |
 | `remote.json` | backend `sync`, `position-get` | Service/LibraryModel |
 | `pushed.json` | backend `position-push` | backend `position-get`, `position-push` |
-| `state.json` | `Service.qml` only (atomic `FileView` write) | Service; backend never reads it |
+| `state.json` | `StateStore.qml` only (atomic `FileView` write) | Service; backend never reads it |
 | `<booksDir>/<asin>/` | backend `get`, `remove` | LibraryModel (directory scan) |
 | auth files | backend `login-*`, `logout` | backend |
+
+`StateStore.qml` is the only `state.json` writer. It applies `qml/lib/Store.js` transitions for adoption, corrupt-file backup, pending-op replay and save decisions, while retaining `FileView`, backup `Process`, retry timers and synchronous shutdown flushing. `Store.step(state, event)` is pure; its `backup`, `write`, `retry_read`, `retry_backup` and `wait_file` effects are performed by the QML owner. `Library.js` still owns parsing and serialization, and `Playback.js` still owns position, finished, queue and player-setting document copies. The timestamp for a recorded operation is supplied by QML.
 
 The merge rule (§4.6) runs in the service: it reads `state.json` and `remote.json` and picks the newest. The backend has a pure `merge()` helper with the unit tests (B6), and the QML port must match it.
 
@@ -276,7 +280,7 @@ Commands (B11: the first form loads an old unlocked `.m4b`; the second is the lo
 ### 5.2 PlayerController (QML object)
 Exposes: `loaded`, `playing`, `positionMs`, `durationMs`, `chapters[]`, `chapterIndex`, `speed`, `asin`, and functions `play(asin)`, `pause()`, `toggle()`, `skip(seconds)`, `nextChapter()`, `prevChapter()`, `seekMs()`, `setSpeed()`, `setSleepTimer()`.
 
-- Position persistence: write `state.json` every 10 s while playing and on pause/switch/quit; a move made while paused is written at the next stop, switch or quit (F38). The service is the only writer, using `FileView` with atomic writes (§4.8).
+- Position persistence: write `state.json` every 10 s while playing and on pause/switch/quit; a move made while paused is written at the next stop, switch or quit (F38). `StateStore.qml` is the only writer, applies `Store.step` from `qml/lib/Store.js`, and uses `FileView` with atomic writes (§4.8).
 - Remote push: every ~60 s while playing and on pause/stop/switch/quit, through `position-push`, following the push rules in §4.6. `PositionSync` applies the sequencing effects from `Sync.step(state, event)` in `qml/lib/Sync.js`; failed pushes remain queued in `state.json` and retry with the reducer's backoff.
 - Finished detection: `eof-reached` or position ≥ duration − 30 s (`Positions.FINISH_TRAILING_MS`, its one home; `Playback.js` and `LibraryUi.js` import it) ⇒ mark finished and, if `autoRemoveFinished`, call `remove` (`qml/Removals.qml`). A loaded book is unloaded first and removed once mpv lets go, the same way as the user's Remove (F17). The pending-unload list is `qml/lib/Unload.js`'s reducer, and an auto-remove keeps its purpose after the unload: the event log says so, and it is cancelled if `autoRemoveFinished` is off by then (P8 nit 3).
 - Sleep timer lives in QML (a `Timer`; "end of chapter" watches `chapter`). It pauses and fades over 5 s.
@@ -300,7 +304,7 @@ The bar widget owns a `qs.Ui` `KeyboardPanel` anchored under the book icon (✅ 
 - Mini has a library button (→ Library) and a maximize button (→ Full). Full has the same library button (U8) and a collapse button (→ Mini).
 - Onboarding view replaces Library when `status.authenticated` is false or setup is incomplete. The step and the Connect phase come from `qml/SigninFlow.qml` through the service's `onboardingStep` and `loginPhase` (P9).
 
-Keyboard: search field focused on open; ↑/↓ move; Enter play; Esc close; Space play/pause when the search field is empty; ←/→ skip in Mini/Full; Backspace in Full collapses to Mini. In the Mini chapter popup, ↑/↓ move, Enter jumps to the chapter and Esc closes only the popup.
+Keyboard: search field focused on open; ↑/↓ move; Enter play; Esc close; Space play/pause when the search field is empty; ←/→ skip in Mini/Full; Backspace in Full collapses to Mini. In the Mini chapter popup, ↑/↓ move, Enter jumps to the chapter and Esc closes only the popup. Player and store state live in service-owned child objects (`PlayerController.qml` and `StateStore.qml`); views continue to use the service-facing names.
 
 Shell IPC target `latentoperator.audible`, registered by the one `IpcHandler`, in `qml/ServiceIpc.qml`, which `Service.qml` declares once as its child (P9; a handler in the per-monitor widget would be ignored as a duplicate) ✅ S6:
 `toggle`, `playPause`, `skip <seconds>`, `nextChapter`, `prevChapter`, `openLibrary`. Arguments and return values are strings.
