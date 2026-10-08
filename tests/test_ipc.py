@@ -161,6 +161,7 @@ def test_the_handler_is_the_services_one_child():
     assert "service: root" in block
     for child in ("library", "player", "runner", "store", "sync"):
         assert f"    {child}: {child}\n" in block, child
+    assert "    signin: signinFlow\n" in block
     # No other file declares a second instance (a view or the widget would be
     # created once per monitor).
     instances = {
@@ -182,6 +183,7 @@ def test_the_handler_keeps_no_state():
         "player",
         "runner",
         "service",
+        "signin",
         "store",
         "sync",
     ]

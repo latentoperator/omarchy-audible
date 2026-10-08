@@ -149,23 +149,19 @@ Item {
     removals.flush()
   }
 
-  // Onboarding (U3). `reconnecting` reopens Connect after `auth_failed`;
-  // `authFailed` drives the Library's reconnect banner. `loginSession` is
-  // the open sign-in session id (not a secret; the pasted text never lands
-  // in a property here). `onboardingError` is `Onboarding.errorText` output.
-  property bool reconnecting: false
-  property bool authFailed: false
-  property string loginSession: ""
-  property string marketplace: Signin.DEFAULT_MARKETPLACE
-  property var onboardingError: null
-  property string clipboardNotice: ""
-  property bool pasteRejected: false
-  property bool pasteEmpty: false
-  readonly property string onboardingStep: Signin.effectiveStep(Onboarding.step(status), reconnecting)
-  readonly property string loginPhase: Signin.phase(loginSession, loginStarting,
-    Signin.jobPending("login-finish", runner.pendingJobs, runner.activeJob))
-  property bool loginStarting: false
-  readonly property bool settingUp: Signin.jobPending("setup", runner.pendingJobs, runner.activeJob)
+  // Onboarding and sign-in (U3; qml/SigninFlow.qml owns them). The names
+  // the views read. `marketplace` and `clipboardNotice` are aliases because
+  // the store picker and the notice's dismiss button assign them.
+  readonly property bool reconnecting: signinFlow.reconnecting
+  readonly property bool authFailed: signinFlow.authFailed
+  property alias marketplace: signinFlow.marketplace
+  readonly property var onboardingError: signinFlow.onboardingError
+  property alias clipboardNotice: signinFlow.clipboardNotice
+  readonly property bool pasteRejected: signinFlow.pasteRejected
+  readonly property bool pasteEmpty: signinFlow.pasteEmpty
+  readonly property string onboardingStep: signinFlow.onboardingStep
+  readonly property string loginPhase: signinFlow.loginPhase
+  readonly property bool settingUp: signinFlow.settingUp
 
   onOnboardingStepChanged: view = Onboarding.view(onboardingStep, player.loaded,
     Signin.requestAfterStep(view, clipboardNotice))
@@ -215,91 +211,22 @@ Item {
     view = Onboarding.view(onboardingStep, player.loaded, name)
   }
 
-  // --- Onboarding (U3) -------------------------------------------------------
-  function checkStatus() {
-    run("status", [])
-  }
+  // --- Onboarding (U3): SigninFlow does the work -----------------------------
+  function checkStatus() { signinFlow.checkStatus() }
+  function startSetup() { return signinFlow.startSetup() }
+  function startLogin(code) { return signinFlow.startLogin(code) }
+  function finishLogin(pasted) { return signinFlow.finishLogin(pasted) }
+  function cancelLogin() { signinFlow.cancelLogin() }
+  function importCliLogin() { return signinFlow.importCliLogin() }
+  function disconnect() { return signinFlow.disconnect() }
+  function reconnect() { signinFlow.reconnect() }
+  function copyText(text) { signinFlow.copyText(text) }
+  function readClipboard(target) { signinFlow.readClipboard(target) }
 
-  function startSetup() {
-    onboardingError = null
-    return run("setup", [], "setup") ? "ok" : "error: refused"
-  }
-
-  function startLogin(code) {
-    onboardingError = null
-    pasteRejected = false
-    loginSession = ""
-    marketplace = code
-    loginStarting = true
-    if (!run("login-start", ["--marketplace", code], "login")) {
-      loginStarting = false
-      return "error: refused"
-    }
-    return "ok"
-  }
-
-  // The pasted text goes straight to the backend's stdin (never argv, a log,
-  // an event or a property) and is dropped by the caller right after.
-  function finishLogin(pasted) {
-    if (loginSession.length === 0) return "error: no session"
-    pasteEmpty = !/\S/.test(pasted || "")
-    if (pasteEmpty || !Onboarding.looksLikeRedirect(pasted)) {
-      pasteRejected = true
-      return "rejected"
-    }
-    pasteRejected = false
-    onboardingError = null
-    var sent = runner.runWithInput("login-finish", ["--session", loginSession], "login", pasted)
-    clearPaste()
-    return sent ? "ok" : "error: refused"
-  }
-
-  function cancelLogin() {
-    clearPaste()
-    loginSession = ""
-    pasteRejected = false
-    onboardingError = null
-  }
-
-  function importCliLogin() {
-    onboardingError = null
-    return run("login-import-cli", [], "login") ? "ok" : "error: refused"
-  }
-
-  function disconnect() {
-    return run("logout", [], "logout") ? "ok" : "error: refused"
-  }
-
-  function reconnect() {
-    reconnecting = true
-    cancelLogin()
-    showView(Panel.VIEW_ONBOARDING)
-  }
-
-  function openUrl(url) {
-    opener.command = ["xdg-open", url]
-    opener.running = true
-  }
-
-  // Clipboard I/O for the onboarding view: copy the install command, and read
-  // the clipboard for "Paste from clipboard" (the text goes back to the view
-  // through `clipboardRead` in chunks, never into a property). The view
-  // clears its field before calling `readClipboard` and appends each chunk.
-  // `target` is the view that asked, so another monitor's field never fills.
+  // Re-sent from SigninFlow for the onboarding views: clipboard chunks for
+  // the view that asked, and "clear your paste field".
   signal clipboardRead(var target, string text)
-  // Every view clears its paste field: the text was sent, or sign-in ended.
   signal clearPaste()
-  property var clipboardTarget: null
-
-  function copyText(text) {
-    copier.text = String(text)
-    copier.running = true
-  }
-
-  function readClipboard(target) {
-    clipboardTarget = target
-    paster.running = true
-  }
 
   // The book file for an ASIN, under the books dir from the `status` event.
   // A negative start resumes from the newest of the local and remote
@@ -646,32 +573,6 @@ Item {
   function removeAll() { return removals.removeAll() }
 
 
-  function onboardingFinished(job, outcome) {
-    if (job.command === "login-start") {
-      loginStarting = false
-      if (!outcome.ok) onboardingError = Onboarding.errorText(outcome.code, outcome.message, outcome.hint)
-      return
-    }
-    if (!outcome.ok && outcome.code !== "skipped") {
-      onboardingError = Onboarding.errorText(outcome.code, outcome.message, outcome.hint)
-      // An expired or used session can't be retried; start over.
-      if (job.command === "login-finish") loginSession = ""
-    }
-    if (outcome.ok && Signin.isSignIn(job.command)) {
-      loginSession = ""
-      reconnecting = false
-      authFailed = false
-      onboardingError = null
-      startSync("signin")
-    }
-    if (outcome.ok && job.command === "logout") {
-      clipboardNotice = ""
-      reconnecting = false
-      authFailed = false
-    }
-    if (Signin.refreshesStatus(job.command)) checkStatus()
-  }
-
   function refreshLocal() {
     run("local", [])
   }
@@ -742,6 +643,14 @@ Item {
     player: player
     store: store
     sync: sync
+  }
+
+  SigninFlow {
+    id: signinFlow
+    service: root
+    runner: runner
+    onClipboardRead: function(target, text) { root.clipboardRead(target, text) }
+    onClearPaste: root.clearPaste()
   }
 
   Removals {
@@ -818,33 +727,6 @@ Item {
     onTriggered: root.savePosition(root.snapAsin, root.snapMs, false)
   }
 
-  Process {
-    id: opener
-  }
-
-  Process {
-    id: copier
-    property string text: ""
-    stdinEnabled: true
-    onStarted: {
-      write(text)
-      text = ""
-      stdinEnabled = false
-    }
-    onExited: stdinEnabled = true
-    command: ["wl-copy"]
-  }
-
-  Process {
-    id: paster
-    command: ["wl-paste", "--no-newline"]
-    // Chunks go straight to the view's field; nothing here keeps them.
-    stdout: SplitParser {
-      splitMarker: ""
-      onRead: function(chunk) { root.clipboardRead(root.clipboardTarget, chunk) }
-    }
-  }
-
   // A pick whose playback never starts stops waiting to reopen the panel.
   Timer {
     id: reopenTimer
@@ -877,6 +759,7 @@ Item {
     runner: runner
     store: store
     sync: sync
+    signin: signinFlow
   }
 
   FileView {
@@ -927,15 +810,7 @@ Item {
       }
       catchupFlow.handleEvent(record, job)
       sync.handleEvent(record, job)
-      if (job.command === "login-start" && record.type === "login_url") {
-        root.loginStarting = false
-        root.loginSession = String(record.session || "")
-        // Fake mode's link is a dummy Amazon address: don't open a browser.
-        if (root.fake) root.logEvent("login-start", "fake: browser not opened")
-        else root.openUrl(String(record.url || ""))
-      } else if (job.command === "login-finish" && record.type === "done") {
-        root.clipboardNotice = Onboarding.clipboardNotice(record)
-      }
+      signinFlow.handleEvent(record, job)
       root.logEvent(job.command, Signin.logText(job.command, record.type,
         Signin.isOnboardingCommand(job.command) ? "" : EventLog.summarize(record, 160)))
     }
@@ -943,8 +818,7 @@ Item {
     onJobFinished: function(job, outcome) {
       var text = outcome.ok ? "ok" : String(outcome.code) + (Signin.isOnboardingCommand(job.command)
         ? "" : ": " + String(outcome.message || ""))
-      if (Signin.authFailed(outcome)) root.authFailed = true
-      if (Signin.isOnboardingCommand(job.command)) root.onboardingFinished(job, outcome)
+      signinFlow.handleFinished(job, outcome)
       root.logEvent(job.command + " exit", text)
       root.failures = Playback.updateFailures(root.failures, job, outcome)
       sync.handleFinished(job, outcome)
