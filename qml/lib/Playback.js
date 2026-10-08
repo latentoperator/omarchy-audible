@@ -157,6 +157,19 @@ function markFinished(state, asin) {
   return next;
 }
 
+// Whether a change to the loaded book's position is a new listening position,
+// to be saved and pushed (F38). `cause` is "report" for a position mpv
+// reports, which counts only while playing (a reattach after a shell restart
+// reports one too, and that is not listening), or "user" for a seek, skip or
+// chapter jump the user made, which counts paused or playing (ARCHITECTURE
+// 4.6: a skip made while paused is kept).
+function positionCounts(cause, playing) {
+  if (cause === "user") {
+    return true;
+  }
+  return cause === "report" && playing === true;
+}
+
 // A copy of `state` with the push queue replaced.
 // A copy of `state` with the player's volume and speed (F21), or `state`
 // itself when both are already what it holds. Out-of-range values are not

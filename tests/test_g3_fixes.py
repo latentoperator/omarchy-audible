@@ -121,7 +121,7 @@ def test_catch_up_falls_back_after_the_timeout():
     assert "interval: Catchup.READ_TIMEOUT_MS" in service
     body = function_body(service, "resumeCaughtUp")
     assert "Catchup.jumpTarget(" in body
-    assert "player.seekMs(target)" in body
+    assert "player.jumpToMs(target)" in body
     assert "player.resume()" in body
     # A switch to another book while reading must not resume the old one.
     assert '"sameBook": loadedAsin === asin' in body
@@ -206,7 +206,7 @@ def test_jump_sets_a_short_note():
     service = read("Service.qml")
     body = function_body(service, "resumeCaughtUp")
     assert "showCatchupNote(Format.clock(player.positionMs))" in body
-    assert body.index("showCatchupNote(") < body.index("player.seekMs(target)")
+    assert body.index("showCatchupNote(") < body.index("player.jumpToMs(target)")
     note = function_body(service, "showCatchupNote")
     assert "catchupNote = Catchup.jumpNote(was)" in note
     assert "catchupNoteTimer.restart()" in note
