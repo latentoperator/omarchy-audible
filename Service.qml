@@ -120,9 +120,6 @@ Item {
   // last queued for write-back. Kept apart from `snapDirty` because the 10 s
   // save clears that one without queuing a push.
   property bool snapUnpushed: false
-  // The user moved the loaded book and mpv hasn't reported where it landed
-  // yet (F38, Playback.moveSentAfter).
-  property bool moveSent: false
   readonly property int saveIntervalMs: 10000
   readonly property int pushIntervalMs: 60000
 
@@ -567,7 +564,6 @@ Item {
   }
 
   // The loaded book has a new listening position (Playback.positionCounts).
-  // Only the position handler calls this.
   function markMoved() {
     snapDirty = true
     snapUnpushed = true
@@ -584,7 +580,6 @@ Item {
     snapMs = previous.length === 0 && asin.length > 0 && player.derived.hasPosition ? player.positionMs : 0
     snapDirty = false
     snapUnpushed = false
-    moveSent = Playback.moveSentAfter(moveSent, "switch")
   }
 
   // Picking a Library row (FR-L6, ARCHITECTURE 6). `LibraryUi` decides what
@@ -905,14 +900,16 @@ Item {
       // A null time-pos (a file being swapped) is not a position.
       if (!player.derived.hasPosition || Playback.asinFromPath(player.path) !== root.snapAsin) return
       root.snapMs = player.positionMs
-      if (Playback.positionCounts(player.playing, root.moveSent)) root.markMoved()
-      root.moveSent = Playback.moveSentAfter(root.moveSent, "report")
+      if (Playback.positionCounts("report", player.playing)) root.markMoved()
     }
 
-    // A seek, skip or chapter jump made while paused is saved too (F38), once
-    // mpv reports where it landed (onPositionMsChanged).
-    function onUserMoved() {
-      if (Playback.asinFromPath(player.path) === root.snapAsin) root.moveSent = Playback.moveSentAfter(root.moveSent, "user")
+    // A seek, skip or chapter jump made while paused is saved too (F38). The
+    // snapshot takes where it lands at once, so a quit or restart before mpv
+    // reports it still saves the move; the report then refines it.
+    function onUserMoved(targetMs) {
+      if (Playback.asinFromPath(player.path) !== root.snapAsin || !Playback.positionCounts("user", player.playing)) return
+      if (targetMs >= 0) root.snapMs = targetMs
+      root.markMoved()
     }
 
     // Pause, stop or a crash: save where the book stopped.

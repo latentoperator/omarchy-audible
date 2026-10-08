@@ -214,6 +214,30 @@ function chapterTarget(chapterIndex, chapterCount, delta) {
   return target;
 }
 
+// Where a user's move lands, in milliseconds, so it can be saved before mpv
+// reports it (F38): "skip" by `value` seconds from `positionMs`, "seek" to
+// `value` ms, or "chapter" to chapter `value`'s start. Clamped to the book:
+// mpv runs with --keep-open, so a seek past the end stops at the end. -1 when
+// it can't be known (no duration, no such chapter, a bad value).
+function moveTargetMs(kind, value, positionMs, durationMs, chapters) {
+  var duration = Number(durationMs);
+  if (!isFinite(duration) || duration <= 0) {
+    return -1;
+  }
+  var target = -1;
+  if (kind === "skip" && typeof value === "number" && isFinite(value) && typeof positionMs === "number" && isFinite(positionMs)) {
+    target = positionMs + value * 1000;
+  } else if (kind === "seek" && typeof value === "number" && isFinite(value)) {
+    target = value;
+  } else if (kind === "chapter" && Array.isArray(chapters) && typeof value === "number" && value >= 0 && value < chapters.length
+      && !isNull(chapters[value]) && typeof chapters[value].startMs === "number") {
+    target = chapters[value].startMs;
+  } else {
+    return -1;
+  }
+  return Math.round(Math.max(0, Math.min(duration, target)));
+}
+
 // ---- connection retry ----
 
 function backoffMs(attempt) {

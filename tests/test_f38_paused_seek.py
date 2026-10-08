@@ -1,12 +1,11 @@
 """F38 — a seek, skip or chapter jump made while paused is saved and pushed.
 
-The decisions are ``Playback.positionCounts`` and ``Playback.moveSentAfter``; the rest checks the wiring in the
+The decisions are ``Playback.positionCounts`` and ``Mpv.moveTargetMs``; the rest checks the wiring in the
 QML objects, which the QJSEngine tests can't load.
 """
 
 from __future__ import annotations
 
-import json
 import pathlib
 
 import pytest
@@ -38,91 +37,76 @@ def playback() -> qjs.JsModule:
     return qjs.load("Playback")
 
 
-@pytest.mark.parametrize(
-    "playing,move_sent,counts",
-    [
-        # The report after a user's move counts paused or playing (the old code
-        # dropped it while paused).
-        (False, True, True),
-        (True, True, True),
-        # A plain report counts only while playing: a reattach after a shell
-        # restart reports a position while paused, and that is not listening.
-        (True, False, True),
-        (False, False, False),
-        ("yes", None, False),
-    ],
-)
-def test_position_counts(playback, playing, move_sent, counts):
-    assert playback.call("positionCounts", playing, move_sent) is counts
+@pytest.fixture(scope="module")
+def mpv() -> qjs.JsModule:
+    return qjs.load("Mpv")
 
 
 @pytest.mark.parametrize(
-    "before,event,after",
+    "cause,playing,counts",
     [
-        (False, "user", True),
-        (True, "user", True),
-        (True, "report", False),
-        (True, "switch", False),
-        (False, "report", False),
-        (True, "other", True),
-        (False, None, False),
-        ("yes", None, False),
+        # The user's move counts paused or playing (the old code dropped it
+        # while paused).
+        ("user", False, True),
+        ("user", True, True),
+        # A reported position counts only while playing: a reattach after a
+        # shell restart reports one while paused, and that is not listening.
+        ("report", True, True),
+        ("report", False, False),
+        # Anything else counts for nothing.
+        ("other", True, False),
+        (None, True, False),
+        ("report", "yes", False),
     ],
 )
-def test_move_sent_after(playback, before, event, after):
-    assert playback.call("moveSentAfter", before, event) is after
+def test_position_counts(playback, cause, playing, counts):
+    assert playback.call("positionCounts", cause, playing) is counts
 
 
-# Service's handlers, replayed in the lib: `user` is onUserMoved for the
-# loaded book, `report_*` is onPositionMsChanged and `switch` is
-# onBookSwitched. Stop, a switch and Component.onDestruction save only when
-# the result is dirty.
-REPLAY = """
-(function(steps) {
-  var moveSent = false, dirty = false;
-  for (var i = 0; i < steps.length; i++) {
-    var step = steps[i];
-    if (step === "user") moveSent = moveSentAfter(moveSent, "user");
-    else if (step === "switch") { dirty = false; moveSent = moveSentAfter(moveSent, "switch"); }
-    else {
-      var playing = step === "report_playing";
-      if (positionCounts(playing, moveSent)) dirty = true;
-      moveSent = moveSentAfter(moveSent, "report");
-    }
-  }
-  return dirty;
-})
-"""
+CHAPTERS = [
+    {"title": "1", "startMs": 0},
+    {"title": "2", "startMs": 2500},
+    {"title": "3"},
+]
 
 
 @pytest.mark.parametrize(
-    "steps,dirty",
+    "kind,value,position,duration,target",
     [
-        # Pause, ⏩, its position arrives: saved at Stop, switch or restart.
-        (["user", "report_paused"], True),
-        # Codex P1: a restart (or quit) before the position arrives saves
-        # nothing, rather than the old position with a new listening time.
-        (["user"], False),
-        # Codex P2: a skip sent while another book loads is dropped by the
-        # switch; the new book's first report while paused isn't listening.
-        (["user", "switch", "report_paused"], False),
-        # A reattach reports a position while paused: not listening.
-        (["switch", "report_paused"], False),
-        # One move counts once: a later paused report doesn't count again.
-        (["user", "report_paused", "switch", "report_paused"], False),
-        # Playing always counts.
-        (["report_playing"], True),
+        ("skip", 30, 1000, 600000, 31000),
+        ("skip", -10, 30000, 600000, 20000),
+        # mpv clamps: before the start is 0; --keep-open stops at the end.
+        ("skip", -30, 1000, 600000, 0),
+        ("skip", 30, 3647, 6000, 6000),
+        ("skip", 0.5, 1000, 6000, 1500),
+        ("seek", 4321.4, 0, 6000, 4321),
+        ("seek", -5, 0, 6000, 0),
+        ("seek", 9000, 0, 6000, 6000),
+        ("chapter", 1, 0, 6000, 2500),
+        ("chapter", 0, 4000, 6000, 0),
+        # Unknown: no such chapter, a chapter with no start, no duration, bad values.
+        ("chapter", 3, 0, 6000, -1),
+        ("chapter", 2, 0, 6000, -1),
+        ("chapter", -1, 0, 6000, -1),
+        ("skip", 30, 1000, 0, -1),
+        ("skip", None, 1000, 6000, -1),
+        ("skip", 30, None, 6000, -1),
+        ("seek", "x", 0, 6000, -1),
+        ("jump", 1, 0, 6000, -1),
     ],
 )
-def test_handlers_in_order(playback, steps, dirty):
-    assert playback.evaluate(REPLAY + "(" + json.dumps(steps) + ")") is dirty
+def test_move_target(mpv, kind, value, position, duration, target):
+    assert mpv.call("moveTargetMs", kind, value, position, duration, CHAPTERS) == target
 
 
 def test_user_moves_say_so_and_the_catchup_jump_does_not():
     player = read("qml/PlayerController.qml")
-    assert "signal userMoved()" in player
-    for name in ("skip", "seekMs", "setChapter"):
-        assert "userMoved()" in function_body(player, name), name
+    assert "signal userMoved(int targetMs)" in player
+    for name, kind in (("skip", "skip"), ("seekMs", "seek"), ("setChapter", "chapter")):
+        body = function_body(player, name)
+        assert f'Mpv.moveTargetMs("{kind}", ' in body, name
+        # Only a move that was sent says so.
+        assert ")) userMoved(target)" in body, name
     # Chapter ⏮/⏭ go through setChapter.
     assert "setChapter(target)" in function_body(player, "jumpChapter")
     assert "userMoved" not in function_body(player, "jumpToMs")
@@ -135,21 +119,18 @@ def test_user_moves_say_so_and_the_catchup_jump_does_not():
 def test_the_service_marks_a_move_through_the_lib():
     service = read("Service.qml")
     position = function_body(service, "onPositionMsChanged")
-    assert "Playback.positionCounts(player.playing, root.moveSent)" in position
+    assert 'Playback.positionCounts("report", player.playing)' in position
     assert "root.markMoved()" in position
-    assert 'root.moveSent = Playback.moveSentAfter(root.moveSent, "report")' in position
-    # The move counts when its position arrives, not when it is sent.
     moved = function_body(service, "onUserMoved")
-    assert 'root.moveSent = Playback.moveSentAfter(root.moveSent, "user")' in moved
-    assert "markMoved" not in moved
+    assert 'Playback.positionCounts("user", player.playing)' in moved
     # Only a move of the book the snapshot belongs to.
-    assert "Playback.asinFromPath(player.path) === root.snapAsin" in moved
-    assert 'moveSent = Playback.moveSentAfter(moveSent, "switch")' in function_body(
-        service, "onBookSwitched"
-    )
+    assert "Playback.asinFromPath(player.path) !== root.snapAsin" in moved
+    # Where the move lands is kept at once, so a quit or restart before mpv
+    # reports it saves the move, not the old position (Codex rounds 1 and 2).
+    assert "if (targetMs >= 0) root.snapMs = targetMs" in moved
+    assert moved.index("root.snapMs = targetMs") < moved.index("root.markMoved()")
     mark = function_body(service, "markMoved")
     assert "snapDirty = true" in mark and "snapUnpushed = true" in mark
     # Nothing else in the service sets the marks.
     assert service.count("snapDirty = true") == 1
     assert service.count("snapUnpushed = true") == 1
-    assert service.count("root.markMoved()") == 1

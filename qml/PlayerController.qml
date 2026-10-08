@@ -67,7 +67,8 @@ Item {
   property real fadeBaseVolume: -1
 
   // The user moved the position: a seek, skip or chapter jump was sent (F38).
-  signal userMoved()
+  // `targetMs` is where it lands (Mpv.moveTargetMs), or -1 when unknown.
+  signal userMoved(int targetMs)
 
   // Subscribe on the derived `connected`, not in Socket.onConnectionStateChanged:
   // the socket can connect before Loader.item is assigned (S5 pitfall 1).
@@ -242,13 +243,22 @@ Item {
   function pause() { send(Mpv.pauseCommand(true)) }
   function resume() { send(Mpv.pauseCommand(false)) }
   function toggle() { send(Mpv.pauseCommand(playing)) }
-  // A seek, skip or chapter jump the user asked for says so with `userMoved`,
-  // so a move made while paused is saved (F38). `jumpToMs` is a seek that is
-  // not the user's (the catch-up jump).
-  function skip(seconds) { if (send(Mpv.skipCommand(seconds))) userMoved() }
-  function seekMs(ms) { if (send(Mpv.seekCommand(ms / 1000))) userMoved() }
+  // A seek, skip or chapter jump the user asked for says so with `userMoved`
+  // and where it lands, so a move made while paused is saved (F38).
+  // `jumpToMs` is a seek that is not the user's (the catch-up jump).
+  function skip(seconds) {
+    var target = Mpv.moveTargetMs("skip", Number(seconds), positionMs, durationMs, chapters)
+    if (send(Mpv.skipCommand(seconds))) userMoved(target)
+  }
+  function seekMs(ms) {
+    var target = Mpv.moveTargetMs("seek", Number(ms), positionMs, durationMs, chapters)
+    if (send(Mpv.seekCommand(ms / 1000))) userMoved(target)
+  }
   function jumpToMs(ms) { send(Mpv.seekCommand(ms / 1000)) }
-  function setChapter(index) { if (send(Mpv.chapterCommand(index))) userMoved() }
+  function setChapter(index) {
+    var target = Mpv.moveTargetMs("chapter", Number(index), positionMs, durationMs, chapters)
+    if (send(Mpv.chapterCommand(index))) userMoved(target)
+  }
   function setSpeed(value) { send(Mpv.speedCommand(value)) }
   function setVolume(value) { send(Mpv.volumeCommand(value)) }
 
