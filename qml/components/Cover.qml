@@ -1,8 +1,8 @@
 import QtQuick
 import QtQuick.Effects
 import qs.Commons
+import "../lib/Glyphs.js" as Glyphs
 import "../lib/Parts.js" as Parts
-import "../lib/Panel.js" as Panel
 
 // A book's cover, always square. Loads `<dataDir>/covers/<asin>.jpg` off the
 // UI thread; until it is ready, or when it is missing or broken, shows the
@@ -40,7 +40,7 @@ Item {
 
     Text {
       anchors.centerIn: parent
-      text: Panel.GLYPH_BOOK
+      text: Glyphs.GLYPH_BOOK
       color: Color.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.iconLarge

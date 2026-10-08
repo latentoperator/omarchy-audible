@@ -1,4 +1,5 @@
 .pragma library
+.import "Panel.js" as Panel
 
 // Onboarding logic for the drawer (PLAN L3, ARCHITECTURE §6, SCOPE FR-A1–A4).
 //
@@ -10,9 +11,10 @@
 //
 // It holds no state: the same inputs always give the same answer, so a view can
 // bind straight to it. This is pure ECMAScript for the Qt JS engine: no
-// imports, no Qt types, and nothing here throws on bad input. A pasted URL is
-// never echoed — `looksLikeRedirect` returns only a boolean, and `errorText`
-// drops any message or hint carrying the one-time-code marker.
+// imports but `Panel.js` (the view names), no Qt types, and nothing here
+// throws on bad input. A pasted URL is never echoed — `looksLikeRedirect`
+// returns only a boolean, and `errorText` drops any message or hint carrying
+// the one-time-code marker.
 //
 // The public surface is the constants and the seven functions below.
 // Everything else lives on the private `_p` namespace so it cannot leak into
@@ -24,12 +26,6 @@ var STEP_MISSING = "missing";
 var STEP_SETUP = "setup";
 var STEP_CONNECT = "connect";
 var STEP_READY = "ready";
-
-// The four views the drawer can show (ARCHITECTURE §6).
-var VIEW_ONBOARDING = "onboarding";
-var VIEW_LIBRARY = "library";
-var VIEW_MINI = "mini";
-var VIEW_FULL = "full";
 
 var _p = {};
 
@@ -277,20 +273,20 @@ function installCommand(missing) {
 // is loaded and `library` otherwise.
 function view(stepName, playerLoaded, requested) {
   if (stepName !== STEP_READY) {
-    return VIEW_ONBOARDING;
+    return Panel.VIEW_ONBOARDING;
   }
   var loaded = playerLoaded === true;
   var want = _p.stringOrNull(requested);
-  if (want === VIEW_FULL) {
-    return loaded ? VIEW_FULL : VIEW_LIBRARY;
+  if (want === Panel.VIEW_FULL) {
+    return loaded ? Panel.VIEW_FULL : Panel.VIEW_LIBRARY;
   }
-  if (want === VIEW_MINI) {
-    return loaded ? VIEW_MINI : VIEW_LIBRARY;
+  if (want === Panel.VIEW_MINI) {
+    return loaded ? Panel.VIEW_MINI : Panel.VIEW_LIBRARY;
   }
-  if (want === VIEW_LIBRARY) {
-    return VIEW_LIBRARY;
+  if (want === Panel.VIEW_LIBRARY) {
+    return Panel.VIEW_LIBRARY;
   }
-  return loaded ? VIEW_MINI : VIEW_LIBRARY;
+  return loaded ? Panel.VIEW_MINI : Panel.VIEW_LIBRARY;
 }
 
 // The human text for an `error` event (SCOPE §6, FR-A4) as

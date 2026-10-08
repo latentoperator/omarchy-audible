@@ -15,8 +15,12 @@ var OBSERVED = [
   "path", "idle-active", "eof-reached", "volume"
 ];
 
+// mpv's speed and volume ranges: the one home for them (Playback.js imports
+// them for what it saves).
 var MIN_SPEED = 0.5;
 var MAX_SPEED = 3.0;
+var MIN_VOLUME = 0;
+var MAX_VOLUME = 130;
 
 // Reconnect: `backoffMs` grows by step and caps; the caller stops after
 // MAX_ATTEMPTS so an absent mpv costs nothing (S5 pitfall 5).
@@ -190,7 +194,7 @@ function speedCommand(speed) {
 }
 
 function volumeCommand(volume) {
-  return ["set_property", "volume", Math.max(0, Math.min(130, Number(volume) || 0))];
+  return ["set_property", "volume", Math.max(MIN_VOLUME, Math.min(MAX_VOLUME, Number(volume) || 0))];
 }
 
 function clampSpeed(speed) {
@@ -356,9 +360,9 @@ function userVolume(volume, fadeBaseVolume) {
 }
 
 // The volume a new mpv starts with: the saved one if it is a number in
-// mpv's 0–130 range, else `fallback`.
+// mpv's range (MIN_VOLUME–MAX_VOLUME), else `fallback`.
 function startVolume(saved, fallback) {
-  if (typeof saved === "number" && isFinite(saved) && saved >= 0 && saved <= 130) {
+  if (typeof saved === "number" && isFinite(saved) && saved >= MIN_VOLUME && saved <= MAX_VOLUME) {
     return Math.round(saved);
   }
   return fallback;

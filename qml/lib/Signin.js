@@ -1,12 +1,13 @@
 .pragma library
+.import "Drawer.js" as Drawer
 
 // Onboarding view decisions that `Onboarding.js` does not make (U3): the step
 // while reconnecting, where the Connect step is (pick a store, waiting for
 // the sign-in link, paste, finishing), setup progress text, the account line,
 // which jobs belong to onboarding, and what the event log may record for
-// them. Pure ECMAScript for the Qt JS engine: no imports, no Qt types, and
-// nothing here throws on bad input. Nothing here ever receives the pasted
-// text.
+// them. Pure ECMAScript for the Qt JS engine: no imports but `Drawer.js` (the
+// key codes), no Qt types, and nothing here throws on bad input. Nothing here
+// ever receives the pasted text.
 
 // Connect phases.
 var PHASE_PICK = "pick";
@@ -159,16 +160,11 @@ function phaseText(phase) {
   return "";
 }
 
-// Qt key codes the paste field reacts to.
-var KEY_ESCAPE = 0x01000000;
-var KEY_RETURN = 0x01000004;
-var KEY_ENTER = 0x01000005;
-
 // What a key in the paste field does: Esc closes, Enter sends, anything else
 // is typed.
 function pasteKey(key) {
-  if (key === KEY_ESCAPE) return "close";
-  if (key === KEY_RETURN || key === KEY_ENTER) return "send";
+  if (key === Drawer.KEY_ESCAPE) return "close";
+  if (key === Drawer.KEY_RETURN || key === Drawer.KEY_ENTER) return "send";
   return "type";
 }
 

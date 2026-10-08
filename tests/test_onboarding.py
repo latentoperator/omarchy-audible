@@ -25,10 +25,6 @@ EXPECTED_API = {
     "STEP_MISSING",
     "STEP_READY",
     "STEP_SETUP",
-    "VIEW_FULL",
-    "VIEW_LIBRARY",
-    "VIEW_MINI",
-    "VIEW_ONBOARDING",
     "clipboardNotice",
     "errorText",
     "installCommand",
@@ -93,10 +89,10 @@ def test_constant_values(onboarding: qjs.JsModule) -> None:
     assert onboarding.evaluate("STEP_SETUP") == "setup"
     assert onboarding.evaluate("STEP_CONNECT") == "connect"
     assert onboarding.evaluate("STEP_READY") == "ready"
-    assert onboarding.evaluate("VIEW_ONBOARDING") == "onboarding"
-    assert onboarding.evaluate("VIEW_LIBRARY") == "library"
-    assert onboarding.evaluate("VIEW_MINI") == "mini"
-    assert onboarding.evaluate("VIEW_FULL") == "full"
+    assert onboarding.evaluate("Panel.VIEW_ONBOARDING") == "onboarding"
+    assert onboarding.evaluate("Panel.VIEW_LIBRARY") == "library"
+    assert onboarding.evaluate("Panel.VIEW_MINI") == "mini"
+    assert onboarding.evaluate("Panel.VIEW_FULL") == "full"
 
 
 # --- step --------------------------------------------------------------------

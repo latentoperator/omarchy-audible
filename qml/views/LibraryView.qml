@@ -5,6 +5,7 @@ import qs.Ui
 import "../components"
 import "../lib/Drawer.js" as Drawer
 import "../lib/Format.js" as Format
+import "../lib/Glyphs.js" as Glyphs
 import "../lib/LibraryUi.js" as LibraryUi
 import "../lib/Mini.js" as Mini
 import "../lib/Onboarding.js" as Onboarding
@@ -106,7 +107,7 @@ ColumnLayout {
     }
 
     PanelActionButton {
-      iconText: Drawer.GLYPH_REFRESH
+      iconText: Glyphs.GLYPH_REFRESH
       tooltipText: "Refresh library"
       enabled: root.service ? !root.service.syncing : false
       onClicked: if (root.service) root.service.refreshLibrary()
@@ -187,7 +188,7 @@ ColumnLayout {
     }
 
     PanelActionButton {
-      iconText: Drawer.GLYPH_DISMISS
+      iconText: Glyphs.GLYPH_DISMISS
       tooltipText: "Dismiss"
       onClicked: root.service.clipboardNotice = ""
     }
@@ -217,7 +218,7 @@ ColumnLayout {
       onClicked: root.service.answerAsk(false)
     }
     PanelActionButton {
-      iconText: Drawer.GLYPH_DISMISS
+      iconText: Glyphs.GLYPH_DISMISS
       tooltipText: "Dismiss"
       onClicked: root.service.dismissAsk()
     }
@@ -399,7 +400,7 @@ ColumnLayout {
       }
 
       PanelActionButton {
-        iconText: Mini.GLYPH_BACK
+        iconText: Glyphs.GLYPH_BACK
         tooltipText: "Back " + Mini.SKIP_SECONDS + " s"
         onClicked: if (root.service) root.service.player.skip(Mini.skipSeconds(Mini.ACTION_BACK))
       }
@@ -411,7 +412,7 @@ ColumnLayout {
       }
 
       PanelActionButton {
-        iconText: Mini.GLYPH_FORWARD
+        iconText: Glyphs.GLYPH_FORWARD
         tooltipText: "Forward " + Mini.SKIP_SECONDS + " s"
         onClicked: if (root.service) root.service.player.skip(Mini.skipSeconds(Mini.ACTION_FORWARD))
       }

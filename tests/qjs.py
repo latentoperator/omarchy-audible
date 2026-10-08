@@ -18,7 +18,8 @@ as :class:`JsRef`, so in-place mutations stick.
 ``.import "file.js" as Qualifier`` syntax (P7, F20). ``QJSEngine`` does not
 resolve that itself, so this loader does: the imported file is evaluated in an
 isolated function scope and bound to its qualifier, matching what the QML
-loader hands the library at runtime.
+loader hands the library at runtime. An imported file's own imports are bound
+the same way inside its scope (P9: ``Onboarding`` → ``Panel`` → ``Glyphs``).
 """
 
 from __future__ import annotations
@@ -78,12 +79,15 @@ def _strip_pragma(source: str) -> str:
     )
 
 
-def _resolve_imports(source: str, path: Path) -> tuple[str, list[tuple[str, str]]]:
+def _resolve_imports(
+    source: str, path: Path, chain: tuple[Path, ...] = ()
+) -> tuple[str, list[tuple[str, str]]]:
     """Pull ``.import "file.js" as Qualifier`` lines out of a library.
 
-    Returns the source without those lines and the ``(qualifier, source)`` pairs
-    for the loader to bind. Only one level is supported; none of the libraries
-    imports another library that itself imports one.
+    Returns the source without those lines and the ``(qualifier, js)`` pairs for
+    the loader to evaluate, where ``js`` binds the imported library, with its
+    own imports bound inside its scope, to ``qualifier``. ``chain`` is the
+    files already being imported, so a cycle fails instead of recursing.
     """
     imports: list[tuple[str, str]] = []
     for match in _IMPORT.finditer(source):
@@ -91,13 +95,31 @@ def _resolve_imports(source: str, path: Path) -> tuple[str, list[tuple[str, str]
         imported_path = (path.parent / relative).resolve()
         if not imported_path.is_file():
             raise JsError(f"{path.name} imports a missing file: {imported_path}")
-        imported_source = _strip_pragma(imported_path.read_text(encoding="utf-8"))
-        if _IMPORT.search(imported_source):
-            raise JsError(
-                f"{relative} imports another library; only one level is supported"
-            )
-        imports.append((qualifier, imported_source))
+        if imported_path in chain or imported_path == path.resolve():
+            raise JsError(f"{path.name} imports {relative} in a cycle")
+        imported_source, nested = _resolve_imports(
+            _strip_pragma(imported_path.read_text(encoding="utf-8")),
+            imported_path,
+            chain + (path.resolve(),),
+        )
+        imports.append((qualifier, _wrap(qualifier, imported_source, nested)))
     return _IMPORT.sub("", source), imports
+
+
+def _wrap(qualifier: str, source: str, nested: list[tuple[str, str]]) -> str:
+    """JS that binds a library as ``qualifier``, isolated from its importer.
+
+    The library's top-level declarations, and its own imports, are scoped to
+    the wrapper, so its private ``_p`` cannot collide with the importing
+    library's, and only its qualifier becomes a global.
+    """
+    names = sorted(set(_DECLARATION.findall(source)))
+    exports = ", ".join(f"{name}: {name}" for name in names)
+    inner = "\n".join(js for _, js in nested)
+    return (
+        f"var {qualifier} = (function () {{\n{inner}\n{source}\n"
+        f"return {{ {exports} }};\n}})();"
+    )
 
 
 class JsRef:
@@ -130,8 +152,8 @@ class JsModule:
         if not path.is_file():
             raise FileNotFoundError(f"no such qml/lib file: {path}")
         source, imports = _resolve_imports(path.read_text(encoding="utf-8"), path)
-        for qualifier, imported_source in imports:
-            self._bind_import(qualifier, imported_source)
+        for qualifier, js in imports:
+            self._bind_import(qualifier, js)
         # The imported aliases are part of the evaluation scope, not the
         # module's own surface, so they are bound before the diff is taken.
         before = self._globals()
@@ -141,20 +163,9 @@ class JsModule:
         # is the module's public surface, which keeps the API assertion honest.
         self.functions = sorted(self._globals() - before)
 
-    def _bind_import(self, qualifier: str, source: str) -> None:
-        """Bind an imported library as ``qualifier``, isolated from this one.
-
-        The imported file's top-level declarations are scoped to the wrapper,
-        so its private ``_p`` cannot collide with the importing library's, and
-        only its qualifier becomes a global.
-        """
-        names = sorted(set(_DECLARATION.findall(source)))
-        exports = ", ".join(f"{name}: {name}" for name in names)
-        wrapped = (
-            f"var {qualifier} = (function () {{\n{source}\n"
-            f"return {{ {exports} }};\n}})();"
-        )
-        value = self._engine.evaluate(wrapped)
+    def _bind_import(self, qualifier: str, js: str) -> None:
+        """Evaluate the JS that binds an imported library as ``qualifier``."""
+        value = self._engine.evaluate(js)
         self._check(value, f"importing {qualifier}")
 
     def _globals(self) -> set[str]:

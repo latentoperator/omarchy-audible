@@ -22,13 +22,6 @@ var MAX_TICKS = 40;
 // A seek has landed once the player reports a position this close to it.
 var SEEK_SETTLE_MS = 1500;
 
-// Glyphs from the theme's icon font (Font Awesome, as the bar uses).
-var GLYPH_PREV_CHAPTER = "";
-var GLYPH_NEXT_CHAPTER = "";
-var GLYPH_MAXIMIZE = "";
-var GLYPH_DISMISS = "";
-var GLYPH_CHAPTERS = "";
-
 // The "Couldn't start playback" reason, or "" when there is none: the last
 // `play-info` failure (B11) first, else the player's own failure.
 function playFailure(connection, lastError, playError) {
@@ -194,11 +187,6 @@ var SLEEP_MINUTES = [15, 30, 45, 60];
 // After the user scrolls the chapter list, leave it alone this long before
 // following the current chapter again.
 var USER_SCROLL_HOLD_MS = 4000;
-
-var GLYPH_COLLAPSE = "";
-var GLYPH_MOON = "";
-var GLYPH_SLOWER = "";
-var GLYPH_FASTER = "";
 
 // `fullKeyAction` results.
 var KEY_COLLAPSE = "collapse";

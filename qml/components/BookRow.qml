@@ -4,6 +4,7 @@ import qs.Commons
 import qs.Ui
 import "../lib/Drawer.js" as Drawer
 import "../lib/Format.js" as Format
+import "../lib/Glyphs.js" as Glyphs
 
 // One Library row (FR-L6): cover, title, author, runtime, progress bar and
 // state badge, a failure line for a failed download, plus Remove from
@@ -211,7 +212,7 @@ Rectangle {
 
     PanelActionButton {
       visible: root.removable && !root.removing
-      iconText: Drawer.GLYPH_REMOVE
+      iconText: Glyphs.GLYPH_REMOVE
       tooltipText: "Remove from this device"
       hoverColor: Color.urgent
       onClicked: root.removeRequested()

@@ -7,6 +7,7 @@ import qs.Ui
 import "../components"
 import "../lib/Drawer.js" as Drawer
 import "../lib/Format.js" as Format
+import "../lib/Glyphs.js" as Glyphs
 import "../lib/Mini.js" as Mini
 import "../lib/Mpv.js" as Mpv
 import "../lib/Panel.js" as Panel
@@ -152,19 +153,19 @@ ColumnLayout {
 
       // The same Library button as Mini's (U8); playback carries on.
       Button {
-        iconText: Mini.GLYPH_LIBRARY
+        iconText: Glyphs.GLYPH_LIBRARY
         tooltipText: "Library"
         onClicked: if (root.service) root.service.showView(Panel.VIEW_LIBRARY)
       }
 
       Button {
-        iconText: Player.GLYPH_COLLAPSE
+        iconText: Glyphs.GLYPH_COLLAPSE
         tooltipText: "Mini player (Backspace)"
         onClicked: if (root.service) root.service.showView(Panel.VIEW_MINI)
       }
 
       Button {
-        iconText: Player.GLYPH_DISMISS
+        iconText: Glyphs.GLYPH_DISMISS
         tooltipText: "Close (Esc)"
         onClicked: root.closeRequested()
       }
@@ -233,7 +234,7 @@ ColumnLayout {
 
     Button {
       enabled: root.loaded && Player.canFineStep(root.speed, -1)
-      iconText: Player.GLYPH_SLOWER
+      iconText: Glyphs.GLYPH_SLOWER
       iconSize: Style.font.iconSmall
       tooltipText: "Slower (−0.05)"
       onClicked: root.player.setSpeed(Player.fineSpeed(root.speed, -1))
@@ -251,7 +252,7 @@ ColumnLayout {
 
     Button {
       enabled: root.loaded && Player.canFineStep(root.speed, 1)
-      iconText: Player.GLYPH_FASTER
+      iconText: Glyphs.GLYPH_FASTER
       iconSize: Style.font.iconSmall
       tooltipText: "Faster (+0.05)"
       onClicked: root.player.setSpeed(Player.fineSpeed(root.speed, 1))
@@ -297,7 +298,7 @@ ColumnLayout {
 
     Text {
       visible: root.sleepTimer !== null
-      text: Player.GLYPH_MOON + "  " + Player.sleepText(root.sleepTimer,
+      text: Glyphs.GLYPH_MOON + "  " + Player.sleepText(root.sleepTimer,
         Mpv.sleepRemainingMs(root.sleepTimer, root.nowMs, root.positionMs, root.speed))
       textFormat: Text.PlainText
       color: Color.popups.text
@@ -341,7 +342,7 @@ ColumnLayout {
     Button {
       visible: !root.confirmRemove
       enabled: Drawer.canRemove(root.row)
-      iconText: Drawer.GLYPH_REMOVE
+      iconText: Glyphs.GLYPH_REMOVE
       text: "Remove from this device"
       bordered: true
       onClicked: root.confirmRemove = true

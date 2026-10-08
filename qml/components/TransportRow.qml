@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import qs.Commons
 import qs.Ui
+import "../lib/Glyphs.js" as Glyphs
 import "../lib/Mini.js" as Mini
 import "../lib/Player.js" as Player
 
@@ -19,14 +20,14 @@ RowLayout {
 
   Button {
     enabled: root.loaded && Player.canJumpChapter(root.player.chapterIndex, root.player.chapters.length, -1)
-    iconText: Player.GLYPH_PREV_CHAPTER
+    iconText: Glyphs.GLYPH_PREV_CHAPTER
     tooltipText: "Previous chapter"
     onClicked: root.player.prevChapter()
   }
 
   Button {
     enabled: root.loaded
-    iconText: Mini.GLYPH_BACK
+    iconText: Glyphs.GLYPH_BACK
     text: String(Mini.SKIP_SECONDS)
     tooltipText: "Back " + Mini.SKIP_SECONDS + " s (←)"
     onClicked: root.player.skip(Mini.skipSeconds(Mini.ACTION_BACK))
@@ -41,7 +42,7 @@ RowLayout {
 
   Button {
     enabled: root.loaded
-    iconText: Mini.GLYPH_FORWARD
+    iconText: Glyphs.GLYPH_FORWARD
     text: String(Mini.SKIP_SECONDS)
     tooltipText: "Forward " + Mini.SKIP_SECONDS + " s (→)"
     onClicked: root.player.skip(Mini.skipSeconds(Mini.ACTION_FORWARD))
@@ -49,7 +50,7 @@ RowLayout {
 
   Button {
     enabled: root.loaded && Player.canJumpChapter(root.player.chapterIndex, root.player.chapters.length, 1)
-    iconText: Player.GLYPH_NEXT_CHAPTER
+    iconText: Glyphs.GLYPH_NEXT_CHAPTER
     tooltipText: "Next chapter"
     onClicked: root.player.nextChapter()
   }
