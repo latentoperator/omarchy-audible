@@ -287,3 +287,26 @@ def test_the_service_hands_over_at_the_right_moments():
     assert "if (!service.autoRemoveFinished) return" in function_body(
         removals, "noteFinished"
     )
+
+
+def test_a_new_intent_drops_an_auto_remove_too(unload):
+    out = step(unload, [entry("A", AUTO)], {"type": "intent", "asin": "A"})
+    assert out == {"pending": [], "effects": [TIMER_OFF]}
+
+
+def test_removals_applies_every_effect():
+    # Codex round 1: the effect wiring itself, which the reducer vectors can't see.
+    removals = read("qml/Removals.qml")
+    apply = function_body(removals, "apply")
+    assert 'service.run("remove", [effect.asin], effect.purpose)' in apply
+    assert 'service.logEvent("remove", effect.text)' in apply
+    assert "unloadTimer.restart()" in apply and "unloadTimer.stop()" in apply
+    unload_then_remove = function_body(removals, "unloadThenRemove")
+    assert unload_then_remove.index("apply(Unload.step(") < unload_then_remove.index(
+        "player.quit()"
+    )
+    assert 'return "unloading"' in unload_then_remove
+    timers = removals[removals.index("id: unloadTimer") :]
+    assert "onTriggered: root.abandon()" in timers
+    assert "onTriggered: root.removeIfStillFinished()" in timers
+    assert "interval: 10000" in timers and "interval: 2000" in timers
