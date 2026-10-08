@@ -99,14 +99,53 @@ def test_move_target(mpv, kind, value, position, duration, target):
     assert mpv.call("moveTargetMs", kind, value, position, duration, CHAPTERS) == target
 
 
+@pytest.mark.parametrize(
+    "before,event,reason,after",
+    [
+        (False, "load_sent", None, True),
+        (True, "load_sent", None, True),
+        (True, "file-loaded", None, False),
+        (True, "disconnected", None, False),
+        (True, "end-file", "error", False),
+        # The book being replaced ends ("stop") before the new one opens.
+        (True, "end-file", "stop", True),
+        (True, "end-file", "eof", True),
+        (False, "end-file", "stop", False),
+        (True, "playback-restart", None, True),
+        (False, None, None, False),
+        ("yes", None, None, False),
+    ],
+)
+def test_loading_after(mpv, before, event, reason, after):
+    assert mpv.call("loadingAfter", before, event, reason) is after
+
+
+# Codex round 3: pick B while A is paused, then skip before mpv opens B. The
+# skip lands on B, so A must not be saved at its position plus the skip.
+def test_a_move_during_a_book_swap_is_not_the_old_books():
+    player = read("qml/PlayerController.qml")
+    assert 'loading = Mpv.loadingAfter(loading, "load_sent", null)' in function_body(
+        player, "flushPending"
+    )
+    lines = function_body(player, "handleLine")
+    assert "loading = Mpv.loadingAfter(loading, message.event, message.reason)" in lines
+    assert "loading = Mpv.loadingAfter(loading, message.event, null)" in lines
+    # A gone mpv opens nothing: both places that reset mpvState drop it too.
+    assert (
+        player.count('loading = Mpv.loadingAfter(loading, "disconnected", null)') == 2
+    )
+    assert player.count("mpvState = Mpv.emptyState()") == 2
+    assert player.count("loading = ") == 5
+
+
 def test_user_moves_say_so_and_the_catchup_jump_does_not():
     player = read("qml/PlayerController.qml")
     assert "signal userMoved(int targetMs)" in player
     for name, kind in (("skip", "skip"), ("seekMs", "seek"), ("setChapter", "chapter")):
         body = function_body(player, name)
         assert f'Mpv.moveTargetMs("{kind}", ' in body, name
-        # Only a move that was sent says so.
-        assert ")) userMoved(target)" in body, name
+        # Only a move that was sent says so, and not while a new file opens.
+        assert ") && !loading) userMoved(target)" in body, name
     # Chapter ⏮/⏭ go through setChapter.
     assert "setChapter(target)" in function_body(player, "jumpChapter")
     assert "userMoved" not in function_body(player, "jumpToMs")

@@ -214,6 +214,22 @@ function chapterTarget(chapterIndex, chapterCount, delta) {
   return target;
 }
 
+// Whether a `loadfile` this controller sent is still being opened, after
+// `event`: "load_sent", mpv's "file-loaded" (it opened the file), mpv's
+// "end-file" with `reason` "error" (it never will), or "disconnected". While
+// it is, a seek, skip or chapter jump lands on the new file rather than the
+// book still showing, so it is not reported as that book's move (F38). The
+// end-file of the book being replaced (reason "stop") changes nothing.
+function loadingAfter(loading, event, reason) {
+  if (event === "load_sent") {
+    return true;
+  }
+  if (event === "file-loaded" || event === "disconnected" || (event === "end-file" && reason === "error")) {
+    return false;
+  }
+  return loading === true;
+}
+
 // Where a user's move lands, in milliseconds, so it can be saved before mpv
 // reports it (F38): "skip" by `value` seconds from `positionMs`, "seek" to
 // `value` ms, or "chapter" to chapter `value`'s start. Clamped to the book:
