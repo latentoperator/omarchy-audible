@@ -101,9 +101,8 @@ def test_play_pause_entry_points_use_the_service():
     # Mini's ⏯ is in the shared transport row (U5).
     assert "root.service.playPause()" in read("qml/components/TransportRow.qml")
     assert "TransportRow {" in read("qml/views/MiniView.qml")
-    service = read("Service.qml")
-    ipc = service[service.index("IpcHandler {") :]
-    assert "return root.playPause()" in function_body(ipc, "playPause")
+    ipc = read("qml/ServiceIpc.qml")
+    assert "return service.playPause()" in function_body(ipc, "playPause")
 
 
 def test_resume_reads_only_after_a_long_pause():
