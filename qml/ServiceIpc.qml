@@ -25,6 +25,7 @@ Item {
   property var runner: null
   property var store: null
   property var sync: null
+  property var signin: null
 
   IpcHandler {
     target: "latentoperator.audible"
@@ -116,7 +117,7 @@ Item {
       if (action === "import") return service.importCliLogin()
       if (action === "logout") return service.disconnect()
       if (action === "reconnect") { service.reconnect(); return "ok" }
-      if (action === "authfail") { service.authFailed = true; return "ok" }
+      if (action === "authfail") { signin.noteAuthFailed(); return "ok" }
       return "error: unknown action"
     }
     // Fake mode only: a download that fails with a `--fake-fail` mode.
