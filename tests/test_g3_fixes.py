@@ -161,7 +161,7 @@ def test_library_shows_the_player_error():
 def test_overlapping_reads_keep_their_own_results():
     # Codex R3: a failed read of book A must not clear book B's result. Since
     # P9 PR 5 the finish bookkeeping is `Catchup.finishRead`, whose vectors
-    # (test_catchup_js.py, A fails while B is prefetched) replace the greps for
+    # (test_catchup_flow.py, A fails while B is prefetched) replace the greps for
     # `delete root.catchupResults[readAsin]` and the same-book clear; this
     # checks the wiring applies it.
     flow = read("qml/CatchupFlow.qml")
