@@ -128,7 +128,7 @@ function createState() {
 }
 
 // Events: flush(queue), positions(queue, items, purpose), finished(job, outcome,
-// queue), refused(purpose, queue), reset_retry, and deferred_flush(queue).
+// queue), refused(purpose, queue), and reset_retry.
 // Effects: run(command, args, purpose), setQueue(queue), flush_later, and
 // finish(result). `Positions.flushPlan` remains the authority for drop/send.
 function step(state, event) {
@@ -186,12 +186,6 @@ function step(state, event) {
   }
   if (type === "refused" && current.flushing) {
     return _sync.finish(current, event.queue, "refused");
-  }
-  if (type === "deferred_flush") {
-    var deferredQueue = _sync.list(event.queue);
-    if (current.progressed && deferredQueue.length > 0) {
-      return _sync.result(current, [{ "type": "flush_later" }]);
-    }
   }
   return _sync.result(current, []);
 }

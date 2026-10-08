@@ -124,6 +124,129 @@ def test_newer_listening_replaces_old_plan_entry_before_any_push(sync):
     assert state["progressed"] is True
 
 
+def test_push_error_after_partial_flush_finishes_and_schedules_remaining_queue(sync):
+    queue = [entry("A"), entry("B")]
+    state, _ = step(sync, sync.call("createState"), type="flush", queue=queue)
+    state, _ = step(
+        sync, state, type="positions", purpose="flush", queue=queue, items={}
+    )
+    state, effects = step(
+        sync,
+        state,
+        type="finished",
+        job={"purpose": "flush"},
+        outcome={"ok": True},
+        queue=queue,
+    )
+    assert effects[0]["args"] == ["A", "1000", "--at", AT]
+
+    state, effects = step(
+        sync,
+        state,
+        type="finished",
+        job={"purpose": "push"},
+        outcome={"ok": True},
+        queue=queue,
+    )
+    assert effects == [
+        {"type": "setQueue", "queue": [entry("B")]},
+        {
+            "type": "run",
+            "command": "position-push",
+            "args": ["B", "1000", "--at", AT],
+            "purpose": "push",
+        },
+    ]
+    stale_count = state["staleCount"]
+
+    state, effects = step(
+        sync,
+        state,
+        type="finished",
+        job={"purpose": "push"},
+        outcome={"ok": False, "code": "network"},
+        queue=[entry("B")],
+    )
+    assert effects == [
+        {"type": "finish", "result": "network"},
+        {"type": "flush_later"},
+    ]
+    assert not any(effect["type"] == "setQueue" for effect in effects)
+    assert state["failedFlushes"] == 1
+    assert state["lastResult"] == "network"
+    assert state["staleCount"] == stale_count
+
+
+def test_refused_push_mid_flush_finishes_and_schedules_remaining_queue(sync):
+    queue = [entry("A"), entry("B")]
+    state, _ = step(sync, sync.call("createState"), type="flush", queue=queue)
+    state, _ = step(
+        sync, state, type="positions", purpose="flush", queue=queue, items={}
+    )
+    state, _ = step(
+        sync,
+        state,
+        type="finished",
+        job={"purpose": "flush"},
+        outcome={"ok": True},
+        queue=queue,
+    )
+    state, effects = step(
+        sync,
+        state,
+        type="finished",
+        job={"purpose": "push"},
+        outcome={"ok": True},
+        queue=queue,
+    )
+    assert effects[0]["type"] == "setQueue"
+    assert effects[1]["args"] == ["B", "1000", "--at", AT]
+
+    state, effects = step(
+        sync, state, type="refused", purpose="push", queue=[entry("B")]
+    )
+    assert effects == [
+        {"type": "finish", "result": "refused"},
+        {"type": "flush_later"},
+    ]
+    assert state["lastResult"] == "refused"
+
+
+def test_newer_queue_entry_during_push_skips_old_plan_and_schedules_flush(sync):
+    old_b = entry("B", 1000)
+    newer_b = entry("B", 2500, "2026-10-05T14:05:00Z")
+    queue = [entry("A"), old_b]
+    state, _ = step(sync, sync.call("createState"), type="flush", queue=queue)
+    state, _ = step(
+        sync, state, type="positions", purpose="flush", queue=queue, items={}
+    )
+    state, effects = step(
+        sync,
+        state,
+        type="finished",
+        job={"purpose": "flush"},
+        outcome={"ok": True},
+        queue=queue,
+    )
+    assert effects[0]["args"] == ["A", "1000", "--at", AT]
+
+    state, effects = step(
+        sync,
+        state,
+        type="finished",
+        job={"purpose": "push"},
+        outcome={"ok": True},
+        queue=[newer_b],
+    )
+    assert effects == [
+        {"type": "setQueue", "queue": [newer_b]},
+        {"type": "finish", "result": "done"},
+        {"type": "flush_later"},
+    ]
+    assert not any(effect.get("args", [None])[0] == "B" for effect in effects)
+    assert state["progressed"] is True
+
+
 def test_stale_count_increments_and_success_resets_it(sync):
     state = sync.call("createState")
     for expected in (1, 2):

@@ -84,6 +84,7 @@ Item {
   }
 
   function flush() {
+    if (!service) return
     apply({ "type": "flush", "queue": queue })
   }
 
