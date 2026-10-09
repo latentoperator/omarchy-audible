@@ -128,7 +128,8 @@ def test_stop_is_public_and_uses_the_service_quit_path():
     [
         (True, False, False, "", None, True),
         (False, True, False, "", None, True),
-        (False, False, True, "", None, True),
+        (False, False, {"path": "/b/book.aaxc", "startSec": 0}, "", None, True),
+        (False, False, None, "", None, False),
         (False, False, False, "ASIN", None, True),
         (False, False, False, "", {"asin": "ASIN"}, True),
         (False, False, False, "", None, False),

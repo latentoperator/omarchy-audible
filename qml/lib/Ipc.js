@@ -31,8 +31,10 @@ function parseSeconds(text) {
 }
 
 // Stop is available while a book or any pending playback request is active.
+// `pendingLoad` and `playRequest` are the held objects (or null), not flags.
 function stopAllowed(loaded, wanted, pendingLoad, pendingResume, playRequest) {
-  return loaded === true || wanted === true || pendingLoad === true ||
+  return loaded === true || wanted === true ||
+    (pendingLoad !== null && pendingLoad !== undefined && pendingLoad !== false) ||
     (typeof pendingResume === "string" && pendingResume.length > 0) ||
     (playRequest !== null && playRequest !== undefined && playRequest !== false);
 }
