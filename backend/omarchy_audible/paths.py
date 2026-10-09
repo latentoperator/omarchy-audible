@@ -174,7 +174,7 @@ class Paths:
             if not (override or "").strip():
                 return result
             requested = requested_books_dir(override, home)
-            real_default = home / "Audiobooks" / "Audible"
+            real_default = result.home_dir / "Audiobooks" / "Audible"
             if requested == real_default:
                 return result
             problem = books_dir_problem(requested, result, home)
