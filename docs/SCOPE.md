@@ -78,7 +78,7 @@ The keys live on the widget's `shell.json` entry and are typed by the plugin man
 | `skipSeconds` | 15 | Back and forward skip (one value, 5–120) |
 | `defaultSort` | Recently listened | |
 | `autoRemoveFinished` | Off | FR-S5 |
-| `booksDir` | `~/Audiobooks/Audible` | Where m4b files live |
+| `booksDir` | `~/Audiobooks/Audible` | Where downloaded books live; existing books are not moved |
 | `showTitleInBar` | Off | Bar text next to the icon |
 | `defaultSpeed` | 1.0 | |
 | `syncOnOpenHours` | 6 | Minimum interval between automatic catalog syncs |

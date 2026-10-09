@@ -115,6 +115,9 @@ Save the file and Omarchy applies the values live; no shell restart is needed. T
 | `showTitleInBar` | `On`/`Off` in any case, or JSON `true`/`false` | `Off` | Show the playing book's title beside the bar icon. |
 | `defaultSpeed` | Number or string matching a preset; optional trailing `×`, `x` or `X` | `1.0×` | Starting speed. A changed value applies and saves; an unchanged value preserves the speed chosen with the pill. |
 | `syncOnOpenHours` | Integer or digit string, 1–48 | `6` | Minimum interval between automatic catalog syncs. Any integer in range is accepted. |
+| `booksDir` | Path string; absolute path or `~/…` | `~/Audiobooks/Audible` | Books folder. Empty values use the default; paths must be safe, and existing books are not moved—the plugin tells you how many were left behind. |
+
+`booksDir` trims surrounding whitespace. `~` and `~/…` use your home folder; other `~user` and `$VAR` forms are not expanded. The backend rejects unsafe paths and uses the default folder when a path is invalid. Books already downloaded are not moved; the plugin tells you how many were left behind.
 
 Speed is snapped only when it matches a preset (`0.75`, `1.0`, `1.25`, `1.5`, `1.75`, `2.0`, `2.5`, `3.0`); invalid or out-of-range values use the default. Invalid integers, sort labels and On/Off values also use their defaults.
 

@@ -83,6 +83,7 @@ Theming rule: import `qs.Commons` and `qs.Ui` and use `Style`/theme tokens only.
 | `~/.local/share/omarchy-audible/remote.json` | Remote positions cache `{asin: {ms, updated_at}}`. **Written only by the backend** (`sync`, `position-get`) | |
 | `~/.local/share/omarchy-audible/pushed.json` | This device's own recent pushes `{asin: {ms, at}}`, so its own echo is never mistaken for a newer position (P6, F1). **Written only by the backend** (`position-push`) | |
 | `~/.local/share/omarchy-audible/state.json` | Local positions, last-played times, push queue. **Written only by `StateStore.qml`** | |
+| `~/.local/share/omarchy-audible/books-location.json` | `{books_dir: "<absolute path>"}` acknowledged as the current books folder; written atomically by `books-location-ack` | |
 | `~/.local/share/omarchy-audible/covers/<asin>.jpg` | Cover thumbnails | |
 | `<booksDir>/<asin>/book.m4b` | Decrypted audio, chapters embedded — **old downloads only**, before B11 | |
 | `<booksDir>/<asin>/book.aaxc` \| `book.aax` | The file exactly as Audible sent it, unlocked in memory at play time (B11, D7) | |
@@ -130,7 +131,10 @@ Every subcommand writes **one JSON object per line (NDJSON)** to stdout and exit
 ```
 status                      → {"type":"status","ready":bool,"missing":["mpv"],"authenticated":bool,
                                 "venv_ready":bool,"marketplace":"us","account":"j***@gmail.com",
-                                "catalog_age_s":1234}
+                                "catalog_age_s":1234,"books_dir_problem":string|null,
+                                "old_books":{"dir":"<absolute path>","count":N}|null,
+                                "books_location_recorded":bool}
+books-location-ack          → writes the current effective books folder to books-location.json, then done
 setup                       → progress events, then done
 login-start --marketplace us→ {"type":"login_url","url":"https://www.amazon.com/ap/signin?…","session":"<id>"}
 login-finish --session <id>  (pasted URL on stdin) → done (warning="activation_bytes" when the
@@ -259,6 +263,7 @@ The merge rule (§4.6) runs in the service: it reads `state.json` and `remote.js
 - `JobRunner.qml` is the only thing that spawns backend commands from the UI. It keeps a queue and runs one **job command** at a time.
 - Job commands (`setup`, `sync`, `get`, `remove`, `login-finish`, `login-import-cli`, `logout`) take an exclusive `flock` on `job.lock` **without waiting**. If it is held they exit with `error(code=busy)`. That guards against a second shell, a hotkey, or a user running the CLI.
 - Non-job commands never take the lock: `status`, `doctor`, `local`, `play-info`, `position-get`, `position-push`, `login-start`, and `cancel`. Pushes, status checks and `play-info` therefore work during a download.
+- `books-location-ack` is also non-job and takes no arguments; it can only record the current effective path. In fake mode it writes under the fake data directory.
 - `get` writes `job.json` `{pid, command, asin}` after taking the lock and removes it on exit. `cancel <asin>` reads `job.json`; if the asin matches it sends SIGTERM to that pid, otherwise `error(code=not_running)`. `get` handles SIGTERM by stopping its children, deleting `.partial/`, and emitting `error(code=cancelled)`; a second SIGTERM is ignored so it cannot abort that cleanup (F6). The UI can also just kill the process it spawned; both paths must clean up.
 
 ## 5. Player (QML)
@@ -309,7 +314,7 @@ The bar widget owns a `qs.Ui` `KeyboardPanel` anchored under the book icon (✅ 
 - Stop in Mini or Full ends playback through `Service.quitPlayer`; an open Mini or Full panel returns to Library after a true unload, while a switch or reconnect that temporarily clears the path preserves the current view. A closed panel stays closed. The bar glyph follows `player.loaded` and returns to the book.
 - Onboarding view replaces Library when `status.authenticated` is false or setup is incomplete. The step and the Connect phase come from `qml/SigninFlow.qml` through the service's `onboardingStep` and `loginPhase` (P9).
 
-Manifest settings are declared under `barWidget.schema` and their defaults under `barWidget.defaults`. Values are plain JSON keys on the plugin's `bar.layout.<section>` entry in `~/.config/omarchy/shell.json`. Each live widget passes its injected `settings` object to `Service.applySettings`; `qml/lib/Settings.js` validates values and supplies defaults, and Service owns the effective setting properties read by the views and library. The widget forwards settings only after the shell injects its `moduleName`, so the base-class default `{}` never reaches Service. The shell updates the widget's `settings` property in place when the bar layout entry changes, so saving shell.json applies settings without restarting the shell. Omarchy 4.0.4 has no settings UI that renders `barWidget.schema`. With no widget instance, Service keeps the library defaults and does not record or apply a default-speed marker. `autoRemoveFinished` IPC remains a fake-mode development override; a later settings apply, widget creation or rebuild, or store load can set it from shell.json again (last write wins).
+Manifest settings are declared under `barWidget.schema` and their defaults under `barWidget.defaults`. Values are plain JSON keys on the plugin's `bar.layout.<section>` entry in `~/.config/omarchy/shell.json`. Each live widget passes its injected `settings` object to `Service.applySettings`; `qml/lib/Settings.js` validates values and supplies defaults, and Service owns the effective setting properties read by the views and library. The widget forwards settings only after the shell injects its `moduleName`, so the base-class default `{}` never reaches Service. The shell updates the widget's `settings` property in place when the bar layout entry changes, so saving shell.json applies settings without restarting the shell. A changed `booksDir` is passed to each newly started backend command and causes a fresh `status`/local scan; a running download finishes in its starting folder, and a loaded book keeps playing from its open file. The backend alone validates the path and returns the default with `books_dir_problem` when invalid. On status, `old_books` reports books found in the last acknowledged folder (or the default folder when no record exists); the UI asks the user to acknowledge the notice, and nothing moves automatically. An empty old folder is acknowledged silently. Omarchy 4.0.4 has no settings UI that renders `barWidget.schema`. With no widget instance, Service keeps the library defaults and does not record or apply a default-speed marker. `autoRemoveFinished` IPC remains a fake-mode development override; a later settings apply, widget creation or rebuild, or store load can set it from shell.json again (last write wins).
 
 Keyboard: search field focused on open; ↑/↓ move; Enter play; Esc close; Space play/pause when the search field is empty; ←/→ skip in Mini/Full; Backspace in Full collapses to Mini. In the Mini chapter popup, ↑/↓ move, Enter jumps to the chapter and Esc closes only the popup. Player and store state live in service-owned child objects (`PlayerController.qml` and `StateStore.qml`, whose decisions are `PlayerMachine.step` and `Store.step`); views continue to use the service-facing names.
 

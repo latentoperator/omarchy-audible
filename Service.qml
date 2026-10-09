@@ -11,6 +11,7 @@ import "qml/lib/Mpv.js" as Mpv
 import "qml/lib/Onboarding.js" as Onboarding
 import "qml/lib/Panel.js" as Panel
 import "qml/lib/Playback.js" as Playback
+import "qml/lib/BooksLocation.js" as BooksLocation
 import "qml/lib/Player.js" as Player
 import "qml/lib/PlayRequest.js" as PlayRequest
 import "qml/lib/Positions.js" as Positions
@@ -45,6 +46,7 @@ Item {
   property int syncOnOpenHours: Settings.DEFAULTS.syncOnOpenHours
   property real defaultSpeed: Settings.DEFAULTS.defaultSpeed
   property string showTitleInBar: Settings.DEFAULTS.showTitleInBar
+  property string booksDirSetting: Settings.DEFAULTS.booksDir
   property bool settingsReceived: false
   // No backend command runs until the flag has been read: a command that
   // raced ahead of it would go out without OMARCHY_AUDIBLE_FAKE.
@@ -53,6 +55,8 @@ Item {
   function applySettings(raw, moduleName) {
     var step = Settings.applyStep({ "settingsReceived": settingsReceived }, moduleName, raw)
     if (!step.accepted) return
+    var hadSettings = settingsReceived
+    var booksDirChanged = booksDirSetting !== step.settings.booksDir
     settingsReceived = step.state.settingsReceived
     var next = step.settings
     skipSeconds = next.skipSeconds
@@ -64,6 +68,8 @@ Item {
       library.sortKey = Settings.sortKey(defaultSort)
     }
     defaultSpeed = next.defaultSpeed
+    booksDirSetting = next.booksDir
+    if (booksDirChanged && (hadSettings || flagKnown)) run("status", [])
     if (store.loaded) applyDefaultSpeedSetting()
   }
 
@@ -220,6 +226,10 @@ Item {
     }
     runner.run(command, args, purpose)
     return true
+  }
+
+  function acknowledgeBooksLocation() {
+    return run("books-location-ack", [], "books-location-ack-user")
   }
 
   function markFlagKnown() {
@@ -830,13 +840,16 @@ Item {
     id: runner
     gate: removals.jobAllowed
     launcher: root.pluginDir + "/bin/omarchy-audible"
-    environment: root.fake ? ({ "OMARCHY_AUDIBLE_FAKE": "1" }) : ({})
+    environment: root.fake
+      ? ({ "OMARCHY_AUDIBLE_FAKE": "1", "OMARCHY_AUDIBLE_BOOKS_DIR": root.booksDirSetting })
+      : ({ "OMARCHY_AUDIBLE_BOOKS_DIR": root.booksDirSetting })
 
     onEvent: function(record, job) {
       if (record.type === "status") {
         root.status = record
         root.statusAtMs = Date.now()
         root.refreshLocal()
+        if (BooksLocation.shouldAck(record)) root.run("books-location-ack", [], "books-location-ack-silent")
       } else if (record.type === "local") {
         library.localBooks = record.books
       } else if (record.type === "play_info") {
@@ -878,6 +891,7 @@ Item {
       } else if (job.command === "get" || job.command === "remove") {
         root.refreshLocal()
       }
+      if (job.command === "books-location-ack" && outcome.ok) root.run("status", [])
     }
   }
 

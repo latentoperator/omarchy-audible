@@ -108,6 +108,10 @@ def test_fake_mode_ignores_the_books_dir_override(env, run_cli, events, tmp_path
     )
     assert status["books_dir"] == str(fake.books_dir)
     assert status["books_dir"] != str(override)
+    assert (
+        status["books_dir_problem"]
+        == "fake mode only allows paths inside its data directory"
+    )
 
 
 def test_every_fake_command_leaves_the_real_tree_untouched(env, run_cli):

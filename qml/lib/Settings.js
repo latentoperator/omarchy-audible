@@ -10,7 +10,8 @@ var DEFAULTS = {
   "autoRemoveFinished": "Off",
   "showTitleInBar": "Off",
   "defaultSpeed": 1.0,
-  "syncOnOpenHours": 6
+  "syncOnOpenHours": 6,
+  "booksDir": "~/Audiobooks/Audible"
 };
 var PLUGIN_ID = "latentoperator.audible";
 
@@ -25,7 +26,9 @@ function normalize(raw) {
     "autoRemoveFinished": _s.toggle(source.autoRemoveFinished, DEFAULTS.autoRemoveFinished),
     "showTitleInBar": _s.toggle(source.showTitleInBar, DEFAULTS.showTitleInBar),
     "defaultSpeed": _s.speed(source.defaultSpeed),
-    "syncOnOpenHours": _s.integer(source.syncOnOpenHours, 1, 48, DEFAULTS.syncOnOpenHours)
+    "syncOnOpenHours": _s.integer(source.syncOnOpenHours, 1, 48, DEFAULTS.syncOnOpenHours),
+    "booksDir": typeof source.booksDir === "string" && source.booksDir.trim().length > 0
+      ? source.booksDir.trim() : DEFAULTS.booksDir
   };
 }
 

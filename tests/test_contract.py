@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from omarchy_audible.commands import KNOWN_COMMANDS
+from omarchy_audible.commands import KNOWN_COMMANDS, REGISTRY
 
 TERMINAL_TYPES = frozenset({"done", "error"})
 
@@ -42,6 +42,7 @@ DOCUMENTED_EVENT_TYPES = frozenset(
 # when the registry grows and this table does not.
 COMMAND_CASES: tuple[tuple[str, tuple[str, ...], str | None], ...] = (
     ("status", (), None),
+    ("books-location-ack", (), None),
     ("doctor", (), None),
     ("setup", (), None),
     ("sync", (), None),
@@ -71,6 +72,7 @@ def _load_schemas(schemas_dir: Path) -> dict[str, dict]:
 def test_contract_covers_every_registered_command():
     """A command added to the registry must get a contract case in this file."""
     assert {name for name, _, _ in COMMAND_CASES} == set(KNOWN_COMMANDS)
+    assert REGISTRY["books-location-ack"].is_job is False
 
 
 def test_schema_files_cover_the_documented_protocol(schemas_dir):

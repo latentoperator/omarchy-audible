@@ -83,6 +83,7 @@ def test_registry_classifies_job_and_non_job_commands():
         "position-push",
         "login-start",
         "cancel",
+        "books-location-ack",
     }
     assert JOB_COMMANDS == expected_jobs
     for name in expected_plain:
