@@ -135,12 +135,20 @@ def test_a_move_during_a_load_is_not_the_showing_books():
     flush = function_body(player, "flushPending")
     assert "loadPath = load.path" in flush and "loadArrived = false" in flush
     assert "loadArrived = true" in function_body(player, "handleLine")
-    # A gone mpv has no load on its way: both places that reset mpvState
-    # forget it too.
-    assert player.count('loadPath = ""') == 2
-    assert player.count("mpvState = Mpv.emptyState()") == 2
-    assert player.count("loadPath = ") == 3
-    assert player.count("loadArrived = true") == 3
+    # A gone mpv has no load on its way: the one place that resets mpvState
+    # forgets it too. P9 PR 9: that is the handler of PlayerMachine's
+    # reset_state effect, which both the disconnect and a give-up emit (the
+    # two places before; test_player_machine's vectors, and as behaviour
+    # test_player_qml's unexpected-exit and load-write tests).
+    reset = player[
+        player.index('type === "reset_state"') : player.index('type === "forget_sleep"')
+    ]
+    assert "mpvState = Mpv.emptyState()" in reset
+    assert 'loadPath = ""' in reset and "loadArrived = true" in reset
+    assert player.count('loadPath = ""') == 1
+    assert player.count("mpvState = Mpv.emptyState()") == 1
+    assert player.count("loadPath = ") == 2
+    assert player.count("loadArrived = true") == 2
     assert player.count("loadArrived = false") == 1
 
 

@@ -75,11 +75,20 @@ def test_f21_mpv_starts_with_the_saved_volume_and_speed():
 
 
 def test_f22_a_disconnect_forgets_the_fade_base():
+    # P9 PR 9: the disconnect's branch of onConnectedChanged is now
+    # PlayerMachine's, which emits forget_sleep after reset_state; the
+    # controller's handler for it keeps the order. As behaviour:
+    # test_player_qml's unexpected-exit test, with a fade in progress.
     player = read("qml/PlayerController.qml")
-    handler = player[player.index("onConnectedChanged: {") :]
-    handler = handler[: handler.index("// ---- connection ----")]
-    lost = handler[handler.index("} else if (connection") :]
-    assert lost.index("sleepTimer = null") < lost.index("fadeBaseVolume = -1")
+    forget = player[player.index('type === "forget_sleep"') :]
+    forget = forget[: forget.index("} else if")]
+    assert forget.index("sleepTimer = null") < forget.index("fadeBaseVolume = -1")
+    machine = read("qml/lib/PlayerMachine.js")
+    lost = machine[machine.index("_machine.disconnected = function") :]
+    lost = lost[: lost.index("\n};\n")]
+    assert lost.index('{ "type": "reset_state" }') < lost.index(
+        '{ "type": "forget_sleep" }'
+    )
 
 
 def test_f23_pause_holds_and_resume_restarts_the_timer():

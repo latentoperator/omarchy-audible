@@ -23,4 +23,4 @@ extend-exclude = ["spikes"]
 extend-include = ["bin/omarchy-audible"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["qjs", "omarchy_audible"]
+known-first-party = ["qjs", "omarchy_audible", "player_harness"]

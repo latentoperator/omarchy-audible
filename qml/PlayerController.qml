@@ -3,10 +3,12 @@ import Quickshell
 import Quickshell.Io
 
 import "lib/Mpv.js" as Mpv
+import "lib/PlayerMachine.js" as PlayerMachine
 
 // mpv under the shell (ARCHITECTURE 5.1, 5.2; S5 pitfalls). mpv is launched in
 // its own systemd scope so it survives a shell restart, and this object
-// reattaches to it over the JSON IPC socket.
+// reattaches to it over the JSON IPC socket. Attach, launch, reconnect, quit
+// and relaunch are `PlayerMachine.step`; this object applies its effects.
 Item {
   id: root
 
@@ -22,6 +24,10 @@ Item {
   // The systemd scope mpv runs in. The fixed name refuses a second mpv; each
   // mode has its own, so a fake-mode mpv never blocks the real one.
   property string unitName: "omarchy-audible-mpv"
+
+  // The machine's state has one writer: apply() assigns each PlayerMachine.step
+  // result, and publish() copies it to the properties below.
+  property var reducerState: PlayerMachine.createState()
 
   // A book is supposed to be loaded. Reconnects happen only while this (or a
   // bounded startup attach) holds, so an absent mpv costs nothing.
@@ -78,47 +84,90 @@ Item {
 
   // Subscribe on the derived `connected`, not in Socket.onConnectionStateChanged:
   // the socket can connect before Loader.item is assigned (S5 pitfall 1).
-  onConnectedChanged: {
-    if (connected) {
-      attempt = 0
+  onConnectedChanged: apply({ "type": connected ? "connected" : "disconnected" })
+
+  // The machine's only writer. The new state is published before any effect
+  // runs, and an effect whose handlers call back in (a Socket that connects
+  // at once, a write that finds mpv gone) is applied there and then, on top of
+  // it: nothing is queued. `load` is a play's {path, startSec, options}, for
+  // hold_load; it never goes to the machine. Returns the effects.
+  function apply(event, load) {
+    var transition = PlayerMachine.step(reducerState, event)
+    reducerState = transition.state
+    publish()
+    transition.effects.forEach(function(effect) { perform(effect, load) })
+    return transition.effects
+  }
+
+  // Plain copies, not bindings. Of these only `connection` has a listener
+  // (Service's onConnectionChanged, which reads lastError later, with
+  // Qt.callLater), so their order here can't be seen.
+  function publish() {
+    wanted = reducerState.wanted
+    attaching = reducerState.attaching
+    quitting = reducerState.quitting
+    quitPending = reducerState.quitPending
+    relaunchPending = reducerState.relaunchPending
+    scopeChecks = reducerState.scopeChecks
+    launching = reducerState.launching
+    attempt = reducerState.attempt
+    connection = reducerState.connection
+    lastError = reducerState.lastError
+  }
+
+  function perform(effect, load) {
+    var type = effect.type
+    if (type === "connect") {
+      // A failed connect leaves a dead Socket, so every try builds a new one
+      // (S5 pitfall 2). "Socket file exists" proves nothing; only a connect
+      // does (pitfall 3). One that connects at once has reset `attempt`.
+      socketLoader.active = false
+      socketLoader.active = true
+      retryTimer.interval = Mpv.backoffMs(attempt)
+      retryTimer.restart()
+    } else if (type === "stop_retry") {
       retryTimer.stop()
-      launching = false
-      attaching = false
-      connection = "connected"
-      lastError = ""
-      quitting = false
-      if (quitPending) {
-        // quit() came in during startup; now there is a socket to say it on.
-        quitPending = false
-        quitting = true
-        send(["quit"])
-        return
-      }
+    } else if (type === "close_socket") {
+      socketLoader.active = false
+    } else if (type === "close_quit") {
+      socketLoader.active = false
+      apply({ "type": "quit_closed" })
+    } else if (type === "launch") {
+      launchMpv()
+    } else if (type === "subscribe") {
       subscribe()
-      // An mpv reattached after a shell restart may have been mid-load: make
-      // sure no key is left in its options. Harmless when there is none.
+    } else if (type === "clear_key") {
       send(Mpv.clearKeyCommand())
+    } else if (type === "hold_load") {
+      pendingLoad = load
+    } else if (type === "flush_pending") {
       flushPending()
-    } else if (connection === "connected") {
+    } else if (type === "drop_load") {
+      pendingLoad = null
+    } else if (type === "send_quit") {
+      send(["quit"])
+    } else if (type === "try_quit") {
+      apply({ "type": "quit_sent", "sent": send(["quit"]), "starting": effect.starting })
+    } else if (type === "cancel_sleep") {
+      cancelSleep()
+    } else if (type === "reset_state") {
       mpvState = Mpv.emptyState()
       loadPath = ""
       loadArrived = true
+    } else if (type === "forget_sleep") {
       sleepTimer = null
       // A fade's base volume belongs to the mpv that is gone; a later
       // cancelSleep() must not send it to a new one (F22).
       fadeBaseVolume = -1
-      if (quitting) {
-        quitting = false
-        connection = "idle"
-        // The old scope may outlive the socket. Wait for it to go before any
-        // new mpv, whether or not a play() is already waiting.
-        beginRelaunch()
-      } else {
-        // Not asked for: surface it, and retry only while a book is wanted.
-        lastError = "mpv exited unexpectedly"
-        connection = wanted ? "lost" : "failed"
-        if (wanted) connectNow()
-      }
+    } else if (type === "begin_relaunch" || type === "recheck_scope") {
+      relaunchTimer.restart()
+    } else if (type === "probe_socket") {
+      probe.command = ["test", "-S", socketPath]
+      probe.running = true
+    } else if (type === "probe_scope") {
+      scopeProbe.running = true
+    } else if (type === "use_scope") {
+      useScope = effect.value === true
     }
   }
 
@@ -152,58 +201,15 @@ Item {
       // key behind, since that book's own file-loaded clears it too.
       send(Mpv.clearKeyCommand())
     } else if (message.kind === "reply" && message.error) {
-      lastError = "mpv: " + message.error
+      apply({ "type": "reply_error", "error": message.error })
     }
   }
 
-  // A failed connect leaves a dead Socket, so every try builds a new one
-  // (S5 pitfall 2). "Socket file exists" proves nothing; only a connect does
-  // (pitfall 3).
-  function connectNow() {
-    attempt += 1
-    socketLoader.active = false
-    socketLoader.active = true
-    retryTimer.interval = Mpv.backoffMs(attempt)
-    retryTimer.restart()
-  }
-
-  function giveUp() {
-    retryTimer.stop()
-    quitPending = false
-    // The startup attach found only a stale socket, but a play was waiting.
-    if (attaching && pendingLoad) {
-      attaching = false
-      launchMpv()
-      return
-    }
-    socketLoader.active = false
-    if (launching) {
-      connection = "failed"
-      lastError = "mpv did not start"
-    } else if (wanted) {
-      connection = "failed"
-      lastError = "mpv exited unexpectedly"
-    } else {
-      connection = "idle"
-    }
-    // Nothing will send it now: don't keep its key.
-    pendingLoad = null
-    wanted = false
-    attaching = false
-    launching = false
-    mpvState = Mpv.emptyState()
-    loadPath = ""
-    loadArrived = true
-    attempt = 0
-  }
+  function giveUp() { apply({ "type": "give_up" }) }
 
   // Startup: reattach to an mpv that outlived a shell restart. Tries only when
   // the socket file exists, and only a bounded number of times.
-  function attach() {
-    if (connected || socketPath.length === 0) return
-    probe.command = ["test", "-S", socketPath]
-    probe.running = true
-  }
+  function attach() { apply({ "type": "attach", "ready": socketPath.length > 0, "connected": connected }) }
 
   function launchMpv() {
     var mpv = ["mpv", "--no-config", "--no-video", "--idle=yes", "--keep-open=yes",
@@ -216,10 +222,6 @@ Item {
     var dir = socketPath.replace(/\/[^\/]*$/, "")
     // mkdir and launch in one shell so mpv never starts before its directory.
     Quickshell.execDetached(["sh", "-c", 'mkdir -p "$1" && shift && exec "$@"', "sh", dir].concat(command))
-    launching = true
-    connection = "launching"
-    attempt = 0
-    connectNow()
   }
 
   function flushPending() {
@@ -236,22 +238,11 @@ Item {
   // ---- control ----
 
   // `options` is {lavf, chaptersFile} from `play-info`; both may be empty
-  // (an old `.m4b`). The key is never stored anywhere else.
+  // (an old `.m4b`). The key is never stored anywhere else. False when the
+  // player is not ready (no socket path yet).
   function play(path, startSec, options) {
-    if (socketPath.length === 0) {
-      lastError = "player not ready"
-      return false
-    }
-    wanted = true
-    pendingLoad = { "path": path, "startSec": startSec, "options": Mpv.loadOptions(options) }
-    // A quit that has not been sent yet is overtaken by this play.
-    quitPending = false
-    if (connected && !quitting) {
-      flushPending()
-    } else if (!connected && !launching && !attaching && !relaunchPending) {
-      launchMpv()
-    }
-    return true
+    var load = { "path": path, "startSec": startSec, "options": Mpv.loadOptions(options) }
+    return PlayerMachine.holdsLoad(apply({ "type": "play", "ready": socketPath.length > 0, "connected": connected }, load))
   }
 
   function pause() { send(Mpv.pauseCommand(true)) }
@@ -286,37 +277,7 @@ Item {
   function prevChapter() { jumpChapter(-1) }
 
   // Stops playback and ends the mpv process.
-  function quit() {
-    var starting = launching
-    wanted = false
-    pendingLoad = null
-    launching = false
-    cancelSleep()
-    if (send(["quit"])) {
-      attaching = false
-      quitting = true
-      return
-    }
-    if (starting || attaching) {
-      // mpv is on its way up (or being reattached): keep the bounded connect
-      // going and quit it as soon as it answers.
-      quitPending = true
-      attaching = true
-      return
-    }
-    // Not connected and nothing starting: nothing to quit or retry.
-    retryTimer.stop()
-    socketLoader.active = false
-    connection = "idle"
-  }
-
-  // The scope has one fixed name, so a new mpv can start only after the old
-  // scope has gone; check it before launching.
-  function beginRelaunch() {
-    relaunchPending = true
-    scopeChecks = 0
-    relaunchTimer.restart()
-  }
+  function quit() { apply({ "type": "quit" }) }
 
   // ---- sleep timer ----
 
@@ -399,6 +360,8 @@ Item {
     sourceComponent: socketComponent
   }
 
+  // The scope has one fixed name, so a new mpv can start only after the old
+  // scope has gone; the relaunch checks it before launching.
   Timer {
     id: relaunchTimer
     interval: 300
@@ -409,52 +372,28 @@ Item {
   Process {
     id: scopeActive
     command: ["systemctl", "--user", "is-active", "--quiet", root.unitName + ".scope"]
+    // `is-active --quiet` exits 0 only while the scope is active.
     onExited: function(code, status) {
-      var gone = code !== 0
-      root.scopeChecks += 1
-      if (!gone && root.scopeChecks < 10) {
-        relaunchTimer.restart()
-        return
-      }
-      root.relaunchPending = false
-      if (!gone) {
-        // Starting another mpv under the same unit name would be refused.
-        root.wanted = false
-        root.pendingLoad = null
-        root.connection = "failed"
-        root.lastError = "the previous mpv did not exit"
-        return
-      }
-      if (root.wanted && root.pendingLoad && !root.connected) root.launchMpv()
+      root.apply({ "type": code === 0 ? "scope_active" : "scope_gone", "connected": root.connected })
     }
   }
 
   Timer {
     id: retryTimer
     repeat: false
-    onTriggered: {
-      if (root.connected) return
-      if (Mpv.shouldRetry(root.attempt, root.wanted || root.attaching)) root.connectNow()
-      else root.giveUp()
-    }
+    onTriggered: root.apply({ "type": "retry_tick", "connected": root.connected })
   }
 
   Process {
     id: probe
-    onExited: function(code, status) {
-      if (code !== 0 || root.connected) return
-      root.attaching = true
-      root.connection = "connecting"
-      root.attempt = 0
-      root.connectNow()
-    }
+    onExited: function(code, status) { root.apply({ "type": "probe_result", "code": code, "connected": root.connected }) }
   }
 
   Process {
     id: scopeProbe
     command: ["sh", "-c", "command -v systemd-run"]
-    onExited: function(code, status) { root.useScope = code === 0 }
+    onExited: function(code, status) { root.apply({ "type": "scope_probe_result", "code": code }) }
   }
 
-  Component.onCompleted: scopeProbe.running = true
+  Component.onCompleted: apply({ "type": "start" })
 }
