@@ -117,7 +117,11 @@ def test_every_listed_method_exists(ipc):
 
 def test_stop_is_public_and_uses_the_service_quit_path():
     body = ipc_methods()["stop"]
-    assert "Ipc.stopAllowed(player.loaded, player.wanted, player.pendingLoad," in body
+    flat = " ".join(body.split())
+    assert (
+        "if (!Ipc.stopAllowed(player.loaded, player.wanted, player.pendingLoad, "
+        'service.pendingResume, service.playRequest)) return "error: nothing loaded"'
+    ) in flat
     assert 'return "error: nothing loaded"' in body
     assert "service.quitPlayer()" in body
     assert 'return "ok"' in body

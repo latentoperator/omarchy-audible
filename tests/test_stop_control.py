@@ -32,6 +32,8 @@ def test_transport_row_stop_is_enabled_for_loaded_books_and_calls_service() -> N
 def test_path_change_wires_the_unload_decision_to_panel_library_rule() -> None:
     service = (REPO / "Service.qml").read_text(encoding="utf-8")
     assert "function onPathChanged()" in service
-    assert "Panel.libraryAfterUnload(player.loaded, player.wanted)" in service
-    assert "root.showView(root.view)" in service
+    assert (
+        "if (Panel.libraryAfterUnload(player.loaded, player.wanted)) root.showView(root.view)"
+        in service
+    )
     assert "function showView(name)" in service
