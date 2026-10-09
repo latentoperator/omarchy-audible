@@ -175,11 +175,11 @@ class Paths:
                 return result
             requested = requested_books_dir(override, home)
             real_default = home / "Audiobooks" / "Audible"
-            try:
-                if requested.resolve() == real_default.resolve():
-                    return result
-            except (OSError, RuntimeError, ValueError):
-                pass
+            if requested == real_default:
+                return result
+            problem = books_dir_problem(requested, result, home)
+            if problem is not None:
+                return cls(**{**result.__dict__, "books_dir_problem": problem})
             try:
                 inside = (
                     requested.resolve().is_relative_to(data_dir.resolve())
@@ -194,12 +194,10 @@ class Paths:
                         "books_dir_problem": "fake mode only allows paths inside its data directory",
                     }
                 )
-            problem = books_dir_problem(requested, result, home)
             return cls(
                 **{
                     **result.__dict__,
-                    "books_dir": requested if problem is None else result.books_dir,
-                    "books_dir_problem": problem,
+                    "books_dir": requested,
                 }
             )
         books = env.get("OMARCHY_AUDIBLE_BOOKS_DIR")

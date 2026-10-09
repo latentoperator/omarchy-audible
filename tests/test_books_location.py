@@ -194,6 +194,20 @@ def test_fake_default_override_is_treated_as_unset(env, run_cli, events):
     assert status["books_dir_problem"] is None
 
 
+@pytest.mark.parametrize(
+    "override,expected",
+    [
+        ("/", "path cannot be /"),
+        ("relative/path", "path must be absolute (or start with ~/)"),
+        ("/tmp/outside", "fake mode only allows paths inside its data directory"),
+    ],
+)
+def test_fake_invalid_books_dir_keeps_specific_reason(env, override, expected):
+    selected = Paths.from_env({**env, "OMARCHY_AUDIBLE_BOOKS_DIR": override}, fake=True)
+    assert selected.books_dir == selected.default_books_dir
+    assert selected.books_dir_problem == expected
+
+
 def test_fake_status_ignores_record_outside_fake_data(
     env, fake_paths, run_cli, events, tmp_path
 ):
