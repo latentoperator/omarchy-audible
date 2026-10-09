@@ -11,7 +11,7 @@ function redact(text) {
 }
 
 function build(version, command, code, message, hint, checks) {
-  var lines = ["Omarchy Audible " + redact(version || "unknown"),
+  var lines = ["Omaudible " + redact(version || "unknown"),
     "Command: " + redact(command || "unknown"), "Error: " + redact(code || "unknown"),
     "Message: " + redact(message || ""), "Hint: " + redact(hint || ""), "Doctor checks:"];
   var items = Array.isArray(checks) ? checks : [];

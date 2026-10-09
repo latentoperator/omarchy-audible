@@ -1,6 +1,6 @@
 # Releasing
 
-How to cut a release of Omarchy Audible. Users install from the repository's default branch (`omarchy plugin add` and `omarchy plugin update` take the current `main`), so a release is a version, a changelog entry and a tag on a commit that is already on `main`.
+How to cut a release of Omaudible. Users install from the repository's default branch (`omarchy plugin add` and `omarchy plugin update` take the current `main`), so a release is a version, a changelog entry and a tag on a commit that is already on `main`.
 
 ## Before you start
 

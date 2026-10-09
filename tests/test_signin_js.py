@@ -186,7 +186,7 @@ def test_store_options(signin):
     "step,reconnecting,text",
     [
         ("missing", False, "A few tools are missing"),
-        ("setup", False, "Set up Omarchy Audible"),
+        ("setup", False, "Set up Omaudible"),
         ("connect", False, "Connect Audible"),
         ("connect", True, "Reconnect Audible"),
         ("loading", False, "Checking your setup…"),

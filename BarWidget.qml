@@ -110,7 +110,7 @@ BarWidget {
     visible: root.barTitle.length === 0
     bar: root.bar
     text: root.service ? root.service.barGlyph : Glyphs.GLYPH_BOOK
-    tooltipText: root.service ? root.service.tooltipText : "Omarchy Audible"
+    tooltipText: root.service ? root.service.tooltipText : "Omaudible"
     onPressed: function(b) { root.press(b) }
   }
 

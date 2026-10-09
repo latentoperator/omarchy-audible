@@ -143,7 +143,7 @@ function storeOptions(list) {
 // The onboarding view's heading.
 function heading(step, reconnecting) {
   if (step === "missing") return "A few tools are missing";
-  if (step === "setup") return "Set up Omarchy Audible";
+  if (step === "setup") return "Set up Omaudible";
   if (step === "connect") return reconnecting === true ? "Reconnect Audible" : "Connect Audible";
   return "Checking your setup…";
 }

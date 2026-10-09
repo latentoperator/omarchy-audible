@@ -1,4 +1,4 @@
-# Project plan — Omarchy Audible
+# Project plan — Omaudible
 
 Read [SCOPE.md](SCOPE.md) (what and why) and [ARCHITECTURE.md](ARCHITECTURE.md) (how) first. This file is the work breakdown. It is written so that tasks can be handed to separate, cheaper agents one at a time.
 
