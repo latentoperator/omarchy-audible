@@ -131,29 +131,6 @@ def test_pending_ops_replay_in_order_before_loaded_and_save(store):
     ]
 
 
-@pytest.mark.parametrize(
-    "loaded,speed,doc_speed,expected_effects,dirty",
-    [
-        (False, 1.5, 1.5, [], False),
-        (True, 1.5, 1.5, [], False),
-        (True, 1.5, 1.0, [{"type": "save_now"}], True),
-        (True, "1.5", 1.0, [], False),
-    ],
-)
-def test_set_default_speed_setting_vectors(
-    store, loaded, speed, doc_speed, expected_effects, dirty
-):
-    state = base()
-    state["loaded"] = loaded
-    state["doc"]["default_speed_setting"] = doc_speed if loaded else None
-    state["doc"]["speed"] = 1.0
-    state, effects = vector(store, state, type="set_default_speed_setting", speed=speed)
-    assert effects == expected_effects
-    assert state["dirty"] is dirty
-    if loaded and speed == 1.5 and doc_speed != 1.5:
-        assert state["doc"]["default_speed_setting"] == 1.5
-
-
 def test_changed_default_speed_is_one_atomic_reducer_write(store):
     state = base()
     state.update(loaded=True, dirty=False)
@@ -170,6 +147,45 @@ def test_changed_default_speed_is_one_atomic_reducer_write(store):
     assert state["doc"]["default_speed_setting"] == 1.5
     assert state["dirty"] is True
     assert effects == [{"type": "save_now"}]
+
+
+@pytest.mark.parametrize(
+    "loaded,setting,marker,saved,apply_speed,expected_effects,expected_speed,expected_marker",
+    [
+        (False, 1.5, None, 1.25, True, [], 1.25, None),
+        (True, 1.5, 1.5, 1.25, True, [], 1.25, 1.5),
+        (True, 1.5, 1.0, 1.25, False, [{"type": "save_now"}], 1.25, 1.5),
+        (True, 1.5, 1.0, "bad", True, [{"type": "save_now"}], 1.25, 1.5),
+    ],
+)
+def test_set_default_speed_vectors(
+    store,
+    loaded,
+    setting,
+    marker,
+    saved,
+    apply_speed,
+    expected_effects,
+    expected_speed,
+    expected_marker,
+):
+    state = base()
+    state.update(loaded=loaded)
+    state["doc"].update(
+        speed=saved if isinstance(saved, (int, float)) else 1.25,
+        default_speed_setting=marker,
+    )
+    state, effects = vector(
+        store,
+        state,
+        type="set_default_speed",
+        speed=setting,
+        applySpeed=apply_speed,
+        savedSpeed=saved,
+    )
+    assert effects == expected_effects
+    assert state["doc"]["speed"] == expected_speed
+    assert state["doc"].get("default_speed_setting") == expected_marker
 
 
 def test_corrupt_file_waits_for_backup_then_replays_before_first_write(store):

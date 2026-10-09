@@ -28,11 +28,6 @@ function normalize(raw) {
   };
 }
 
-function hasValues(raw) {
-  return raw !== null && typeof raw === "object" && !Array.isArray(raw)
-    && Object.keys(raw).length > 0;
-}
-
 function shouldForward(moduleName, raw) {
   return String(moduleName || "") === PLUGIN_ID;
 }
@@ -40,7 +35,7 @@ function shouldForward(moduleName, raw) {
 function applyStep(state, moduleName, raw) {
   var current = state && typeof state === "object" ? state : {};
   var received = current.settingsReceived === true;
-  if (!shouldForward(moduleName, raw) || (!received && !hasValues(raw))) {
+  if (!shouldForward(moduleName, raw)) {
     return { "accepted": false, "state": { "settingsReceived": received }, "settings": null };
   }
   return {
@@ -82,7 +77,7 @@ _s.integer = function(value, min, max, fallback) {
 };
 _s.choice = function(value, choices, fallback) {
   if (typeof value !== "string") return fallback;
-  var normalized = value.toLowerCase();
+  var normalized = value.trim().toLowerCase();
   for (var i = 0; i < choices.length; i++) {
     if (choices[i].toLowerCase() === normalized) return choices[i];
   }

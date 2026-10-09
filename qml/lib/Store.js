@@ -66,14 +66,6 @@ function step(state, event) {
     current.dirty = true;
     return _store.result(current, [{ "type": "save_now" }]);
   }
-  if (type === "set_default_speed_setting") {
-    if (!current.loaded) return _store.result(current, []);
-    var nextDoc = Playback.withDefaultSpeedSetting(current.doc, event.speed);
-    if (nextDoc === current.doc) return _store.result(current, []);
-    current.doc = nextDoc;
-    current.dirty = true;
-    return _store.result(current, [{ "type": "save_now" }]);
-  }
   if (type === "set_default_speed") {
     if (!current.loaded) return _store.result(current, []);
     var speedDoc = Playback.withDefaultSpeed(current.doc, event.speed, event.applySpeed === true, event.savedSpeed);

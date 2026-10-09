@@ -104,16 +104,6 @@ def test_speed_accepts_numeric_preset_and_garbage_object_falls_back(settings) ->
 
 
 @pytest.mark.parametrize(
-    "raw,expected",
-    [({}, False), (None, False), ([], False), ({"defaultSpeed": "1.5x"}, True)],
-)
-def test_initial_empty_settings_are_not_a_received_settings_object(
-    settings, raw, expected
-):
-    assert settings.call("hasValues", raw) is expected
-
-
-@pytest.mark.parametrize(
     "saved,setting,last,expected",
     [
         (1.25, 1.0, 1.0, {"apply": False, "speed": 1.25}),
@@ -174,7 +164,7 @@ def test_service_owns_and_applies_widget_settings() -> None:
     assert (
         "if (choice.apply && player.connected) player.setSpeed(choice.speed)" in service
     )
-    assert "default_speed_setting" in (ROOT / "qml/StateStore.qml").read_text(
+    assert "set_default_speed" in (ROOT / "qml/StateStore.qml").read_text(
         encoding="utf-8"
     )
 
@@ -190,16 +180,23 @@ def test_settings_reducer_shell_order_and_foreign_module(settings) -> None:
     foreign = settings.call("applyStep", state, "omarchy.clock", {})
     assert foreign["accepted"] is False
 
+    keyless = settings.call("applyStep", state, "latentoperator.audible", {})
+    assert keyless == {
+        "accepted": True,
+        "state": {"settingsReceived": True},
+        "settings": DEFAULTS,
+    }
+
     real = settings.call(
         "applyStep",
-        state,
+        keyless["state"],
         "latentoperator.audible",
-        {"defaultSpeed": "1.5×", "defaultSort": "Title"},
+        {"defaultSpeed": "1.5×"},
     )
     assert real == {
         "accepted": True,
         "state": {"settingsReceived": True},
-        "settings": dict(DEFAULTS, defaultSpeed=1.5, defaultSort="Title"),
+        "settings": dict(DEFAULTS, defaultSpeed=1.5),
     }
 
     later_foreign = settings.call("applyStep", real["state"], "omarchy.clock", {})
@@ -210,22 +207,49 @@ def test_settings_reducer_shell_order_and_foreign_module(settings) -> None:
 def test_settings_reducer_store_first_and_empty_user_edit(settings) -> None:
     state = {"settingsReceived": False}
     assert settings.call("shouldApplySpeed", False, True) is False
-    applied = settings.call(
-        "applyStep", state, "latentoperator.audible", {"defaultSpeed": "1.5x"}
-    )
-    assert applied["accepted"] is True
+    keyless = settings.call("applyStep", state, "latentoperator.audible", {})
+    assert keyless["accepted"] is True
+    assert keyless["settings"]["defaultSpeed"] == 1.0
     assert (
-        settings.call("shouldApplySpeed", applied["state"]["settingsReceived"], False)
+        settings.call("shouldApplySpeed", keyless["state"]["settingsReceived"], False)
         is False
     )
     assert (
-        settings.call("shouldApplySpeed", applied["state"]["settingsReceived"], True)
+        settings.call("shouldApplySpeed", keyless["state"]["settingsReceived"], True)
         is True
     )
 
-    cleared = settings.call("applyStep", applied["state"], "latentoperator.audible", {})
-    assert cleared["accepted"] is True
-    assert cleared["settings"] == DEFAULTS
+    unchanged = settings.call(
+        "speedChoice", 1.25, keyless["settings"]["defaultSpeed"], None
+    )
+    assert unchanged == {"apply": False, "speed": 1.25}
+
+    changed = settings.call(
+        "applyStep",
+        keyless["state"],
+        "latentoperator.audible",
+        {"defaultSpeed": "1.5×"},
+    )
+    assert changed["accepted"] is True
+    choice = settings.call(
+        "speedChoice", unchanged["speed"], changed["settings"]["defaultSpeed"], 1.0
+    )
+    assert choice == {"apply": True, "speed": 1.5}
+
+
+@pytest.mark.parametrize(
+    "key,value,expected",
+    [
+        ("defaultSort", " Title ", "Title"),
+        ("defaultSort", " recently ADDED ", "Recently added"),
+        ("autoRemoveFinished", " On ", "On"),
+        ("showTitleInBar", " oFf ", "Off"),
+        ("defaultSort", "unknown", DEFAULTS["defaultSort"]),
+        ("autoRemoveFinished", "true", DEFAULTS["autoRemoveFinished"]),
+    ],
+)
+def test_choice_and_toggle_trim_strings(settings, key, value, expected):
+    assert settings.call("normalize", {key: value})[key] == expected
 
 
 def test_widget_and_service_are_wired_to_settings_reducer() -> None:

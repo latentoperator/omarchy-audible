@@ -202,20 +202,16 @@ function withPlayerSettings(state, volume, speed) {
   return next;
 }
 
-function withDefaultSpeedSetting(state, speed) {
-  if (!state || typeof speed !== "number" || !isFinite(speed)) return state;
-  if (state.default_speed_setting === speed) return state;
-  var next = {};
-  for (var key in state) next[key] = state[key];
-  next.default_speed_setting = speed;
-  return next;
-}
-
 function withDefaultSpeed(state, marker, applySpeed, speed) {
   var withPlayer = applySpeed === true
     ? withPlayerSettings(state, state.volume, speed)
     : state;
-  return withDefaultSpeedSetting(withPlayer, marker);
+  if (!withPlayer || typeof marker !== "number" || !isFinite(marker)
+      || withPlayer.default_speed_setting === marker) return withPlayer;
+  var next = {};
+  for (var key in withPlayer) next[key] = withPlayer[key];
+  next.default_speed_setting = marker;
+  return next;
 }
 
 // A copy of `state` with the push queue replaced.

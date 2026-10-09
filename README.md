@@ -99,7 +99,7 @@ Settings are plain JSON keys on this plugin's entry in `~/.config/omarchy/shell.
 ```json
 {
   "id": "latentoperator.audible",
-  "skipSeconds": "30",
+  "skipSeconds": 30,
   "defaultSort": "Title",
   "defaultSpeed": "1.5×"
 }

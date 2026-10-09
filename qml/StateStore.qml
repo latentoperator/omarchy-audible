@@ -75,10 +75,6 @@ Item {
     apply({ "type": "set_player_settings", "volume": volume, "speed": speed })
   }
 
-  function setDefaultSpeedSetting(speed) {
-    apply({ "type": "set_default_speed_setting", "speed": speed })
-  }
-
   function applyDefaultSpeed(speed, applySpeed, savedSpeed) {
     apply({ "type": "set_default_speed", "speed": speed, "applySpeed": applySpeed, "savedSpeed": savedSpeed })
   }
