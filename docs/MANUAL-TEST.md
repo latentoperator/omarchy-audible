@@ -2,6 +2,23 @@
 
 Hand-run journeys from `docs/SCOPE.md` §3, one line per run. Chris does all the clicking; the driving CLI checks state over IPC and writes the line. Real mode unless a line says otherwise.
 
+## R1 (desktop) — 2026-10-09, HMSP-OMARCHYBEE, live folder on `main` (R1a at `a50f32d`, R1b at `cc0cfa2`)
+
+Real mode (no dev-fake flag), connected, 91 books, Dungeon Crawler Carl (`B08V8B2CGV`) loaded and paused in mpv 99684 throughout (16 104 035 ms before and after). Chris edited our entry in `~/.config/omarchy/shell.json` by hand and looked; Dante read IPC, the books-location record and the journal over SSH. No shell restart between edits. The R1b live folder was pulled once and the shell restarted once after #101 merged (new shell 319300: zero non-DEBUG lines from our files, no crash).
+
+| # | Check | Steps | Result | Date |
+|---|---|---|---|---|
+| 1 | `skipSeconds` applies live | Entry set to `{"id": "latentoperator.audible", "skipSeconds": 30}`, saved; open Mini | **Pass** (Chris): ⏪/⏩ showed 30 with no restart (no book loaded at the time; the buttons were disabled but labelled). | 2026-10-09 |
+| 2 | Removing it restores the default live | Key deleted, saved | **Pass** (Chris): ⏪/⏩ back to 15. | 2026-10-09 |
+| 3 | First start after R1b records the folder silently | Merge #101, pull, one restart, `booksDir` unset | **Pass.** `~/.local/share/omarchy-audible/books-location.json` written as `{"books_dir": "/home/chrisgray/Audiobooks/Audible"}`; no notice; 4 local books. | 2026-10-09 |
+| 4 | Old-books notice | Entry set to `{"id": "latentoperator.audible", "booksDir": "~/Audiobooks/r1b-empty"}`, saved; open Library. Got it not pressed, nothing downloaded | **Pass** (Chris): notice "4 downloaded books are still in ~/Audiobooks/Audible…" naming the new folder; the 4 books shown as not downloaded. Dante: local storage 0, the record still the old folder (no silent ack), `~/Audiobooks/r1b-empty` not created, zero warnings. | 2026-10-09 |
+| 5 | Back to the default | Key deleted, saved | **Pass** (Chris): notice gone, the 4 books local again. Dante: storage 4 books (2 796 652 955 bytes), 91 books, record unchanged, `r1b-empty` still absent, player paused at the same position, zero warnings. | 2026-10-09 |
+
+### Notes
+
+- The problem notice (an unsafe `booksDir`) and Got it were checked in fake mode only (#101 rounds 1–2, screenshots on BEE in `~/.cache/dante-oa/r1b-shots/`); pressing Got it in real mode would have recorded the empty folder.
+- The other R1a settings (`defaultSort`, `autoRemoveFinished`, `showTitleInBar`, `defaultSpeed`, `syncOnOpenHours`) were checked live in fake mode in #100.
+
 ## R8 (desktop) — 2026-10-08, HMSP-OMARCHYBEE, live folder on `main` at `88c51a5`
 
 PR #98 merged; the live folder was pulled once and the shell restarted once (new shell 577997: zero warnings from our files; no crash). Start state: real mode (no dev-fake flag), one `quickshell`, connected, 91 books, Dungeon Crawler Carl (`B08V8B2CGV`) loaded and paused in mpv 262406. Chris did the clicking; Dante read IPC, `state.json` and the account over SSH. Times are local (UTC−5). These rows also close the two P9 §5 "Stop, then play again" steps (P9 rows 1 and 4).
