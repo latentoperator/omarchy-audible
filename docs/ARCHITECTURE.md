@@ -279,7 +279,7 @@ Commands (B11: the first form loads an old unlocked `.m4b`; the second is the lo
 - `set pause yes|no`, `seek ±N relative`, `seek <s> absolute`, `add chapter ±1`, `set chapter <i>`, `set speed <x>`.
 
 ### 5.2 PlayerController (QML object)
-Exposes: `loaded`, `playing`, `positionMs`, `durationMs`, `chapters[]`, `chapterIndex`, `speed`, `asin`, and functions `play(asin)`, `pause()`, `toggle()`, `skip(seconds)`, `nextChapter()`, `prevChapter()`, `seekMs()`, `setSpeed()`, `setSleepTimer()`.
+Exposes: `connection`, `lastError`, `connected`, `loaded`, `playing`, `positionMs`, `durationMs`, `chapters[]`, `chapterIndex`, `speed`, `volume`, `path`, `pendingLoad`, `restarts`, `sleepTimer`, the `userMoved` signal, and functions `play(path, startSec, options)`, `pause()`, `resume()`, `toggle()`, `skip(seconds)`, `seekMs()`, `jumpToMs()`, `setChapter()`, `nextChapter()`, `prevChapter()`, `setSpeed()`, `setVolume()`, `setSleepTimer()`, `setSleepEndOfChapter()`, `cancelSleep()`, `attach()`, `quit()`. The service maps an ASIN to a path; the player never sees an ASIN.
 
 - Position persistence: write `state.json` every 10 s while playing and on pause/switch/quit; a move made while paused is written at the next stop, switch or quit (F38). `StateStore.qml` is the only writer, applies `Store.step` from `qml/lib/Store.js`, and uses `FileView` with atomic writes (§4.8).
 - Remote push: every ~60 s while playing and on pause/stop/switch/quit, through `position-push`, following the push rules in §4.6. `PositionSync` applies the sequencing effects from `Sync.step(state, event)` in `qml/lib/Sync.js`; failed pushes remain queued in `state.json` and retry with the reducer's backoff.

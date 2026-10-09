@@ -2,6 +2,26 @@
 
 Hand-run journeys from `docs/SCOPE.md` §3, one line per run. Chris does all the clicking; the driving CLI checks state over IPC and writes the line. Real mode unless a line says otherwise.
 
+## P9 (desktop) — 2026-10-08, HMSP-OMARCHYBEE (two 1920×1080 monitors, DP-4 and DP-5), live folder on `main` at `3899312`
+
+Brief: [briefs/P9-desktop.md](briefs/P9-desktop.md) §5, after #86–#96 merged. Start state: real mode (no dev-fake flag), one `quickshell`, one bar per monitor, connected, 91 books. BEE had rebooted at 18:47, so no mpv was running and nothing was loaded; the live folder was pulled to `3899312` and the shell restarted once. Chris did the clicking and listening; Dante drove IPC, `state.json` and the journal over SSH. Times are local (UTC−5). Book: Dungeon Crawler Carl (`B08V8B2CGV`).
+
+| # | Check | Steps | Result | Date |
+|---|---|---|---|---|
+| 1 | F38, a move while paused | Play, pause, ⏩ three times while paused; open the phone app | **Pass.** `state.json` held the moved spot (3:49:59, 13 799 571 ms) at 20:26:30, `last_played_at` updated, push done, queue empty; the phone picked up exactly where BEE left off. **Stop, then play again: not run**: neither Mini nor Full has a Stop control (see Notes). | 2026-10-08 |
+| 2 | Catch-up | Paused well over 30 s; ~90 s skipped ahead on the phone; ⏯ on BEE | **Pass.** "Checking Audible…" showed, then the event log `catchup jump 13859487 -> 13961045` (3:50:59 → 3:52:41) and playback from there. | 2026-10-08 |
+| 3 | Push | Play, pause on BEE | **Pass.** `pushState`: `last` done, queue empty, `staleCount` 0, no stale line; `state.json` queue empty. Played a few seconds rather than a minute; the pause push is the same path. | 2026-10-08 |
+| 4 | Player machine | Seek with the scrub bar, a chapter jump (to 25), then `omarchy-restart-shell` at 20:58:59 during playback (5:56:39) | **Pass.** The same mpv PID (262406, started 20:25:57) kept playing; the new shell (323920 replacing 230803) reattached within 10 s, connected and playing, the position moving on (5:56:59 → 5:57:02); Chris heard no gap or stutter. **Stop, then play again: not run** (no Stop control). | 2026-10-08 |
+| 5 | IPC | `toggle` ×2, `playPause` ×2, `playerStatus`, `libraryQuery title all ""` | **Pass.** `toggle` closed then opened the panel; `playPause` resumed then paused, `playerStatus` following each; `libraryQuery` → `error: dev only` (and the dev-only `quitPlayer` → `error: dev only`, player untouched). | 2026-10-08 |
+| 6 | Removal | — | **Skipped** (Chris): removal has passed in real mode several times before (G4, B11, Follow-ups). | 2026-10-08 |
+| 7 | Smoke | `journalctl --user -b` for the new shell's PID after the restart in step 4 | **Pass.** Zero warnings from our files; one `quickshell`. | 2026-10-08 |
+
+### Notes
+
+- **No Stop control in the views.** Stop exists only as the dev-only IPC `quitPlayer` (real mode answers `error: dev only`); no view, component or `BarWidget` has ever called it, and SCOPE does not ask for one (FR-U5 only says dismissing never stops playback). In real mode the only way to unload a book and end mpv is to quit the shell or reboot. The F38 and player-machine "Stop, then play again" steps were therefore not run by hand; both are covered in fake mode (#86, #96). Placed in PLAN M5 as R8.
+- **Last pause wins.** After the catch-up in step 2, the phone kept playing; BEE's pause then pushed BEE's position, so the account moved back to BEE's spot. That is the designed rule (ARCHITECTURE §4.6), noted because it can look like the phone jumping back.
+- **Reboot.** BEE rebooted at 18:47 through `systemctl reboot` from Chris's desktop session, before this check; it was not traced to any agent.
+
 ## Follow-ups (desktop) — 2026-10-07, HMSP-OMARCHYBEE (two 1920×1080 monitors, DP-4 and DP-5), live folder on `main` at `4488ef2`
 
 Brief: [briefs/FOLLOWUPS-desktop.md](briefs/FOLLOWUPS-desktop.md) §5, after #77–#84 merged. Start state: real mode (no dev-fake flag; the flag was deleted and the shell restarted on `5e5dfb8` earlier the same day), one `quickshell`, one bar per monitor, connected, 91 books, nothing playing. The live folder was pulled from `5e5dfb8` to `4488ef2` while paused (#84 is docs and spikes only, so no restart). Chris did the clicking; Claude Code drove and checked IPC state and the journal. Times are local (UTC−5).
