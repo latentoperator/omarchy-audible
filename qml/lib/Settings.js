@@ -11,6 +11,7 @@ var DEFAULTS = {
   "defaultSpeed": 1.0,
   "syncOnOpenHours": 6
 };
+var PLUGIN_ID = "latentoperator.audible";
 
 var SORTS = ["Recently listened", "Recently added", "Title", "Author"];
 var SPEEDS = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0];
@@ -30,6 +31,27 @@ function normalize(raw) {
 function hasValues(raw) {
   return raw !== null && typeof raw === "object" && !Array.isArray(raw)
     && Object.keys(raw).length > 0;
+}
+
+function shouldForward(moduleName, raw) {
+  return String(moduleName || "") === PLUGIN_ID;
+}
+
+function applyStep(state, moduleName, raw) {
+  var current = state && typeof state === "object" ? state : {};
+  var received = current.settingsReceived === true;
+  if (!shouldForward(moduleName, raw) || (!received && !hasValues(raw))) {
+    return { "accepted": false, "state": { "settingsReceived": received }, "settings": null };
+  }
+  return {
+    "accepted": true,
+    "state": { "settingsReceived": true },
+    "settings": normalize(raw)
+  };
+}
+
+function shouldApplySpeed(settingsReceived, storeLoaded) {
+  return settingsReceived === true && storeLoaded === true;
 }
 
 function sortKey(label) {

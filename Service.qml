@@ -50,10 +50,11 @@ Item {
   // raced ahead of it would go out without OMARCHY_AUDIBLE_FAKE.
   property bool flagKnown: false
 
-  function applySettings(raw) {
-    if (!settingsReceived && !Settings.hasValues(raw)) return
-    settingsReceived = true
-    var next = Settings.normalize(raw)
+  function applySettings(raw, moduleName) {
+    var step = Settings.applyStep({ "settingsReceived": settingsReceived }, moduleName, raw)
+    if (!step.accepted) return
+    settingsReceived = step.state.settingsReceived
+    var next = step.settings
     skipSeconds = next.skipSeconds
     autoRemoveFinished = next.autoRemoveFinished === "On"
     syncOnOpenHours = next.syncOnOpenHours
@@ -67,7 +68,7 @@ Item {
   }
 
   function applyDefaultSpeedSetting() {
-    if (!settingsReceived || !store.loaded) return
+    if (!Settings.shouldApplySpeed(settingsReceived, store.loaded)) return
     var choice = Settings.speedChoice(store.doc.speed, defaultSpeed, store.doc.default_speed_setting)
     store.applyDefaultSpeed(defaultSpeed, choice.apply, choice.speed)
     if (choice.apply && player.connected) player.setSpeed(choice.speed)

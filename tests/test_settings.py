@@ -148,7 +148,7 @@ def test_service_owns_and_applies_widget_settings() -> None:
     service = (ROOT / "Service.qml").read_text(encoding="utf-8")
     widget = (ROOT / "BarWidget.qml").read_text(encoding="utf-8")
     assert "property bool settingsInjected: false" in widget
-    assert "if (settingsInjected) service.applySettings(settings)" in widget
+    assert "settingsInjected && Settings.shouldForward(moduleName, settings)" in widget
     assert "settingsInjected = true" in widget
     assert "Component.onCompleted: if (service) service.registerSurface(root)" in widget
     for setting in (
@@ -166,8 +166,11 @@ def test_service_owns_and_applies_widget_settings() -> None:
         in service
     )
     assert "property bool settingsReceived: false" in service
-    assert "if (!settingsReceived && !Settings.hasValues(raw)) return" in service
-    assert "if (!settingsReceived || !store.loaded) return" in service
+    assert (
+        'Settings.applyStep({ "settingsReceived": settingsReceived }, moduleName, raw)'
+        in service
+    )
+    assert "Settings.shouldApplySpeed(settingsReceived, store.loaded)" in service
     assert (
         "if (choice.apply && player.connected) player.setSpeed(choice.speed)" in service
     )
@@ -176,50 +179,67 @@ def test_service_owns_and_applies_widget_settings() -> None:
     )
 
 
-def test_widget_rebuild_empty_settings_is_ignored(settings) -> None:
-    widget = (ROOT / "BarWidget.qml").read_text(encoding="utf-8")
-    service = (ROOT / "Service.qml").read_text(encoding="utf-8")
-    assert "if (settingsInjected) service.applySettings(settings)" in widget
+def test_settings_reducer_shell_order_and_foreign_module(settings) -> None:
+    state = {"settingsReceived": False}
+    empty_default = settings.call("applyStep", state, "", {})
+    assert empty_default == {
+        "accepted": False,
+        "state": {"settingsReceived": False},
+        "settings": None,
+    }
+    foreign = settings.call("applyStep", state, "omarchy.clock", {})
+    assert foreign["accepted"] is False
+
+    real = settings.call(
+        "applyStep",
+        state,
+        "latentoperator.audible",
+        {"defaultSpeed": "1.5×", "defaultSort": "Title"},
+    )
+    assert real == {
+        "accepted": True,
+        "state": {"settingsReceived": True},
+        "settings": dict(DEFAULTS, defaultSpeed=1.5, defaultSort="Title"),
+    }
+
+    later_foreign = settings.call("applyStep", real["state"], "omarchy.clock", {})
+    assert later_foreign["accepted"] is False
+    assert later_foreign["state"] == real["state"]
+
+
+def test_settings_reducer_store_first_and_empty_user_edit(settings) -> None:
+    state = {"settingsReceived": False}
+    assert settings.call("shouldApplySpeed", False, True) is False
+    applied = settings.call(
+        "applyStep", state, "latentoperator.audible", {"defaultSpeed": "1.5x"}
+    )
+    assert applied["accepted"] is True
     assert (
-        "if (choice.apply && player.connected) player.setSpeed(choice.speed)" in service
+        settings.call("shouldApplySpeed", applied["state"]["settingsReceived"], False)
+        is False
+    )
+    assert (
+        settings.call("shouldApplySpeed", applied["state"]["settingsReceived"], True)
+        is True
     )
 
-    # Shell order: bar/service arrives first, then the actual settings object.
-    saved_speed, marker = 1.25, 1.5
-    service_sort, chosen_sort = "Title", "author"
-    settings_injected = False
-    writes = []
-    if settings_injected:
-        writes.append(settings.call("speedChoice", saved_speed, 1.5, marker))
-    settings_injected = True
-    normalized = settings.call(
-        "normalize", {"defaultSpeed": "1.5×", "defaultSort": "Title"}
-    )
-    choice = settings.call(
-        "speedChoice", saved_speed, normalized["defaultSpeed"], marker
-    )
-    if choice["apply"]:
-        saved_speed = choice["speed"]
-        writes.append("setSpeed")
-    if service_sort != normalized["defaultSort"]:
-        service_sort = normalized["defaultSort"]
-        chosen_sort = settings.call("sortKey", service_sort)
-    assert saved_speed == 1.25
-    assert marker == 1.5
-    assert writes == []
-    assert chosen_sort == "author"
+    cleared = settings.call("applyStep", applied["state"], "latentoperator.audible", {})
+    assert cleared["accepted"] is True
+    assert cleared["settings"] == DEFAULTS
 
 
-def test_store_first_does_not_write_speed_marker_before_settings(settings) -> None:
+def test_widget_and_service_are_wired_to_settings_reducer() -> None:
     service = (ROOT / "Service.qml").read_text(encoding="utf-8")
-    assert "if (!settingsReceived || !store.loaded) return" in service
-    assert "if (!settingsReceived && !Settings.hasValues(raw)) return" in service
-    settings_received = False
-    marker = None
-    if settings.call("hasValues", {}):
-        settings_received = True
-    store_loaded = True
-    if settings_received and store_loaded:
-        marker = 1.0
-    assert marker is None
-    assert settings.call("hasValues", {"defaultSpeed": "1.5x"}) is True
+    widget = (ROOT / "BarWidget.qml").read_text(encoding="utf-8")
+    assert 'import "qml/lib/Settings.js" as Settings' in widget
+    assert "Settings.shouldForward(moduleName, settings)" in widget
+    assert 'moduleName: "latentoperator.audible"' not in widget
+    assert (
+        'Settings.applyStep({ "settingsReceived": settingsReceived }, moduleName, raw)'
+        in service
+    )
+    assert "Settings.shouldApplySpeed(settingsReceived, store.loaded)" in service
+    assert (
+        "Component.onDestruction: if (service) service.unregisterSurface(root)"
+        in widget
+    )

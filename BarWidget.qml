@@ -7,13 +7,13 @@ import "qml/lib/Glyphs.js" as Glyphs
 import "qml/lib/Mini.js" as Mini
 import "qml/lib/Panel.js" as Panel
 import "qml/lib/Player.js" as Player
+import "qml/lib/Settings.js" as Settings
 import "qml/views"
 
 // Book glyph that toggles an anchored, themed drawer. The widget is a view
 // only: one instance exists per monitor, and all state lives in the service.
 BarWidget {
   id: root
-  moduleName: "latentoperator.audible"
 
   readonly property var service: bar && bar.shell
     ? bar.shell.serviceFor("latentoperator.audible") : null
@@ -89,13 +89,18 @@ BarWidget {
   implicitHeight: barTitle.length > 0 ? titled.implicitHeight : button.implicitHeight
 
   onServiceChanged: if (service) {
-    if (settingsInjected) service.applySettings(settings)
+    if (settingsInjected && Settings.shouldForward(moduleName, settings)) service.applySettings(settings, moduleName)
     service.registerSurface(root)
   }
   onSettingsChanged: {
+    if (!Settings.shouldForward(moduleName, settings)) {
+      settingsInjected = false
+      return
+    }
     settingsInjected = true
-    if (service) service.applySettings(settings)
+    if (service) service.applySettings(settings, moduleName)
   }
+  onModuleNameChanged: if (!Settings.shouldForward(moduleName, settings)) settingsInjected = false
   Component.onCompleted: if (service) service.registerSurface(root)
   Component.onDestruction: if (service) service.unregisterSurface(root)
 
