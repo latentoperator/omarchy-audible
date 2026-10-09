@@ -47,6 +47,24 @@ def test_parse_json_falls_back(playback):
         assert playback.call("parseJson", text, {"x": 1}) == {"x": 1}
 
 
+@pytest.mark.parametrize(
+    "values,expected",
+    [
+        ((True, True, False, False, True, "B0A"), True),
+        ((True, True, False, False, False, "B0A"), False),  # a new load is underway
+        ((True, True, False, True, True, "B0A"), False),  # our own Stop
+        ((True, False, False, False, True, "B0A"), False),
+        ((False, True, False, False, True, "B0A"), False),
+        ((True, True, True, False, True, "B0A"), False),
+        ((True, True, False, False, True, ""), False),
+    ],
+)
+def test_mpris_unload_is_an_external_stop_only_when_a_book_was_wanted(
+    playback, values, expected
+):
+    assert playback.call("externalUnload", *values) is expected
+
+
 NOW = "2026-10-05T14:00:00.000Z"
 
 

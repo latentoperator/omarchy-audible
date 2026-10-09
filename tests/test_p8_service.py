@@ -64,7 +64,10 @@ def test_f19_the_picked_panel_reopens():
 
 def test_f21_mpv_starts_with_the_saved_volume_and_speed():
     player = read("qml/PlayerController.qml")
-    assert '"--speed=" + initialSpeed' in function_body(player, "launchMpv")
+    assert '"speed": initialSpeed' in function_body(player, "launchMpv")
+    assert "Mpv.launchArgs(" in function_body(player, "launchMpv")
+    mpv = read("qml/lib/Mpv.js")
+    assert '"--speed=" + values.speed' in function_body(mpv, "launchArgs")
     service = read("Service.qml")
     assert "initialVolume: Mpv.startVolume(store.doc.volume" in service
     assert "initialSpeed: Mpv.startSpeed(store.doc.speed, root.defaultSpeed)" in service

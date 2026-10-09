@@ -135,7 +135,7 @@ status                      → {"type":"status","ready":bool,"missing":["mpv"],
                                 "venv_ready":bool,"marketplace":"us","account":"j***@gmail.com",
                                 "catalog_age_s":1234,"books_dir_problem":string|null,
                                 "old_books":{"dir":"<absolute path>","count":N}|null,
-                                "books_location_recorded":bool}
+                                "books_location_recorded":bool,"mpris_script":string|null}
 books-location-ack [--if-no-old-books]
                             → records the current effective folder; conditional form rechecks old_books
                               and writes nothing when books remain there, then done(acked: bool)
@@ -159,6 +159,8 @@ position-get <asin…>        → {"type":"positions","items":{"<asin>":{"ms":N,
 position-push <asin> <ms> --at <iso-8601> → done | error(code=invalid_args|stale|unsupported|network)
 doctor                      → {"type":"doctor","checks":[{"name":…,"ok":bool,"detail":…}]}
 ```
+
+`status.mpris_script` is the first readable mpv-mpris script at `/usr/lib/mpv-mpris/mpris.so`, `/etc/mpv/scripts/mpris.so`, or `$XDG_CONFIG_HOME/mpv/scripts/mpris.so` (default `~/.config/mpv/scripts/mpris.so`), else `null`. It is reported in fake mode too. `doctor` includes the same optional check; its `ok` is always true and `detail` is the installed path or `not installed (optional)`. The plugin starts mpv with this script only when detected; MPRIS support is optional and never affects readiness.
 
 The first settings object causes Service to re-read `status`; before settings arrive, the UI does not show books-folder notices or silently acknowledge a folder. The silent acknowledgement runs only when `old_books` is null, the current folder is not recorded, and no `get` is active or queued. Service re-runs `status` after each `get` and `remove`, so a download that finishes in the prior folder is counted before an acknowledgement can hide it.
 
@@ -278,17 +280,17 @@ The merge rule (§4.6) runs in the service: it reads `state.json` and `remote.js
 Started by the service when a book is first played, as a detached process:
 ```
 mpv --no-config --no-video --idle=yes --keep-open=yes --no-terminal --audio-display=no \
-    --input-ipc-server=$XDG_RUNTIME_DIR/omarchy-audible/mpv.sock \
-    --force-window=no --volume=<saved> --speed=<saved>
+    --force-window=no --volume=<saved> --speed=<saved> \
+    --input-ipc-server=$XDG_RUNTIME_DIR/omarchy-audible/mpv.sock [--script=<mpris_script>]
 ```
 `<saved>` is `state.json`'s `volume` and `speed`, written a second after either changes (the volume from before a sleep fade, never the faded one) and range-checked on start (`Mpv.startVolume`, `Mpv.startSpeed`); without one, volume 100 (15 in fake mode) and speed 1. Until P8 (F21) neither was ever saved, so mpv always started at those defaults and this line did not match the code.
 Launched as `systemd-run --user --scope --quiet --collect --unit=omarchy-audible-mpv mpv …` (fake mode: `--unit=omarchy-audible-fake-mpv`, so a fake player never blocks the real one; real mode stops a leftover fake scope when it starts, fake mode never touches the real one) through `Quickshell.execDetached` ✅ S5 (own cgroup, survives `omarchy-restart-shell`; the fixed unit name refuses a second mpv). A player that fails to start shows a desktop notification ("Couldn't start playback") and a line in Mini. Fall back to plain `execDetached` if `systemd-run` is missing. Never use `Process`, whose child dies with the shell. P2 must handle the pitfalls listed in SPIKE-RESULTS S5. When to probe, launch, connect, retry, give up, quit and relaunch is `PlayerMachine.step(state, event)` in `qml/lib/PlayerMachine.js` (P9); `PlayerController.qml` keeps the `Socket`, the processes, the timers and `execDetached`, and applies its effects (§5.2).
 
 The service connects with Quickshell's unix-socket client (`Quickshell.Io` `Socket`) and speaks mpv's JSON IPC (`{"command":[…],"request_id":n}`; events as JSON lines). Observed properties: `time-pos`, `duration`, `pause`, `speed`, `chapter`, `chapter-list`, `path`, `idle-active`, `eof-reached`, `volume`.
 
-Commands (B11: the first form loads an old unlocked `.m4b`; the second is the locked-file form):
+Commands (B11 and R3: the first form is used only when there is no key, no chapters file and no title; since R3 the service always sends the catalog title, so every book from the drawer uses the second):
 - `loadfile <path> replace 0 start=<seconds>` — no options.
-- `loadfile <path> replace -1 {"start": "<s>", "demuxer-lavf-o": "<key options>", "chapters-file": "<chapters.txt>"}` — mpv ≥ 0.38 takes the index argument **before** the options map (the desktop has mpv 0.41); `-1` means "no playlist index". Empty or absent options are left out of the map. `demuxer-lavf-o` carries the `play-info` value (`audible_key=…,audible_iv=…`, or `activation_bytes=…`), so the key travels over the IPC socket and never in mpv's argv. Once the file is loaded the service sends `set_property demuxer-lavf-o ""` so the key no longer sits in a readable property (S7).
+- `loadfile <path> replace -1 {"start": "<s>", "demuxer-lavf-o": "<key options>", "chapters-file": "<chapters.txt>", "force-media-title": "<catalog title>"}` — mpv ≥ 0.38 takes the index argument **before** the options map (the desktop has mpv 0.41); `-1` means "no playlist index". Empty or absent options are left out of the map. `demuxer-lavf-o` carries the `play-info` value (`audible_key=…,audible_iv=…`, or `activation_bytes=…`), so the key travels over the IPC socket and never in mpv's argv. Once the file is loaded the service sends `set_property demuxer-lavf-o ""` so the key no longer sits in a readable property (S7).
 - `set pause yes|no`, `seek ±N relative`, `seek <s> absolute`, `add chapter ±1`, `set chapter <i>`, `set speed <x>`.
 
 ### 5.2 PlayerController (QML object)
@@ -334,7 +336,9 @@ Which methods work in real mode (H1 F27) is listed in `qml/lib/Ipc.js`, and a te
 - **Test-only**, everything else (`play`, `pause`, `quitPlayer`, `removeBook`, `syncNow`, `libraryQuery`, `view`, …): each returns `error: dev only` unless the dev-fake flag was present when the service loaded. `libraryQuery` computes its rows from a copy (`Library.queryRows`) and never changes the drawer's sort, filter or search.
 
 ## 7. Media keys / MPRIS (optional, M5)
-mpv does not export MPRIS by itself. The AUR/Arch package `mpv-mpris` provides it, which would make hardware media keys, `playerctl`, and Omarchy's stock media widget see the book. Make it **optional**: if the script is installed, pass it to mpv with `--script=`; otherwise skip. Do not make it a hard dependency.
+mpv does not export MPRIS by itself. `status` checks `/usr/lib/mpv-mpris/mpris.so`, `/etc/mpv/scripts/mpris.so`, then `$XDG_CONFIG_HOME/mpv/scripts/mpris.so` (default `~/.config/mpv/scripts/mpris.so`). When found, a new player receives `--script=<path>`; the script is never required and existing mpv processes are not relaunched to add it. `doctor` reports it as an optional check whose `ok` is always true. mpv-mpris 1.2 names the bus after `audio-client-name`: the first mpv takes `org.mpris.MediaPlayer2.mpv` and a later one (e.g. a fake player beside a real one) gets `org.mpris.MediaPlayer2.mpv.instance-<random>`.
+
+With `mpv-mpris` installed, the stock Omarchy media service and media keys can control play/pause, seek and Stop. Next/Previous remain mpv playlist commands and do not navigate audiobook chapters. Catalog title is sent as `force-media-title` in each load's options so the MPRIS title is useful; author is not overridden. mpv-mpris 1.2 reads `mpris:artUrl` from mpv's embedded cover or recognized artwork beside the audio file; this plugin's cached cover is stored elsewhere, so it is not wired as MPRIS art. An MPRIS pause follows the ordinary pause path and saves/pushes the position. Resuming through MPRIS does not run the UI's long-pause catch-up read; the next position push remains protected by the existing stale-position rules. MPRIS Stop unloads mpv's file while leaving its process connected; for a book this shell started, the controller treats that unload as Stop (`PlayerController.externalUnload`, `Playback.externalUnload`): it saves and pushes once, clears the wanted book, and exits the player through the normal cleanup. Any other unload of a wanted, loaded book that we did not ask for takes the same path: mpv-mpris `OpenUri` (a `loadfile`) and a mid-playback `end-file` error. An mpv reattached after a shell restart is not `wanted` (only a play sets that), so an MPRIS Stop there saves and pushes through the ordinary pause/switch path and returns to Library, but leaves the idle mpv running; the next play reuses it. A paused seek through MPRIS is not marked as a user move and can be lost on a later Stop; see R3's manual record.
 
 ## 8. Testing strategy
 
