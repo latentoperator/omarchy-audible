@@ -92,6 +92,24 @@ def test_local_scan_includes_safe_catalog_metadata(
     assert book["authors"] == ["Mara Quill"]
 
 
+@pytest.mark.parametrize(
+    "value,expected",
+    [(8709594, 8709594), (0, 0), (-5, None), (True, None), ("12", None), (1.5, None)],
+)
+def test_local_scan_reports_the_download_duration(
+    run_cli, validate_stream, fake_paths, value, expected
+):
+    # R6: a book no longer in the catalog shows its own length, not "0m".
+    directory = _make_book(fake_paths, "B00DUR001")
+    (directory / "meta.json").write_text(
+        json.dumps({"title": "Invented Harbor", "duration_ms": value}),
+        encoding="utf-8",
+    )
+    parsed = validate_stream(run_cli("local", fake=True), expect_last="done")
+    book = next(event for event in parsed if event["type"] == "local")["books"][0]
+    assert book["duration_ms"] == expected
+
+
 def test_local_falls_back_to_the_file_mtime_without_meta(
     run_cli, validate_stream, fake_paths
 ):

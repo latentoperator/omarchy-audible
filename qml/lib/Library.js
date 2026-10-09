@@ -285,7 +285,8 @@ _p.indexByAsin = function (value) {
 };
 
 // The `local` scan is the backend's `local` event: a list of
-// `{asin, size, downloaded_at}`. A map keyed by ASIN is tolerated too.
+// `{asin, size, downloaded_at, title, duration_ms, authors}` (ARCHITECTURE
+// §4.2). A map keyed by ASIN is tolerated too.
 _p.indexLocal = function (value) {
   var out = {};
   var entries = Array.isArray(value) ? value : null;
@@ -299,6 +300,7 @@ _p.indexLocal = function (value) {
         "size": _p.numberOrNull(entry.size),
         "downloadedAt": _p.stringOrNull(entry.downloaded_at),
         "title": _p.stringOrNull(entry.title),
+        "durationMs": _p.numberOrNull(entry.duration_ms),
         "authors": Array.isArray(entry.authors) ? entry.authors.slice() : []
       };
     }
@@ -313,10 +315,11 @@ _p.indexLocal = function (value) {
           "size": _p.numberOrNull(mapped.size),
           "downloadedAt": _p.stringOrNull(mapped.downloaded_at),
           "title": _p.stringOrNull(mapped.title),
+          "durationMs": _p.numberOrNull(mapped.duration_ms),
           "authors": Array.isArray(mapped.authors) ? mapped.authors.slice() : []
         };
       } else if (mapped === true) {
-        out[asins[index]] = { "size": null, "downloadedAt": null, "title": null, "authors": [] };
+        out[asins[index]] = { "size": null, "downloadedAt": null, "title": null, "durationMs": null, "authors": [] };
       }
     }
   }
@@ -607,8 +610,11 @@ function buildRows(catalog, remote, state, local, jobs) {
     var localAsin = localAsins[index];
     if (catalogAsins[localAsin]) continue;
     var localEntry = localMap[localAsin];
+    // The catalog no longer has its runtime; the download's own duration does.
     var orphan = { "asin": localAsin, "title": localEntry.title || localAsin,
-      "authors": localEntry.authors, "inLibrary": false };
+      "authors": localEntry.authors, "inLibrary": false,
+      "runtime_min": localEntry.durationMs !== null && localEntry.durationMs > 0
+        ? localEntry.durationMs / 60000 : null };
     rows.push(_p.buildRow(orphan, localAsin,
       Object.prototype.hasOwnProperty.call(remoteMap, localAsin) ? remoteMap[localAsin] : null,
       Object.prototype.hasOwnProperty.call(stateBooks, localAsin) ? stateBooks[localAsin] : null,

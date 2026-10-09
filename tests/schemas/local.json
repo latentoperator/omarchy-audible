@@ -16,6 +16,7 @@
           "size": { "type": "integer", "minimum": 0 },
           "downloaded_at": { "type": "string" },
           "title": { "type": ["string", "null"] },
+          "duration_ms": { "type": ["integer", "null"], "minimum": 0 },
           "authors": { "type": "array", "items": { "type": "string" } }
         },
         "additionalProperties": false

@@ -125,6 +125,13 @@ def iso_now() -> str:
     return datetime.now(tz=UTC).isoformat().replace("+00:00", "Z")
 
 
+def _meta_duration_ms(meta: dict[str, Any]) -> int | None:
+    value = meta.get("duration_ms")
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return value
+
+
 def scan_local(books_dir: Path) -> list[dict[str, Any]]:
     """Every downloaded book under ``books_dir``, sorted by ASIN."""
     if not books_dir.is_dir():
@@ -150,6 +157,7 @@ def scan_local(books_dir: Path) -> list[dict[str, Any]]:
                 "title": meta.get("title")
                 if isinstance(meta.get("title"), str)
                 else None,
+                "duration_ms": _meta_duration_ms(meta),
                 "authors": [
                     name for name in meta.get("authors", []) if isinstance(name, str)
                 ]

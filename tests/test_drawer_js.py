@@ -343,6 +343,48 @@ def test_runtime_ms(drawer, row, ms):
 
 
 @pytest.mark.parametrize(
+    "banner,urgent",
+    [
+        ("reconnect", True),
+        ("connection", True),
+        ("offline", False),
+        ("syncing", False),
+        (None, False),
+        ("", False),
+    ],
+)
+def test_banner_urgent(drawer, banner, urgent):
+    # R6: the connection-problem banner was muted and hard to read.
+    assert drawer.call("bannerUrgent", banner) is urgent
+
+
+def test_banner_urgent_matches_the_library_ui_banner_names(drawer):
+    ui = qjs.load("LibraryUi")
+    assert drawer.call("bannerUrgent", ui.evaluate("BANNER_RECONNECT")) is True
+    assert drawer.call("bannerUrgent", ui.evaluate("BANNER_CONNECTION")) is True
+    assert drawer.call("bannerUrgent", ui.evaluate("BANNER_OFFLINE")) is False
+    assert drawer.call("bannerUrgent", ui.evaluate("BANNER_SYNCING")) is False
+
+
+def test_library_view_colours_problem_banners_through_banner_urgent():
+    view = (qjs.REPO_ROOT / "qml/views/LibraryView.qml").read_text(encoding="utf-8")
+    assert (
+        "color: Drawer.bannerUrgent(root.list.banner) ? Color.urgent : Color.muted"
+        in view
+    )
+    block = view.split('text: "Audible connection problem"', 1)[1].split("}", 1)[0]
+    assert "color: Color.urgent" in block
+
+
+def test_book_row_hides_an_unknown_runtime():
+    row = (qjs.REPO_ROOT / "qml/components/BookRow.qml").read_text(encoding="utf-8")
+    assert (
+        'text: Drawer.runtimeMs(root.row) > 0 ? Format.duration(Drawer.runtimeMs(root.row)) : ""'
+        in row
+    )
+
+
+@pytest.mark.parametrize(
     "row,fraction",
     [
         ({"percent": 50}, 0.5),

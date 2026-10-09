@@ -161,7 +161,7 @@ ColumnLayout {
       text: Drawer.bannerText(root.list.banner, root.service ? root.service.catalogAgeSeconds : null)
       textFormat: Text.PlainText
       wrapMode: Text.WordWrap
-      color: root.list.banner === LibraryUi.BANNER_RECONNECT ? Color.urgent : Color.muted
+      color: Drawer.bannerUrgent(root.list.banner) ? Color.urgent : Color.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.bodySmall
     }
@@ -307,7 +307,7 @@ ColumnLayout {
         text: "Audible connection problem"
         textFormat: Text.PlainText
         horizontalAlignment: Text.AlignHCenter
-        color: Color.muted
+        color: Color.urgent
         font.family: Style.font.family
         font.pixelSize: Style.font.body
       }

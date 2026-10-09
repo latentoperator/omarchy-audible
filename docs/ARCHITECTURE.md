@@ -154,7 +154,7 @@ play-info <asin>            → {"type":"play_info","path":".../book.aaxc","chap
                               (for a legacy aax it may fetch the account AAX key once, §4.7)
 cancel <asin>               → done | error(code=not_running)   (signals the running `get`, see §4.8)
 remove <asin>               → {"type":"done","freed_bytes":N}      (LOCAL ONLY — see §4.4)
-local                       → {"type":"local","books":[{"asin":…,"size":N,"downloaded_at":…,"title":…|null,"authors":[…]}]}
+local                       → {"type":"local","books":[{"asin":…,"size":N,"downloaded_at":…,"title":…|null,"duration_ms":N|null,"authors":[…]}]}
 position-get <asin…>        → {"type":"positions","items":{"<asin>":{"ms":N,"updated_at":"…"|null,"own":true?}}}
 position-push <asin> <ms> --at <iso-8601> → done | error(code=invalid_args|stale|unsupported|network)
 doctor                      → {"type":"doctor","checks":[{"name":…,"ok":bool,"detail":…}]}
