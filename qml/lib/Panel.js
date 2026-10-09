@@ -58,6 +58,12 @@ function chapterPopupShown(chapterListOpen, panelOpen) {
   return chapterListOpen === true && panelOpen === true;
 }
 
+// A switch or reconnect briefly has no loaded path while playback is still
+// wanted. Reconcile the view only after an actual unload.
+function libraryAfterUnload(loaded, wanted) {
+  return loaded !== true && wanted !== true;
+}
+
 // The panel's content width and height cap per view, in unscaled units for
 // `Style.space`. The Full view grows the same drawer (ARCHITECTURE 6).
 var WIDTH = 420;

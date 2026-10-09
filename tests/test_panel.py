@@ -117,6 +117,19 @@ def test_chapter_popup_only_in_the_open_panel(panel, list_open, panel_open, show
     assert panel.call("chapterPopupShown", list_open, panel_open) is shown
 
 
+@pytest.mark.parametrize(
+    "loaded,wanted,reconcile",
+    [
+        (True, False, False),
+        (True, True, False),
+        (False, True, False),
+        (False, False, True),
+    ],
+)
+def test_library_after_unload(panel, loaded, wanted, reconcile):
+    assert panel.call("libraryAfterUnload", loaded, wanted) is reconcile
+
+
 def test_mini_view_opens_the_popup_only_through_the_gate():
     root = pathlib.Path(__file__).resolve().parent.parent
     mini = (root / "qml/views/MiniView.qml").read_text(encoding="utf-8")

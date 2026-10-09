@@ -70,7 +70,8 @@ Item {
     }
 
     function stop(): string {
-      if (!player.loaded && !player.pendingLoad && service.pendingResume.length === 0 && !service.playRequest) return "error: nothing loaded"
+      if (!Ipc.stopAllowed(player.loaded, player.wanted, player.pendingLoad,
+          service.pendingResume, service.playRequest)) return "error: nothing loaded"
       service.quitPlayer()
       return "ok"
     }

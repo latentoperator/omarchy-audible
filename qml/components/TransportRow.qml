@@ -6,7 +6,7 @@ import "../lib/Glyphs.js" as Glyphs
 import "../lib/Mini.js" as Mini
 import "../lib/Player.js" as Player
 
-// ⏮ ⏪N ⏯ ⏩N ⏭ (FR-U3, FR-P2). ⏯ goes through the service, so a resume
+// ⏮ ⏪N ⏯ ⏩N ⏭ ■ (FR-U3, FR-P2). ⏯ goes through the service, so a resume
 // first checks the account for a newer position on another device.
 RowLayout {
   id: root

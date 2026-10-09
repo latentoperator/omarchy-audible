@@ -676,7 +676,7 @@ Item {
 
     function onPathChanged() {
       root.onBookSwitched()
-      if (!player.loaded) root.showView(root.view)
+      if (Panel.libraryAfterUnload(player.loaded, player.wanted)) root.showView(root.view)
     }
 
     function onPositionMsChanged() {

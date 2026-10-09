@@ -117,13 +117,32 @@ def test_every_listed_method_exists(ipc):
 
 def test_stop_is_public_and_uses_the_service_quit_path():
     body = ipc_methods()["stop"]
-    assert (
-        "if (!player.loaded && !player.pendingLoad && service.pendingResume.length === 0 && !service.playRequest)"
-        in body
-    )
+    assert "Ipc.stopAllowed(player.loaded, player.wanted, player.pendingLoad," in body
     assert 'return "error: nothing loaded"' in body
     assert "service.quitPlayer()" in body
     assert 'return "ok"' in body
+
+
+@pytest.mark.parametrize(
+    "loaded,wanted,pending_load,pending_resume,play_request,allowed",
+    [
+        (True, False, False, "", None, True),
+        (False, True, False, "", None, True),
+        (False, False, True, "", None, True),
+        (False, False, False, "ASIN", None, True),
+        (False, False, False, "", {"asin": "ASIN"}, True),
+        (False, False, False, "", None, False),
+    ],
+)
+def test_stop_allowed_covers_loaded_and_pending_playback(
+    ipc, loaded, wanted, pending_load, pending_resume, play_request, allowed
+):
+    assert (
+        ipc.call(
+            "stopAllowed", loaded, wanted, pending_load, pending_resume, play_request
+        )
+        is allowed
+    )
 
 
 def test_test_only_methods_are_gated_first(ipc):

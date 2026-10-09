@@ -304,13 +304,13 @@ The bar widget owns a `qs.Ui` `KeyboardPanel` anchored under the book icon (✅ 
 - ✕ / Esc / click-away → hide the panel; audio continues.
 - Bar click → **Mini** if a book is loaded, otherwise **Library**.
 - Mini has a library button (→ Library) and a maximize button (→ Full). Full has the same library button (U8) and a collapse button (→ Mini).
-- Stop in Mini or Full ends playback through `Service.quitPlayer`; an open Mini or Full panel returns to Library when the player unloads, while a closed panel stays closed. The bar glyph follows `player.loaded` and returns to the book.
+- Stop in Mini or Full ends playback through `Service.quitPlayer`; an open Mini or Full panel returns to Library after a true unload, while a switch or reconnect that temporarily clears the path preserves the current view. A closed panel stays closed. The bar glyph follows `player.loaded` and returns to the book.
 - Onboarding view replaces Library when `status.authenticated` is false or setup is incomplete. The step and the Connect phase come from `qml/SigninFlow.qml` through the service's `onboardingStep` and `loginPhase` (P9).
 
 Keyboard: search field focused on open; ↑/↓ move; Enter play; Esc close; Space play/pause when the search field is empty; ←/→ skip in Mini/Full; Backspace in Full collapses to Mini. In the Mini chapter popup, ↑/↓ move, Enter jumps to the chapter and Esc closes only the popup. Player and store state live in service-owned child objects (`PlayerController.qml` and `StateStore.qml`, whose decisions are `PlayerMachine.step` and `Store.step`); views continue to use the service-facing names.
 
 Shell IPC target `latentoperator.audible`, registered by the one `IpcHandler`, in `qml/ServiceIpc.qml`, which `Service.qml` declares once as its child (P9; a handler in the per-monitor widget would be ignored as a duplicate) ✅ S6:
-`toggle`, `playPause`, `skip <seconds>`, `nextChapter`, `prevChapter`, `openLibrary`, `stop`. Arguments and return values are strings. `stop` returns `error: nothing loaded` if neither a book nor a play request is active; otherwise it uses `Service.quitPlayer` to clear pending playback, the play error and persist player settings.
+`toggle`, `playPause`, `skip <seconds>`, `nextChapter`, `prevChapter`, `openLibrary`, `stop`. Arguments and return values are strings. `stop` returns `error: nothing loaded` only if no book is loaded or wanted and no load, resume, or play-info request is pending; otherwise it uses `Service.quitPlayer` to clear pending playback, the play error and persist player settings. `PlayerMachine.step` sets `wanted` on play, clears it on quit and when retries give up, and publishes it through `PlayerController.publish()`.
 Call syntax ✅: `omarchy-shell latentoperator.audible toggle`. Example Hyprland binding: `bind = SUPER, A, exec, omarchy-shell latentoperator.audible toggle`.
 
 Which methods work in real mode (H1 F27) is listed in `qml/lib/Ipc.js`, and a test checks `qml/ServiceIpc.qml` against it:

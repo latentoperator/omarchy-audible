@@ -30,6 +30,13 @@ function parseSeconds(text) {
   return value;
 }
 
+// Stop is available while a book or any pending playback request is active.
+function stopAllowed(loaded, wanted, pendingLoad, pendingResume, playRequest) {
+  return loaded === true || wanted === true || pendingLoad === true ||
+    (typeof pendingResume === "string" && pendingResume.length > 0) ||
+    (playRequest !== null && playRequest !== undefined && playRequest !== false);
+}
+
 // What a test-only method returns outside fake mode (H1 F27).
 var DEV_ONLY = "error: dev only";
 
