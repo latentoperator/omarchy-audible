@@ -6,7 +6,7 @@
   "required": [
     "type", "ready", "missing", "authenticated", "venv_ready", "marketplace",
     "account", "catalog_age_s", "config_dir", "data_dir", "runtime_dir", "books_dir",
-    "books_dir_problem", "old_books", "books_location_recorded"
+    "books_dir_problem", "old_books", "books_location_recorded", "mpris_script"
   ],
   "properties": {
     "type": { "const": "status" },
@@ -31,7 +31,8 @@
       },
       "additionalProperties": false
     },
-    "books_location_recorded": { "type": "boolean" }
+    "books_location_recorded": { "type": "boolean" },
+    "mpris_script": { "type": ["string", "null"], "pattern": "^/" }
   },
   "additionalProperties": false
 }

@@ -323,8 +323,10 @@ Item {
     var startSec = playRequest.startSec
     var asin = playRequest.asin
     playRequest = null
+    var row = library.rowFor(asin)
     if (!player.play(String(record.path || ""), startSec,
-        { "lavf": record.lavf_options, "chaptersFile": record.chapters_file })) failPlay(asin, "", player.lastError)
+        { "lavf": record.lavf_options, "chaptersFile": record.chapters_file,
+          "title": row ? row.title : "" })) failPlay(asin, "", player.lastError)
   }
 
   // play-info ended without giving this request a file to play.
@@ -679,6 +681,7 @@ Item {
   PlayerController {
     id: player
     socketPath: root.runtimeDir.length > 0 ? root.runtimeDir + "/mpv.sock" : ""
+    mprisScript: root.status && typeof root.status.mpris_script === "string" ? root.status.mpris_script : ""
     // The saved volume and speed (F21). Without a saved volume, low in fake
     // mode: the fake book is a sine wave.
     initialVolume: Mpv.startVolume(store.doc.volume, root.fake ? 15 : 100)
@@ -739,6 +742,13 @@ Item {
 
   Connections {
     target: player
+
+    function onExternalUnload() {
+      if (!Playback.externalUnload(player.connected, player.wanted, player.loaded,
+          player.quitting, player.loadArrived, root.snapAsin)) return
+      root.savePosition(root.snapAsin, root.snapMs, true)
+      root.quitPlayer()
+    }
 
     function onPathChanged() {
       root.onBookSwitched()

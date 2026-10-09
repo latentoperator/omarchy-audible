@@ -181,6 +181,15 @@ function reportBelongs(hasPosition, reportAsin, snapAsin, loadSettled) {
     && typeof reportAsin === "string" && reportAsin.length > 0 && reportAsin === snapAsin;
 }
 
+// An mpv-mpris Stop unloads the current file but leaves the IPC connection
+// alive. Treat only an otherwise-unexplained unload of a wanted book as Stop;
+// a pending load and our own quit both have separate paths.
+function externalUnload(connected, wanted, loaded, quitting, loadArrived, snapAsin) {
+  return connected === true && wanted === true && loaded !== true
+    && quitting !== true && loadArrived === true
+    && typeof snapAsin === "string" && snapAsin.length > 0;
+}
+
 // A copy of `state` with the player's volume and speed (F21), or `state`
 // itself when both are already what it holds. Out-of-range values are not
 // saved (Mpv.startVolume / startSpeed would ignore them anyway).

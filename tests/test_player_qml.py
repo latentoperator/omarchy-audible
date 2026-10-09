@@ -155,6 +155,90 @@ def test_play_while_idle_launches_then_connects_and_sends_the_load(harness):
     assert harness.warnings == []
 
 
+def test_external_mpris_unload_emits_stop_signal_without_relaunch(harness):
+    run(harness, PLAYING)
+    run(
+        harness,
+        [
+            (
+                "line",
+                {"event": "property-change", "name": "path", "data": BOOK},
+                {"path": BOOK, "loaded": True},
+            ),
+            (
+                "line",
+                {"event": "file-loaded"},
+                {"loadArrived": True, "writes": [CLEAR_KEY]},
+            ),
+            (
+                "externalStop",
+                None,
+                {
+                    "externalUnloads": 1,
+                    "path": "",
+                    "loaded": False,
+                    "wanted": False,
+                    "quitting": True,
+                    "writes": [["quit"]],
+                },
+            ),
+        ],
+    )
+    assert harness.last["wanted"] is False
+    assert harness.last["connected"] is True
+    assert harness.last["detached"] == []
+    assert harness.warnings == []
+
+
+def _loaded(harness):
+    run(harness, PLAYING)
+    harness.step("line", {"event": "property-change", "name": "path", "data": BOOK})
+    harness.step("line", {"event": "file-loaded"})
+    assert harness.last["loaded"] is True and harness.last["loadArrived"] is True
+
+
+def test_our_own_quit_unloading_the_book_is_not_an_external_stop(harness):
+    _loaded(harness)
+    harness.step("quit")
+    assert harness.last["quitting"] is True
+    harness.step("externalStop")
+    assert harness.last["externalUnloads"] == 0
+    assert harness.warnings == []
+
+
+def test_a_play_while_our_quit_is_in_flight_is_not_an_external_stop(harness):
+    # Stop, then pick a book before mpv has exited: the new play is wanted
+    # again while the old mpv is still quitting and drops its file.
+    _loaded(harness)
+    harness.step("quit")
+    harness.step("play", dict(PLAY, start=40))
+    assert harness.last["wanted"] is True and harness.last["quitting"] is True
+    harness.step("externalStop")
+    assert harness.last["externalUnloads"] == 0
+    assert harness.last["wanted"] is True
+    assert harness.warnings == []
+
+
+def test_a_book_switch_unloading_the_old_file_is_not_an_external_stop(harness):
+    _loaded(harness)
+    # A second play while connected sends `loadfile replace` at once; mpv then
+    # reports the old file gone (path null) before the new one's file-loaded.
+    harness.step("play", dict(PLAY, start=40))
+    assert harness.last["loadArrived"] is False
+    harness.step("externalStop")
+    assert harness.last["externalUnloads"] == 0
+    assert harness.last["wanted"] is True
+    assert harness.warnings == []
+
+
+def test_launch_passes_detected_mpris_script(harness):
+    script = "/usr/lib/mpv-mpris/mpris.so"
+    mpv = MPV + ["--script=" + script]
+    launch = LAUNCH[: -len(MPV)] + mpv
+    played = dict(PLAYED, detached=[launch])
+    run(harness, READY + [("mprisScript", script, {}), ("play", PLAY, played)])
+
+
 def test_play_before_the_socket_path_is_refused(harness):
     run(harness, [("play", PLAY, {"result": False, "lastError": "player not ready"})])
     assert harness.warnings == []

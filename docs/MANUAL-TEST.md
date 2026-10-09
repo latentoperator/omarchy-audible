@@ -27,6 +27,35 @@ Round 1's regression proof against starting `main` found four missing offline-ag
 
 Round 2 took the lock, backed up `shell.json`, confirmed the real baseline (`playerStatus`: loaded, paused, 16,104,035 ms; `libraryState`: 91 total, 4 local), set the fake flag, and checked out code head `83c694a` in the live plugin. `omarchy-restart-shell` returned 0, but subsequent IPC said “omarchy-shell is not running” and `qs list --all` showed no running instances; no fake sync, play, remove-all, or screenshot checks were attempted. Cleanup restored the live folder to clean `main` at `a294590`, removed the flag, and confirmed `shell.json` was byte-identical to its backup. The required final restart registered shell PID 660331; real IPC then reported loaded/paused at 16,104,035 ms and library count 91, with mpv PID 99684 still present. The new PID logged a warning from `qml/PlayerController.qml:389` (“Property 'apply' … is not a function”), plus stock Omarchy/Omamail warnings. No Round 2 fake screenshots were captured.
 
+## R3 — MPRIS (optional), fake mode — 2026-10-09, HMSP-OMARCHYBEE (branch `r3-mpris`)
+
+Run on HMSP-OMARCHYBEE in fake mode. The live folder was switched to the R3 head once and restored to `main` after testing. Do not use media keys or `omarchy-shell media` here; those target whichever MPRIS player is active.
+
+| # | Check | Result |
+|---|---|---|
+| 1 | `status` reports `/usr/lib/mpv-mpris/mpris.so`; `doctor` marks it optional and `ok: true`. | **Pass.** Fake `status` included that absolute path; doctor `mpris_script` was `{ok:true, detail:"/usr/lib/mpv-mpris/mpris.so"}`. Fake library count was 4 before sync and 5 after the §3 smoke sync. Real baseline before fake mode: mpv 99684 paused at 16,104,035 ms; library 91. |
+| 2 | New fake mpv argv includes `--script=/usr/lib/mpv-mpris/mpris.so`; the secret key is absent from argv. Its own MPRIS name appears; real mpv has no MPRIS name. | **Pass.** Fake mpv 583595 argv ended with `--script=/usr/lib/mpv-mpris/mpris.so`; checked argv for `audible_key`, `audible_iv` and `activation_bytes` before printing. `busctl --user list` showed its MPRIS service, owned by the fake PID; no service belonged to real PID 99684. |
+| 3 | Fake instance `Metadata` reports the catalog title and has no key material; `Identity` and `PlaybackStatus` are readable. | **Pass.** D-Bus returned `xesam:title="A Short Course in Starlight"`, `Identity="mpv"`, and `PlaybackStatus="Paused"`; metadata contained no key fields. A later 30-second fake book reported `Collected Winter Tales` and `mpris:length=30000000`. |
+| 4 | D-Bus PlayPause pauses and saves/pushes; a second call resumes. | **Pass.** On the 30-second fake book, PlayPause paused at 15,277 ms; `pushState` queued 15,202 ms, then completed with an empty queue, and fake `position-get` read 15,202 ms (`own:true`). A second PlayPause returned `PlaybackStatus="Playing"` and `playerStatus` at 15,239 ms. |
+| 5 | D-Bus Next/Previous leave the book loaded and unchanged. | **Pass.** With the six-second fake book at its end, both calls left it loaded, connection `connected`; MPRIS `CanGoNext` and `CanGoPrevious` were both false. |
+| 6 | D-Bus Stop saves/pushes once, returns the panel to Library, does not relaunch, and subsequent `stop` IPC says nothing loaded; replay resumes at the saved spot. | **Pass.** On `B0FAKE0003`, Stop saved/pushed 22,775 ms; fake `position-get` read 22,775 ms (`own:true`), `pushState` was done/empty, panel was Library, and IPC `stop` returned `error: nothing loaded`. `pgrep -x mpv` showed only real PID 99684 after Stop. Replay loaded the saved spot; first read was 27,799 ms after asynchronous IPC latency. |
+| 7 | Shell restart while the fake book plays keeps the same mpv PID and MPRIS name and reattaches. | **Pass.** During playback, fake PID 589915 and its MPRIS service survived restart; the new shell reattached to the same PID (the six-second fixture reached EOF during restart). A longer fake book also retained PID 606652 and its MPRIS name through a restart; it reattached paused at 23 ms. |
+| 8 | Read-only `qs ipc show` confirms the stock media target; §3 smoke journey and post-restart plugin QML warning check. | **Pass.** `qs ipc --pid 576402 show` listed `media`; read-only `media status` while fake mpv 589915 was active returned `hasPlayer:true`, `hasMedia:true`, title `A Short Course in Starlight`, and `canTogglePlaying:true`. §3 journey ran with `B0FAKE0001` (download, pick, answer Resume, skip, play/pause twice, chapter 1, quit, remove, sync); final local storage 0 books, push queue empty. After restart, shell PID 607640 had zero warnings/errors from our plugin files. |
+
+**Hand check for Chris (real mode, pending):**
+
+| # | Check | Result |
+|---|---|---|
+| 1 | Start a book from the drawer in a new mpv; play/pause keys on the keyboard control it. | Pending |
+| 2 | Stock media widget shows the book title; its play/pause and seek work. | Pending |
+| 3 | ■ in Mini still works. | Pending |
+| 4 | Pause from the media widget, then ⏯ in Mini. | Pending |
+| 5 | Audio plays from the speakers/headphones after a widget or key resume. | Pending |
+| 6 | Stop from the media widget, then pick the book again: it resumes at the spot Stop saved (compare `pushState`/`playerStatus` before and after; not just "near"). | Pending |
+| 7 | Play, restart the shell, then Stop from the media widget: the position is saved, the drawer goes to Library, and the idle mpv stays until the next play (expected after a reattach). | Pending |
+
+Fake row 6's "near" is IPC latency (the book plays on after the resume), not a drift in the saved spot; hand-check row 6 confirms it. Found, not fixed: a paused MPRIS `SetPosition` is not marked as a user move. After setting it to 0 while paused, the saved account position remained at the prior 5,949 ms through the next pause; because it is not dirty, a Stop before any playing position report will not save that move. mpv does not identify seek origin, and `playback-restart` also covers the internal catch-up jump. MPRIS resume also skips the UI catch-up read after a long pause; the existing push staleness check protects the account. The mpv-mpris 1.2 source does not use the PID name described in the task prompt: it requests `org.mpris.MediaPlayer2.mpv` when available, and falls back on a random `.instance-<id>` suffix after a name collision. This run had only the fake mpv exporting MPRIS, so the canonical name was owned by the fake PID; the already-running real mpv had no MPRIS service.
+
 ## R1 (desktop) — 2026-10-09, HMSP-OMARCHYBEE, live folder on `main` (R1a at `a50f32d`, R1b at `cc0cfa2`)
 
 Real mode (no dev-fake flag), connected, 91 books, Dungeon Crawler Carl (`B08V8B2CGV`) loaded and paused in mpv 99684 throughout (16 104 035 ms before and after). Chris edited our entry in `~/.config/omarchy/shell.json` by hand and looked; Dante read IPC, the books-location record and the journal over SSH. No shell restart between edits. The R1b live folder was pulled once and the shell restarted once after #101 merged (new shell 319300: zero non-DEBUG lines from our files, no crash).

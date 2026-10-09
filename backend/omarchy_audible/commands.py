@@ -67,6 +67,10 @@ DOCTOR_TOOLS = (
 # Fake account shown by ``status`` in fake mode. Invented, never a real user.
 FAKE_ACCOUNT = "fake@example.com"
 DEFAULT_MARKETPLACE = "us"
+MPRIS_SYSTEM_SCRIPTS = (
+    Path("/usr/lib/mpv-mpris/mpris.so"),
+    Path("/etc/mpv/scripts/mpris.so"),
+)
 
 Handler = Callable[..., int]
 
@@ -97,6 +101,27 @@ def _status_dirs(paths: Paths) -> dict[str, str]:
         "runtime_dir": str(paths.runtime_dir),
         "books_dir": str(paths.books_dir),
     }
+
+
+def find_mpris_script(
+    system_paths: Sequence[Path] = MPRIS_SYSTEM_SCRIPTS,
+    config_home: Path | None = None,
+) -> str | None:
+    """Find the first readable optional mpv-mpris script."""
+    if config_home is None:
+        # The XDG spec says a relative value is invalid and must be ignored.
+        configured = os.environ.get("XDG_CONFIG_HOME") or ""
+        config_home = (
+            Path(configured) if os.path.isabs(configured) else Path.home() / ".config"
+        )
+    candidates = (*system_paths, config_home / "mpv/scripts/mpris.so")
+    for candidate in candidates:
+        try:
+            if candidate.is_file() and os.access(candidate, os.R_OK):
+                return str(candidate.resolve())
+        except OSError:
+            continue
+    return None
 
 
 def _books_location(paths: Paths) -> dict[str, object]:
@@ -160,6 +185,7 @@ def cmd_status(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -
             catalog_age_s=None,
             **_books_location(paths),
             **_status_dirs(paths),
+            mpris_script=find_mpris_script(),
         )
         protocol.done()
         return protocol.EXIT_OK
@@ -186,6 +212,7 @@ def cmd_status(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -
         catalog_age_s=_catalog_age_s(paths),
         **_books_location(paths),
         **_status_dirs(paths),
+        mpris_script=find_mpris_script(),
     )
     protocol.done()
     return protocol.EXIT_OK
@@ -224,6 +251,14 @@ def cmd_doctor(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -
             "name": "auth",
             "ok": auth_ok,
             "detail": str(paths.auth_file) if auth_ok else "no auth.json; run login",
+        }
+    )
+    script = find_mpris_script()
+    checks.append(
+        {
+            "name": "mpris_script",
+            "ok": True,
+            "detail": script or "not installed (optional)",
         }
     )
     protocol.emit("doctor", checks=checks)

@@ -23,6 +23,7 @@ import pytest
 from test_auth import ACCOUNT, URL, FakeAudible, _make_cli_login
 
 from omarchy_audible import auth, bootstrap
+from omarchy_audible.commands import find_mpris_script
 from omarchy_audible.paths import Paths
 
 FAKE_STATUS_FILENAME = "fake-status.json"
@@ -30,6 +31,33 @@ SIGNED_OUT_MARKER = "fake-signed-out"
 
 INVENTED_NAME = "Zelda"
 INVENTED_FULL_NAME = "Zelda Fitzgerald"
+
+
+def test_mpris_script_detection_prefers_fixed_system_paths_and_user_fallback(tmp_path):
+    system = tmp_path / "usr" / "lib" / "mpris.so"
+    other = tmp_path / "etc" / "scripts" / "mpris.so"
+    user = tmp_path / "config" / "mpv" / "scripts" / "mpris.so"
+    for candidate in (system, other, user):
+        candidate.parent.mkdir(parents=True, exist_ok=True)
+        candidate.write_bytes(b"fixture")
+    assert find_mpris_script([system, other], tmp_path / "config") == str(system)
+    system.unlink()
+    assert find_mpris_script([system, other], tmp_path / "config") == str(other)
+    other.unlink()
+    assert find_mpris_script([system, other], tmp_path / "config") == str(user)
+    user.unlink()
+    assert find_mpris_script([system, other], tmp_path / "config") is None
+
+
+def test_mpris_script_detection_ignores_a_relative_xdg_config_home(
+    tmp_path, monkeypatch
+):
+    user = tmp_path / ".config" / "mpv" / "scripts" / "mpris.so"
+    user.parent.mkdir(parents=True)
+    user.write_bytes(b"")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", "relative/config")
+    assert find_mpris_script([]) == str(user)
 
 
 def _status_event(result, events) -> dict:

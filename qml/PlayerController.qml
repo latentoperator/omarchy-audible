@@ -18,6 +18,7 @@ Item {
 
   // $XDG_RUNTIME_DIR/omarchy-audible[-fake]/mpv.sock, from the `status` event.
   property string socketPath: ""
+  property string mprisScript: ""
   property int initialVolume: 100
   // The speed a new mpv starts at (F21: the saved one).
   property real initialSpeed: 1
@@ -81,6 +82,11 @@ Item {
   // The user moved the position: a seek, skip or chapter jump was sent (F38).
   // `targetMs` is where it lands (Mpv.moveTargetMs), or -1 when unknown.
   signal userMoved(int targetMs)
+  signal externalUnload()
+
+  onLoadedChanged: {
+    if (!loaded && connected && wanted && !quitting && loadArrived) externalUnload()
+  }
 
   // Subscribe on the derived `connected`, not in Socket.onConnectionStateChanged:
   // the socket can connect before Loader.item is assigned (S5 pitfall 1).
@@ -212,9 +218,8 @@ Item {
   function attach() { apply({ "type": "attach", "ready": socketPath.length > 0, "connected": connected }) }
 
   function launchMpv() {
-    var mpv = ["mpv", "--no-config", "--no-video", "--idle=yes", "--keep-open=yes",
-      "--no-terminal", "--audio-display=no", "--force-window=no",
-      "--volume=" + initialVolume, "--speed=" + initialSpeed, "--input-ipc-server=" + socketPath]
+    var mpv = Mpv.launchArgs({ "volume": initialVolume, "speed": initialSpeed,
+      "socketPath": socketPath, "mprisScript": mprisScript })
     var command = useScope
       ? ["systemd-run", "--user", "--scope", "--quiet", "--collect",
          "--unit=" + unitName].concat(mpv)
