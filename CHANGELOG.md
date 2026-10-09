@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Omarchy Audible. Versions follow `manifest.json`.
+All notable changes to Omaudible. Versions follow `manifest.json`.
 
 ## 0.1.0 (unreleased)
 

@@ -1,4 +1,4 @@
-# Scope — Omarchy Audible
+# Scope — Omaudible
 
 Status: **planning** · Last updated: 2026-10-04 · Owner: @latentoperator
 

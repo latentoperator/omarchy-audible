@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "latentoperator.audible",
-  "name": "Omarchy Audible",
+  "name": "Omaudible",
   "version": "0.0.1",
   "author": "latentoperator",
   "description": "Your Audible library in the Omarchy bar: browse, download, and listen without a browser tab.",
@@ -14,7 +14,7 @@
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
-    "displayName": "Omarchy Audible",
+    "displayName": "Omaudible",
     "description": "Your Audible library in the Omarchy bar.",
     "category": "Media",
     "allowMultiple": false,

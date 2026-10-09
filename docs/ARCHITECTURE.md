@@ -1,4 +1,4 @@
-# Architecture — Omarchy Audible
+# Architecture — Omaudible
 
 Companion to [SCOPE.md](SCOPE.md). Facts marked ✅ were verified by hand on 2026-10-04 on an Omarchy machine with a real Audible account. Facts marked ❓ are assumptions that a spike in [PLAN.md](PLAN.md) must confirm before building on them.
 

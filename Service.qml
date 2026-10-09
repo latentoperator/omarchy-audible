@@ -98,11 +98,11 @@ Item {
   readonly property var loadedRow: loadedAsin.length > 0 ? library.rowFor(loadedAsin) : null
   readonly property string barGlyph: Panel.glyph(player.loaded, player.playing)
   readonly property string tooltipText: {
-    if (!player.loaded) return "Omarchy Audible"
+    if (!player.loaded) return "Omaudible"
     var row = loadedRow
     var text = Format.tooltip(row ? row.title : "", row ? Format.names(row.authors) : "",
       Format.left(player.positionMs, player.durationMs))
-    return text.length > 0 ? text : "Omarchy Audible"
+    return text.length > 0 ? text : "Omaudible"
   }
 
   readonly property alias runner: runner
@@ -354,7 +354,7 @@ Item {
   function notifyPlayFailed(message) {
     var text = String(message || "").length > 0 ? String(message) : "the player did not start"
     logEvent("player", "failed: " + text)
-    Quickshell.execDetached(["notify-send", "--app-name=Omarchy Audible",
+    Quickshell.execDetached(["notify-send", "--app-name=Omaudible",
       "Couldn't start playback", text])
   }
 
