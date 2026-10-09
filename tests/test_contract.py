@@ -124,6 +124,20 @@ def test_validator_rejects_a_malformed_event(validate_event):
         validate_event({"type": "status", "ready": True})
 
 
+def test_conditional_books_location_ack_contract_noop(
+    fake_paths, run_cli, events, validate_event
+):
+    old = fake_paths.data_dir / "books-old"
+    book = old / "B00FAKE01"
+    book.mkdir(parents=True)
+    (book / "book.m4b").write_bytes(b"fake")
+    fake_paths.books_location_file.parent.mkdir(parents=True, exist_ok=True)
+    fake_paths.books_location_file.write_text(json.dumps({"books_dir": str(old)}))
+    result = events(run_cli("books-location-ack", "--if-no-old-books", fake=True))
+    assert result == [{"type": "done", "acked": False}]
+    validate_event(result[0])
+
+
 def test_validator_rejects_an_unknown_done_payload_field(validate_event):
     jsonschema = pytest.importorskip("jsonschema")
     with pytest.raises(jsonschema.ValidationError):

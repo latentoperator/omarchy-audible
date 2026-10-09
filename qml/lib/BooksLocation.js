@@ -30,6 +30,40 @@ function shouldAck(status, downloadActive, settingsReceived) {
     && status.old_books === null && status.books_location_recorded === false
 }
 
+function hasActiveGet(activeJob, pendingJobs) {
+  if (activeJob && activeJob.command === "get") return true
+  return Array.isArray(pendingJobs) && pendingJobs.some(function(job) {
+    return job && job.command === "get"
+  })
+}
+
+function ackStep(state, status, downloadActive, settingsReceived) {
+  state = state || {}
+  var next = {
+    "pendingDir": typeof state.pendingDir === "string" ? state.pendingDir : "",
+    "failedDir": typeof state.failedDir === "string" ? state.failedDir : ""
+  }
+  var dir = status && typeof status.books_dir === "string" ? status.books_dir : ""
+  var log = false
+  if (next.failedDir && next.failedDir !== dir) next.failedDir = ""
+  if (next.pendingDir) {
+    if (next.pendingDir === dir && status && status.books_location_recorded === true) {
+      next.pendingDir = ""
+    } else if (next.pendingDir === dir && status && status.books_location_recorded === false) {
+      next.pendingDir = ""
+      if (next.failedDir !== dir) {
+        next.failedDir = dir
+        log = true
+      }
+    } else if (next.pendingDir !== dir) {
+      next.pendingDir = ""
+    }
+  }
+  var ack = shouldAck(status, downloadActive, settingsReceived) && next.failedDir !== dir
+  if (ack) next.pendingDir = dir
+  return { "ack": ack, "log": log, "state": next }
+}
+
 function shouldShowOldBooks(status, settingsReceived) {
   return settingsReceived === true && !!status && status.old_books !== null
 }

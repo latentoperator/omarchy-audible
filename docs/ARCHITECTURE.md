@@ -136,7 +136,9 @@ status                      → {"type":"status","ready":bool,"missing":["mpv"],
                                 "catalog_age_s":1234,"books_dir_problem":string|null,
                                 "old_books":{"dir":"<absolute path>","count":N}|null,
                                 "books_location_recorded":bool}
-books-location-ack          → writes the current effective books folder to books-location.json, then done
+books-location-ack [--if-no-old-books]
+                            → records the current effective folder; conditional form rechecks old_books
+                              and writes nothing when books remain there, then done(acked: bool)
 setup                       → progress events, then done
 login-start --marketplace us→ {"type":"login_url","url":"https://www.amazon.com/ap/signin?…","session":"<id>"}
 login-finish --session <id>  (pasted URL on stdin) → done (warning="activation_bytes" when the
@@ -267,7 +269,7 @@ The merge rule (§4.6) runs in the service: it reads `state.json` and `remote.js
 - `JobRunner.qml` is the only thing that spawns backend commands from the UI. It keeps a queue and runs one **job command** at a time.
 - Job commands (`setup`, `sync`, `get`, `remove`, `login-finish`, `login-import-cli`, `logout`) take an exclusive `flock` on `job.lock` **without waiting**. If it is held they exit with `error(code=busy)`. That guards against a second shell, a hotkey, or a user running the CLI.
 - Non-job commands never take the lock: `status`, `doctor`, `local`, `play-info`, `position-get`, `position-push`, `login-start`, and `cancel`. Pushes, status checks and `play-info` therefore work during a download.
-- `books-location-ack` is also non-job and takes no arguments; it can only record the current effective path. In fake mode it writes under the fake data directory.
+- `books-location-ack` is also non-job. The user acknowledgement takes no arguments; the silent form may pass `--if-no-old-books`, which rechecks `old_books` immediately before writing and returns `done(acked:false)` without a write if books remain. Otherwise it returns `done(acked:true)`. In fake mode it writes under the fake data directory.
 - `get` writes `job.json` `{pid, command, asin}` after taking the lock and removes it on exit. `cancel <asin>` reads `job.json`; if the asin matches it sends SIGTERM to that pid, otherwise `error(code=not_running)`. `get` handles SIGTERM by stopping its children, deleting `.partial/`, and emitting `error(code=cancelled)`; a second SIGTERM is ignored so it cannot abort that cleanup (F6). The UI can also just kill the process it spawned; both paths must clean up.
 
 ## 5. Player (QML)

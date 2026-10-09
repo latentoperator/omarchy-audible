@@ -166,10 +166,8 @@ def test_service_owns_and_applies_widget_settings() -> None:
         in service
     )
     assert 'if (booksStep.rerunStatus && flagKnown) run("status", [])' in service
-    assert (
-        "BooksLocation.shouldAck(record, root.downloadActive(), root.settingsReceived)"
-        in service
-    )
+    assert "BooksLocation.ackStep(root.booksAckState, record," in service
+    assert "BooksLocation.hasActiveGet(runner.activeJob, runner.pendingJobs)" in service
     assert (
         'else if (job.command === "get" || job.command === "remove") {\n        root.run("status", [])'
         in service
@@ -177,7 +175,10 @@ def test_service_owns_and_applies_widget_settings() -> None:
     library_view = (ROOT / "qml/views/LibraryView.qml").read_text(encoding="utf-8")
     assert "BooksLocation.shouldShowOldBooks" in library_view
     assert "BooksLocation.shouldShowProblem" in library_view
-    assert 'root.run("books-location-ack", [], "books-location-ack-silent")' in service
+    assert (
+        'root.run("books-location-ack", ["--if-no-old-books"], "books-location-ack-silent")'
+        in service
+    )
     assert 'job.command === "books-location-ack" && outcome.ok' in service
     assert 'root.run("status", [])' in service
     assert "LibraryUi.syncDue(age, syncOnOpenHours)" in service

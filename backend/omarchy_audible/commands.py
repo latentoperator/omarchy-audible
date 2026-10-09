@@ -108,7 +108,10 @@ def _books_location(paths: Paths) -> dict[str, object]:
         value = data.get("books_dir") if isinstance(data, dict) else None
         if isinstance(value, str) and Path(value).is_absolute():
             candidate = Path(value)
-            if not paths.fake_mode or (
+            if value == str(paths.books_dir):
+                previous = candidate
+                recorded = True
+            elif not paths.fake_mode or (
                 candidate.resolve().is_relative_to(paths.data_dir.resolve())
                 and candidate.resolve() != paths.data_dir.resolve()
             ):
@@ -486,13 +489,21 @@ def cmd_books_location_ack(
     args: Sequence[str], *, command: str, fake: bool, paths: Paths
 ) -> int:
     """Record the current effective books folder after the user acknowledges it."""
-    if args:
+    conditional = list(args) == ["--if-no-old-books"]
+    if args and not conditional:
         protocol.error(
-            protocol.ErrorCode.INVALID_ARGS, "books-location-ack takes no arguments"
+            protocol.ErrorCode.INVALID_ARGS,
+            "books-location-ack accepts only --if-no-old-books",
         )
         return protocol.EXIT_USAGE
+    if conditional and _books_location(paths)["old_books"] is not None:
+        protocol.done(acked=False)
+        return protocol.EXIT_OK
     atomic_write_json(paths.books_location_file, {"books_dir": str(paths.books_dir)})
-    protocol.done()
+    if conditional:
+        protocol.done(acked=True)
+    else:
+        protocol.done()
     return protocol.EXIT_OK
 
 

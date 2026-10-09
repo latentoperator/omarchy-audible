@@ -48,6 +48,7 @@ Item {
   property string showTitleInBar: Settings.DEFAULTS.showTitleInBar
   property string booksDirSetting: Settings.DEFAULTS.booksDir
   property bool settingsReceived: false
+  property var booksAckState: ({ "pendingDir": "", "failedDir": "" })
   // No backend command runs until the flag has been read: a command that
   // raced ahead of it would go out without OMARCHY_AUDIBLE_FAKE.
   property bool flagKnown: false
@@ -618,8 +619,7 @@ Item {
   }
 
   function downloadActive() {
-    if (runner.activeJob && runner.activeJob.command === "get") return true
-    return runner.pendingJobs.some(function(job) { return job.command === "get" })
+    return BooksLocation.hasActiveGet(runner.activeJob, runner.pendingJobs)
   }
 
   function reloadSync() {
@@ -852,12 +852,17 @@ Item {
     }
 
     onEvent: function(record, job) {
+      var silentAckFailure = ""
       if (record.type === "status") {
         root.status = record
         root.statusAtMs = Date.now()
         root.refreshLocal()
-        if (BooksLocation.shouldAck(record, root.downloadActive(), root.settingsReceived))
-          root.run("books-location-ack", [], "books-location-ack-silent")
+        var ackStep = BooksLocation.ackStep(root.booksAckState, record,
+          root.downloadActive(), root.settingsReceived)
+        root.booksAckState = ackStep.state
+        if (ackStep.log) silentAckFailure = String(record.books_dir || "")
+        if (ackStep.ack)
+          root.run("books-location-ack", ["--if-no-old-books"], "books-location-ack-silent")
       } else if (record.type === "local") {
         library.localBooks = record.books
       } else if (record.type === "play_info") {
@@ -871,6 +876,8 @@ Item {
       catchupFlow.handleEvent(record, job)
       sync.handleEvent(record, job)
       signinFlow.handleEvent(record, job)
+      if (silentAckFailure.length > 0)
+        root.logEvent("books-location-ack-silent", "ack did not record " + silentAckFailure)
       root.logEvent(job.command, Signin.logText(job.command, record.type,
         Signin.isOnboardingCommand(job.command) ? "" : EventLog.summarize(record, 160)))
     }

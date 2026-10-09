@@ -161,7 +161,10 @@ def test_fake_status_never_scans_real_default_without_record(env, monkeypatch, c
     status = json.loads(capsys.readouterr().out.splitlines()[0])
     assert status["type"] == "status"
     assert status["old_books"] is None
-    assert real_default not in scanned
+    assert all(
+        Path(path).resolve().is_relative_to(fake_paths.data_dir.resolve())
+        for path in scanned
+    )
 
 
 def test_fake_status_does_not_report_a_seeded_real_default(env, run_cli, events):
@@ -269,6 +272,38 @@ def test_ack_contract_writes_effective_books_dir(env, run_cli, events, fake_path
     assert events(invalid)[-1]["type"] == "error"
 
 
+def test_conditional_ack_reports_both_outcomes(env, run_cli, events, fake_paths):
+    old = fake_paths.data_dir / "books-old"
+    _seed_book(old)
+    fake_paths.books_location_file.parent.mkdir(parents=True, exist_ok=True)
+    fake_paths.books_location_file.write_text(json.dumps({"books_dir": str(old)}))
+    refused = events(run_cli("books-location-ack", "--if-no-old-books", fake=True))
+    assert refused == [{"type": "done", "acked": False}]
+    assert json.loads(fake_paths.books_location_file.read_text())["books_dir"] == str(
+        old
+    )
+
+    (old / "B00FAKE01" / "book.m4b").unlink()
+    accepted = events(run_cli("books-location-ack", "--if-no-old-books", fake=True))
+    assert accepted == [{"type": "done", "acked": True}]
+    assert json.loads(fake_paths.books_location_file.read_text()) == {
+        "books_dir": str(fake_paths.books_dir)
+    }
+
+
+def test_fake_record_equal_to_symlinked_books_dir_is_recorded(env, tmp_path):
+    fake = Paths.from_env(env, fake=True)
+    outside = tmp_path / "outside-books"
+    outside.mkdir()
+    fake.books_dir.parent.mkdir(parents=True, exist_ok=True)
+    fake.books_dir.symlink_to(outside)
+    fake.books_location_file.parent.mkdir(parents=True, exist_ok=True)
+    fake.books_location_file.write_text(json.dumps({"books_dir": str(fake.books_dir)}))
+    location = commands._books_location(fake)
+    assert location["books_location_recorded"] is True
+    assert location["old_books"] is None
+
+
 @pytest.mark.parametrize(
     "count,expected",
     [
@@ -296,6 +331,17 @@ def test_books_location_notice_text(count, expected):
         )
         == "booksDir was not used: path must be absolute. Books are in ~/Audiobooks."
     )
+    occupied = {"old_books": {"count": 1}, "books_location_recorded": False}
+    assert module.call("shouldShowOldBooks", occupied, False) is False
+    assert module.call("shouldShowOldBooks", occupied, True) is True
+    assert (
+        module.call("shouldShowProblem", {"books_dir_problem": "bad"}, False) is False
+    )
+    assert module.call("shouldShowProblem", {"books_dir_problem": "bad"}, True) is True
+
+
+def test_books_location_should_ack_vectors():
+    module = qjs.load("BooksLocation")
     empty = {"old_books": None, "books_location_recorded": False}
     occupied = {"old_books": {"count": 1}, "books_location_recorded": False}
     recorded = {"old_books": None, "books_location_recorded": True}
@@ -304,12 +350,46 @@ def test_books_location_notice_text(count, expected):
     assert module.call("shouldAck", empty, False, False) is False
     assert module.call("shouldAck", occupied, False, True) is False
     assert module.call("shouldAck", recorded, False, True) is False
-    assert module.call("shouldShowOldBooks", occupied, False) is False
-    assert module.call("shouldShowOldBooks", occupied, True) is True
-    assert (
-        module.call("shouldShowProblem", {"books_dir_problem": "bad"}, False) is False
+
+
+def test_books_location_ack_step_stops_repeat_and_retries_after_folder_change():
+    module = qjs.load("BooksLocation")
+    state = {"pendingDir": "", "failedDir": ""}
+    status = {
+        "books_dir": "/fake/books",
+        "old_books": None,
+        "books_location_recorded": False,
+    }
+    first = module.call("ackStep", state, status, False, True)
+    assert first["ack"] is True
+    assert first["state"]["pendingDir"] == "/fake/books"
+    failed = module.call("ackStep", first["state"], status, False, True)
+    assert failed["ack"] is False and failed["log"] is True
+    repeated = module.call("ackStep", failed["state"], status, False, True)
+    assert repeated["ack"] is False and repeated["log"] is False
+    changed = module.call(
+        "ackStep",
+        repeated["state"],
+        {**status, "books_dir": "/fake/books-alt"},
+        False,
+        True,
     )
-    assert module.call("shouldShowProblem", {"books_dir_problem": "bad"}, True) is True
+    assert changed["ack"] is True
+    back = module.call("ackStep", changed["state"], status, False, True)
+    assert back["ack"] is True
+
+
+@pytest.mark.parametrize(
+    "active,pending,expected",
+    [
+        (None, [], False),
+        ({"command": "get"}, [], True),
+        (None, [{"command": "get"}], True),
+        ({"command": "sync"}, [{"command": "remove"}], False),
+    ],
+)
+def test_books_location_has_active_get_vectors(active, pending, expected):
+    assert qjs.load("BooksLocation").call("hasActiveGet", active, pending) is expected
 
 
 def test_fake_books_dir_override_is_confined_to_fake_data(
