@@ -97,6 +97,8 @@ Theming rule: import `qs.Commons` and `qs.Ui` and use `Style`/theme tokens only.
 
 Books are keyed by **ASIN directory**, not by title. That makes removal a single `rm -r` of one directory, avoids filename-encoding problems, and makes "what is local?" a directory scan. The filesystem is the source of truth for "is this book local": a directory holding `book.m4b`, or a locked `book.aaxc`/`book.aax` **plus a readable `key.json`** (B11). A locked file with no key file is not local.
 
+Fake mode's default books directory is `<fake data dir>/books`; it never scans the real `~/Audiobooks/Audible`. Fake mode honors an override only when the resolved target is strictly inside its data directory, and ignores a recorded folder outside that tree. The real mode default remains the unresolved `$HOME/Audiobooks/Audible` path string, so reported and playback paths keep their original spelling even when a symlink is present.
+
 `state.json` (schema v1, written **only** by `StateStore.qml` (§4.8), with adoption decisions in `qml/lib/Store.js` and parsing/serialization in `qml/lib/Library.js`):
 
 ```json
@@ -155,6 +157,8 @@ position-get <asin…>        → {"type":"positions","items":{"<asin>":{"ms":N,
 position-push <asin> <ms> --at <iso-8601> → done | error(code=invalid_args|stale|unsupported|network)
 doctor                      → {"type":"doctor","checks":[{"name":…,"ok":bool,"detail":…}]}
 ```
+
+The first settings object causes Service to re-read `status`; before settings arrive, the UI does not show books-folder notices or silently acknowledge a folder. The silent acknowledgement runs only when `old_books` is null, the current folder is not recorded, and no `get` is active or queued. Service re-runs `status` after each `get` and `remove`, so a download that finishes in the prior folder is counted before an acknowledgement can hide it.
 
 `--fake` (or env `OMARCHY_AUDIBLE_FAKE=1`) runs the same protocol against `fixtures/` with no network and no account. This lets UI work and tests proceed without credentials, and is what CI runs. Fake `get` produces the same layout as real mode — a short sine served as `book.aaxc`, a fake-hex `key.json`, `chapters.txt` and `meta.json` — and simulates progress and failures (`--fake-fail <code>`). `OMARCHY_AUDIBLE_FAKE_CHAPTERS=<n>` (1–500) or `--fake-chapters <n>` on a fake `get` gives the fake book `n` evenly spaced chapters, for UI checks on 100+ chapter books; real mode ignores it.
 

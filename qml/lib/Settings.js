@@ -49,6 +49,13 @@ function applyStep(state, moduleName, raw) {
   };
 }
 
+function settingStep(previousValue, nextValue, received) {
+  return {
+    "value": nextValue,
+    "rerunStatus": received !== true || previousValue !== nextValue
+  };
+}
+
 function shouldApplySpeed(settingsReceived, storeLoaded) {
   return settingsReceived === true && storeLoaded === true;
 }

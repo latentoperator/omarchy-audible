@@ -62,13 +62,40 @@ def books_dir_problem(path: Path, paths: Paths, home: Path) -> str | None:
             target = root.resolve()
             if resolved == target or target.is_relative_to(resolved):
                 return "path cannot contain plugin data or runtime files"
-        for root in (paths.config_dir, paths.runtime_dir, home / ".audible"):
+        for root in (
+            paths.config_dir,
+            paths.runtime_dir,
+            paths.venv_dir,
+            home / ".audible",
+        ):
             if resolved == root.resolve() or resolved.is_relative_to(root.resolve()):
-                return (
-                    "path cannot be inside plugin configuration, runtime, or ~/.audible"
-                )
+                return "path cannot be inside plugin configuration, runtime, venv, or ~/.audible"
+        system_roots = tuple(
+            Path(value)
+            for value in (
+                "/proc",
+                "/sys",
+                "/dev",
+                "/boot",
+                "/etc",
+                "/usr",
+                "/bin",
+                "/sbin",
+                "/lib",
+                "/lib64",
+            )
+        )
+        if any(
+            resolved == root or resolved.is_relative_to(root) for root in system_roots
+        ):
+            return "path cannot be inside a system directory"
         if resolved.exists() and not resolved.is_dir():
             return "path exists and is not a directory"
+        ancestor = resolved
+        while not ancestor.exists() and ancestor != ancestor.parent:
+            ancestor = ancestor.parent
+        if ancestor.exists() and not ancestor.is_dir():
+            return "nearest existing ancestor is not a directory"
     except (OSError, RuntimeError, ValueError):
         return "path cannot be resolved"
     return None
@@ -111,12 +138,15 @@ def _ensure_private_owned_dir(path: Path) -> None:
 
 @dataclass(frozen=True)
 class Paths:
-    """Resolved on-disk locations for one invocation of the backend."""
+    """Filesystem locations for one invocation of the backend."""
 
     config_dir: Path
     data_dir: Path
     runtime_dir: Path
     books_dir: Path
+    default_books_dir: Path
+    home_dir: Path
+    fake_mode: bool = False
     books_dir_problem: str | None = None
 
     @classmethod
@@ -136,11 +166,20 @@ class Paths:
                 data_dir=data_dir,
                 runtime_dir=_runtime_dir(env, home) / FAKE_DIR_NAME,
                 books_dir=data_dir / "books",
+                default_books_dir=data_dir / "books",
+                home_dir=home,
+                fake_mode=True,
             )
             override = env.get("OMARCHY_AUDIBLE_BOOKS_DIR")
             if not (override or "").strip():
                 return result
             requested = requested_books_dir(override, home)
+            real_default = home / "Audiobooks" / "Audible"
+            try:
+                if requested.resolve() == real_default.resolve():
+                    return result
+            except (OSError, RuntimeError, ValueError):
+                pass
             try:
                 inside = (
                     requested.resolve().is_relative_to(data_dir.resolve())
@@ -159,9 +198,7 @@ class Paths:
             return cls(
                 **{
                     **result.__dict__,
-                    "books_dir": requested.resolve()
-                    if problem is None
-                    else result.books_dir,
+                    "books_dir": requested if problem is None else result.books_dir,
                     "books_dir_problem": problem,
                 }
             )
@@ -171,15 +208,15 @@ class Paths:
             data_dir=data_root / PLUGIN_DIR_NAME,
             runtime_dir=_runtime_dir(env, home) / PLUGIN_DIR_NAME,
             books_dir=home / "Audiobooks" / "Audible",
+            default_books_dir=home / "Audiobooks" / "Audible",
+            home_dir=home,
         )
         requested = requested_books_dir(books, home)
         problem = books_dir_problem(requested, result, home)
         return cls(
             **{
                 **result.__dict__,
-                "books_dir": requested.resolve()
-                if problem is None
-                else result.books_dir,
+                "books_dir": requested if problem is None else result.default_books_dir,
                 "books_dir_problem": problem,
             }
         )

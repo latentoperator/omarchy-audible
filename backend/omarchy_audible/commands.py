@@ -101,16 +101,19 @@ def _status_dirs(paths: Paths) -> dict[str, str]:
 
 def _books_location(paths: Paths) -> dict[str, object]:
     """Describe books left in the previously acknowledged folder."""
-    home = Path(os.environ.get("HOME") or Path.home())
-    default = home / "Audiobooks" / "Audible"
     recorded = False
-    previous = default
+    previous = paths.default_books_dir
     try:
         data = json.loads(paths.books_location_file.read_text(encoding="utf-8"))
         value = data.get("books_dir") if isinstance(data, dict) else None
         if isinstance(value, str) and Path(value).is_absolute():
-            previous = Path(value)
-            recorded = previous.resolve() == paths.books_dir.resolve()
+            candidate = Path(value)
+            if not paths.fake_mode or (
+                candidate.resolve().is_relative_to(paths.data_dir.resolve())
+                and candidate.resolve() != paths.data_dir.resolve()
+            ):
+                previous = candidate
+                recorded = candidate.resolve() == paths.books_dir.resolve()
     except (OSError, ValueError, TypeError):
         pass
     old_books = None

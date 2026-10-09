@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 import qjs
+from omarchy_audible import commands
 from omarchy_audible.paths import Paths, books_dir_problem, requested_books_dir
 
 
@@ -40,7 +41,14 @@ def test_requested_books_dir_parses_only_supported_tilde_forms(
 def test_books_dir_path_rules_and_symlinks(tmp_path):
     home = tmp_path / "home"
     config, data, runtime = (tmp_path / name for name in ("config", "data", "runtime"))
-    paths = Paths(config, data, runtime, home / "Audiobooks" / "Audible")
+    paths = Paths(
+        config,
+        data,
+        runtime,
+        home / "Audiobooks" / "Audible",
+        home / "Audiobooks" / "Audible",
+        home,
+    )
     safe = tmp_path / "safe"
     safe.mkdir()
     assert books_dir_problem(safe, paths, home) is None
@@ -64,7 +72,9 @@ def test_books_dir_path_rules_and_symlinks(tmp_path):
         books_dir_problem(data, paths, home)
         == "path cannot contain plugin data or runtime files"
     )
-    assert books_dir_problem(paths.venv_dir / "nested", paths, home) is None
+    assert books_dir_problem(paths.venv_dir / "nested", paths, home).startswith(
+        "path cannot be inside"
+    )
     assert (
         books_dir_problem(paths.venv_dir, paths, home)
         == "path cannot contain plugin data or runtime files"
@@ -78,12 +88,34 @@ def test_books_dir_path_rules_and_symlinks(tmp_path):
     assert books_dir_problem(home / ".audible", paths, home).startswith(
         "path cannot be inside"
     )
+    for system_dir in (
+        "/proc",
+        "/sys",
+        "/dev",
+        "/boot",
+        "/etc",
+        "/usr",
+        "/bin",
+        "/sbin",
+        "/lib",
+        "/lib64",
+    ):
+        assert books_dir_problem(Path(system_dir), paths, home).startswith(
+            "path cannot be inside a system directory"
+        )
+        assert books_dir_problem(Path(system_dir) / "books", paths, home).startswith(
+            "path cannot be inside a system directory"
+        )
     assert books_dir_problem(home / "not-yet-created", paths, home) is None
     file_path = tmp_path / "a-file"
     file_path.write_text("x", encoding="utf-8")
     assert (
         books_dir_problem(file_path, paths, home)
         == "path exists and is not a directory"
+    )
+    assert (
+        books_dir_problem(file_path / "books", paths, home)
+        == "nearest existing ancestor is not a directory"
     )
     good_link = tmp_path / "good-link"
     good_link.symlink_to(safe)
@@ -103,13 +135,76 @@ def test_paths_from_env_expands_home_and_falls_back_on_unsafe_values(env):
     home = Path(env["HOME"])
     env["OMARCHY_AUDIBLE_BOOKS_DIR"] = "  ~/Books  "
     selected = Paths.from_env(env)
-    assert selected.books_dir == (home / "Books").resolve()
+    assert selected.books_dir == home / "Books"
     assert selected.books_dir_problem is None
 
     env["OMARCHY_AUDIBLE_BOOKS_DIR"] = "/"
     rejected = Paths.from_env(env)
     assert rejected.books_dir == (home / "Audiobooks" / "Audible")
     assert rejected.books_dir_problem == "path cannot be /"
+
+
+def test_status_books_dir_without_override_matches_main_default(env, run_cli, events):
+    env.pop("OMARCHY_AUDIBLE_BOOKS_DIR")
+    result = run_cli("status", extra_env={"OMARCHY_AUDIBLE_BOOKS_DIR": ""})
+    status = next(event for event in events(result) if event["type"] == "status")
+    assert status["books_dir"] == str(Path(env["HOME"]) / "Audiobooks" / "Audible")
+
+
+def test_fake_status_never_scans_real_default_without_record(env, monkeypatch, capsys):
+    real_default = Path(env["HOME"]) / "Audiobooks" / "Audible"
+    _seed_book(real_default)
+    fake_paths = Paths.from_env(env, fake=True)
+    scanned = []
+    monkeypatch.setattr(commands, "scan_local", lambda path: scanned.append(path) or [])
+    assert commands.cmd_status([], command="status", fake=True, paths=fake_paths) == 0
+    status = json.loads(capsys.readouterr().out.splitlines()[0])
+    assert status["type"] == "status"
+    assert status["old_books"] is None
+    assert real_default not in scanned
+
+
+def test_fake_status_does_not_report_a_seeded_real_default(env, run_cli, events):
+    real_default = Path(env["HOME"]) / "Audiobooks" / "Audible"
+    _seed_book(real_default)
+    status = next(
+        event
+        for event in events(
+            run_cli("status", fake=True, extra_env={"OMARCHY_AUDIBLE_BOOKS_DIR": ""})
+        )
+        if event["type"] == "status"
+    )
+    assert status["old_books"] is None
+
+
+def test_fake_default_override_is_treated_as_unset(env, run_cli, events):
+    status = next(
+        event
+        for event in events(
+            run_cli(
+                "status",
+                fake=True,
+                extra_env={"OMARCHY_AUDIBLE_BOOKS_DIR": "~/Audiobooks/Audible"},
+            )
+        )
+        if event["type"] == "status"
+    )
+    fake = Paths.from_env(env, fake=True)
+    assert status["books_dir"] == str(fake.data_dir / "books")
+    assert status["books_dir_problem"] is None
+
+
+def test_fake_status_ignores_record_outside_fake_data(
+    env, fake_paths, run_cli, events, tmp_path
+):
+    fake_paths.books_location_file.write_text(json.dumps({"books_dir": str(tmp_path)}))
+    status = next(
+        event
+        for event in events(run_cli("status", fake=True))
+        if event["type"] == "status"
+    )
+    assert status["old_books"] is None
+    assert status["books_location_recorded"] is False
 
 
 def test_status_old_books_record_cases(env, paths, run_cli, events, tmp_path):
@@ -187,20 +282,20 @@ def test_books_location_notice_text(count, expected):
         )
         == "booksDir was not used: path must be absolute. Books are in ~/Audiobooks."
     )
+    empty = {"old_books": None, "books_location_recorded": False}
+    occupied = {"old_books": {"count": 1}, "books_location_recorded": False}
+    recorded = {"old_books": None, "books_location_recorded": True}
+    assert module.call("shouldAck", empty, False, True) is True
+    assert module.call("shouldAck", empty, True, True) is False
+    assert module.call("shouldAck", empty, False, False) is False
+    assert module.call("shouldAck", occupied, False, True) is False
+    assert module.call("shouldAck", recorded, False, True) is False
+    assert module.call("shouldShowOldBooks", occupied, False) is False
+    assert module.call("shouldShowOldBooks", occupied, True) is True
     assert (
-        module.call("shouldAck", {"old_books": None, "books_location_recorded": False})
-        is True
+        module.call("shouldShowProblem", {"books_dir_problem": "bad"}, False) is False
     )
-    assert (
-        module.call(
-            "shouldAck", {"old_books": {"count": 1}, "books_location_recorded": False}
-        )
-        is False
-    )
-    assert (
-        module.call("shouldAck", {"old_books": None, "books_location_recorded": True})
-        is False
-    )
+    assert module.call("shouldShowProblem", {"books_dir_problem": "bad"}, True) is True
 
 
 def test_fake_books_dir_override_is_confined_to_fake_data(

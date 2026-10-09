@@ -159,12 +159,24 @@ def test_service_owns_and_applies_widget_settings() -> None:
         "booksDir",
     ):
         assert setting in service
-    assert '"OMARCHY_AUDIBLE_BOOKS_DIR": root.booksDirSetting' in service
+    assert "values.OMARCHY_AUDIBLE_BOOKS_DIR = root.booksDirSetting" in service
+    assert "if (root.booksDirSetting !== Settings.DEFAULTS.booksDir)" in service
     assert (
-        'if (booksDirChanged && (hadSettings || flagKnown)) run("status", [])'
+        "Settings.settingStep(booksDirSetting, step.settings.booksDir, settingsReceived)"
         in service
     )
-    assert "BooksLocation.shouldAck(record)" in service
+    assert 'if (booksStep.rerunStatus && flagKnown) run("status", [])' in service
+    assert (
+        "BooksLocation.shouldAck(record, root.downloadActive(), root.settingsReceived)"
+        in service
+    )
+    assert (
+        'else if (job.command === "get" || job.command === "remove") {\n        root.run("status", [])'
+        in service
+    )
+    library_view = (ROOT / "qml/views/LibraryView.qml").read_text(encoding="utf-8")
+    assert "BooksLocation.shouldShowOldBooks" in library_view
+    assert "BooksLocation.shouldShowProblem" in library_view
     assert 'root.run("books-location-ack", [], "books-location-ack-silent")' in service
     assert 'job.command === "books-location-ack" && outcome.ok' in service
     assert 'root.run("status", [])' in service
@@ -220,6 +232,20 @@ def test_settings_reducer_shell_order_and_foreign_module(settings) -> None:
     later_foreign = settings.call("applyStep", real["state"], "omarchy.clock", {})
     assert later_foreign["accepted"] is False
     assert later_foreign["state"] == real["state"]
+
+
+def test_books_dir_setting_step_vectors(settings) -> None:
+    assert settings.call(
+        "settingStep", "~/Audiobooks/Audible", "~/Audiobooks/Audible", False
+    ) == {"value": "~/Audiobooks/Audible", "rerunStatus": True}
+    assert settings.call("settingStep", "~/Audiobooks/Audible", "/tmp/books", True) == {
+        "value": "/tmp/books",
+        "rerunStatus": True,
+    }
+    assert settings.call("settingStep", "/tmp/books", "/tmp/books", True) == {
+        "value": "/tmp/books",
+        "rerunStatus": False,
+    }
 
 
 def test_settings_reducer_store_first_and_empty_user_edit(settings) -> None:

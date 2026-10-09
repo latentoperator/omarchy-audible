@@ -25,6 +25,16 @@ function problemText(problem, booksDir, home) {
     + displayPath(booksDir, home) + "."
 }
 
-function shouldAck(status) {
-  return !!status && status.old_books === null && status.books_location_recorded === false
+function shouldAck(status, downloadActive, settingsReceived) {
+  return settingsReceived === true && downloadActive !== true && !!status
+    && status.old_books === null && status.books_location_recorded === false
+}
+
+function shouldShowOldBooks(status, settingsReceived) {
+  return settingsReceived === true && !!status && status.old_books !== null
+}
+
+function shouldShowProblem(status, settingsReceived) {
+  return settingsReceived === true && !!status
+    && typeof status.books_dir_problem === "string" && status.books_dir_problem.length > 0
 }

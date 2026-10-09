@@ -199,7 +199,8 @@ ColumnLayout {
 
   RowLayout {
     Layout.fillWidth: true
-    visible: oldBooksText.text.length > 0
+    visible: BooksLocation.shouldShowOldBooks(root.service ? root.service.status : null,
+      root.service ? root.service.settingsReceived : false)
     spacing: Style.spacing.md
 
     Text {
@@ -222,7 +223,8 @@ ColumnLayout {
 
   RowLayout {
     Layout.fillWidth: true
-    visible: problemText.text.length > 0
+    visible: BooksLocation.shouldShowProblem(root.service ? root.service.status : null,
+      root.service ? root.service.settingsReceived : false)
     spacing: Style.spacing.md
 
     Text {

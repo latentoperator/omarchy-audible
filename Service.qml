@@ -55,8 +55,7 @@ Item {
   function applySettings(raw, moduleName) {
     var step = Settings.applyStep({ "settingsReceived": settingsReceived }, moduleName, raw)
     if (!step.accepted) return
-    var hadSettings = settingsReceived
-    var booksDirChanged = booksDirSetting !== step.settings.booksDir
+    var booksStep = Settings.settingStep(booksDirSetting, step.settings.booksDir, settingsReceived)
     settingsReceived = step.state.settingsReceived
     var next = step.settings
     skipSeconds = next.skipSeconds
@@ -68,8 +67,8 @@ Item {
       library.sortKey = Settings.sortKey(defaultSort)
     }
     defaultSpeed = next.defaultSpeed
-    booksDirSetting = next.booksDir
-    if (booksDirChanged && (hadSettings || flagKnown)) run("status", [])
+    booksDirSetting = booksStep.value
+    if (booksStep.rerunStatus && flagKnown) run("status", [])
     if (store.loaded) applyDefaultSpeedSetting()
   }
 
@@ -618,6 +617,11 @@ Item {
     run("local", [])
   }
 
+  function downloadActive() {
+    if (runner.activeJob && runner.activeJob.command === "get") return true
+    return runner.pendingJobs.some(function(job) { return job.command === "get" })
+  }
+
   function reloadSync() {
     catalogFile.reload()
     remoteFile.reload()
@@ -840,16 +844,20 @@ Item {
     id: runner
     gate: removals.jobAllowed
     launcher: root.pluginDir + "/bin/omarchy-audible"
-    environment: root.fake
-      ? ({ "OMARCHY_AUDIBLE_FAKE": "1", "OMARCHY_AUDIBLE_BOOKS_DIR": root.booksDirSetting })
-      : ({ "OMARCHY_AUDIBLE_BOOKS_DIR": root.booksDirSetting })
+    environment: {
+      var values = root.fake ? { "OMARCHY_AUDIBLE_FAKE": "1" } : {}
+      if (root.booksDirSetting !== Settings.DEFAULTS.booksDir)
+        values.OMARCHY_AUDIBLE_BOOKS_DIR = root.booksDirSetting
+      return values
+    }
 
     onEvent: function(record, job) {
       if (record.type === "status") {
         root.status = record
         root.statusAtMs = Date.now()
         root.refreshLocal()
-        if (BooksLocation.shouldAck(record)) root.run("books-location-ack", [], "books-location-ack-silent")
+        if (BooksLocation.shouldAck(record, root.downloadActive(), root.settingsReceived))
+          root.run("books-location-ack", [], "books-location-ack-silent")
       } else if (record.type === "local") {
         library.localBooks = record.books
       } else if (record.type === "play_info") {
@@ -889,7 +897,7 @@ Item {
       } else if (job.command === "position-get") {
         remoteFile.reload()
       } else if (job.command === "get" || job.command === "remove") {
-        root.refreshLocal()
+        root.run("status", [])
       }
       if (job.command === "books-location-ack" && outcome.ok) root.run("status", [])
     }
