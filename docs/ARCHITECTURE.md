@@ -331,7 +331,7 @@ Keyboard: search field focused on open; ↑/↓ move; Enter play; Esc close; Spa
 
 Shell IPC target `latentoperator.audible`, registered by the one `IpcHandler`, in `qml/ServiceIpc.qml`, which `Service.qml` declares once as its child (P9; a handler in the per-monitor widget would be ignored as a duplicate) ✅ S6:
 `toggle`, `playPause`, `skip <seconds>`, `nextChapter`, `prevChapter`, `openLibrary`, `stop`. Arguments and return values are strings. `stop` returns `error: nothing loaded` only if no book is loaded or wanted and no load, resume, or play-info request is pending; otherwise it uses `Service.quitPlayer` to clear pending playback, the play error and persist player settings. `PlayerMachine.step` sets `wanted` on play, clears it on quit, when retries give up and when the relaunch's scope wait gives up ("the previous mpv did not exit"), and publishes it through `PlayerController.publish()`.
-Call syntax ✅: `omarchy-shell latentoperator.audible toggle`. Example Hyprland binding: `bind = SUPER, A, exec, omarchy-shell latentoperator.audible toggle`.
+Call syntax ✅: `omarchy-shell latentoperator.audible toggle`. Example Hyprland binding (Omarchy 4, `~/.config/hypr/bindings.lua`): `o.bind("SUPER + ALT + A", "Audible", "omarchy-shell latentoperator.audible toggle")`.
 
 Which methods work in real mode (H1 F27) is listed in `qml/lib/Ipc.js`, and a test checks `qml/ServiceIpc.qml` against it:
 - **Public**, for keybindings and users: the seven above.
