@@ -155,6 +155,50 @@ def test_play_while_idle_launches_then_connects_and_sends_the_load(harness):
     assert harness.warnings == []
 
 
+def test_external_mpris_unload_emits_stop_signal_without_relaunch(harness):
+    run(harness, PLAYING)
+    run(
+        harness,
+        [
+            (
+                "line",
+                {"event": "property-change", "name": "path", "data": BOOK},
+                {"path": BOOK, "loaded": True},
+            ),
+            (
+                "line",
+                {"event": "file-loaded"},
+                {"loadArrived": True, "writes": [CLEAR_KEY]},
+            ),
+            (
+                "externalStop",
+                None,
+                {
+                    "externalUnloads": 1,
+                    "path": "",
+                    "loaded": False,
+                    "wanted": False,
+                    "quitting": True,
+                    "writes": [["quit"]],
+                },
+            ),
+        ],
+    )
+    assert harness.last["wanted"] is False
+    assert harness.last["connected"] is True
+    assert harness.last["detached"] == []
+    assert harness.warnings == []
+
+
+def test_launch_passes_detected_mpris_script(harness):
+    script = "/usr/lib/mpv-mpris/mpris.so"
+    mpv = MPV + ["--script=" + script]
+    launch = LAUNCH[: -len(MPV)] + mpv
+    played = dict(PLAYED, detached=[launch])
+    run(harness, READY + [("mprisScript", script, {}), ("play", PLAY, played)])
+    assert "audible_key" not in " ".join(launch)
+
+
 def test_play_before_the_socket_path_is_refused(harness):
     run(harness, [("play", PLAY, {"result": False, "lastError": "player not ready"})])
     assert harness.warnings == []

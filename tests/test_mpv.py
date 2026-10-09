@@ -143,6 +143,32 @@ def test_commands(mpv):
     assert mpv.call("volumeCommand", 500) == ["set_property", "volume", 130]
 
 
+def test_launch_args_keep_existing_argv_and_append_optional_mpris(mpv):
+    base = [
+        "mpv",
+        "--no-config",
+        "--no-video",
+        "--idle=yes",
+        "--keep-open=yes",
+        "--no-terminal",
+        "--audio-display=no",
+        "--force-window=no",
+        "--volume=15",
+        "--speed=1.25",
+        "--input-ipc-server=/run/test/mpv.sock",
+    ]
+    options = {"volume": 15, "speed": 1.25, "socketPath": "/run/test/mpv.sock"}
+    assert mpv.call("launchArgs", options) == base
+    assert mpv.call("launchArgs", dict(options, mprisScript="")) == base
+    with_script = mpv.call(
+        "launchArgs", dict(options, mprisScript="/usr/lib/mpv-mpris/mpris.so")
+    )
+    assert with_script == base + ["--script=/usr/lib/mpv-mpris/mpris.so"]
+    assert all(
+        "audible_key" not in arg and "audible_iv" not in arg for arg in with_script
+    )
+
+
 # ---- B11: the locked-file load path ----
 
 
@@ -309,7 +335,7 @@ def test_load_options_locked_book(mpv):
     options = mpv.call(
         "loadOptions", {"lavf": "k=1", "chaptersFile": "/b/chapters.txt", "extra": "x"}
     )
-    assert options == {"lavf": "k=1", "chaptersFile": "/b/chapters.txt"}
+    assert options == {"lavf": "k=1", "chaptersFile": "/b/chapters.txt", "title": ""}
     assert mpv.call("loadCommand", "/b/book.aaxc", 5, options) == [
         "loadfile",
         "/b/book.aaxc",
@@ -323,7 +349,37 @@ def test_load_options_chapters_only(mpv):
     assert mpv.call("loadOptions", {"lavf": "", "chaptersFile": "/b/chapters.txt"}) == {
         "lavf": "",
         "chaptersFile": "/b/chapters.txt",
+        "title": "",
     }
+
+
+def test_load_options_force_catalog_title_without_exposing_key_in_argv(mpv):
+    options = mpv.call(
+        "loadOptions",
+        {
+            "lavf": "audible_key=00112233,audible_iv=44556677",
+            "chaptersFile": "/b/chapters.txt",
+            "title": "Invented Winter Tales",
+        },
+    )
+    command = mpv.call("loadCommand", "/b/book.aaxc", 3, options)
+    assert command[-1] == {
+        "start": "3",
+        "demuxer-lavf-o": "audible_key=00112233,audible_iv=44556677",
+        "chapters-file": "/b/chapters.txt",
+        "force-media-title": "Invented Winter Tales",
+    }
+    assert "audible_key" not in json.dumps(
+        mpv.call(
+            "launchArgs",
+            {
+                "volume": 15,
+                "speed": 1,
+                "socketPath": "/run/test/mpv.sock",
+                "mprisScript": "/usr/lib/mpv-mpris/mpris.so",
+            },
+        )
+    )
 
 
 # --- F23: a minutes timer doesn't count paused time -------------------------

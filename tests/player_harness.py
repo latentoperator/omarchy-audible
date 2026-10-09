@@ -121,6 +121,7 @@ import Quickshell.Io
 Item {
   id: top
   property var published: []
+  property int externalUnloads: 0
   property var lastResult: null
   property var loader: null
   property var retryTimer: null
@@ -139,6 +140,7 @@ Item {
   Connections {
     target: player
     function onConnectionChanged() { top.published = top.published.concat([player.connection]) }
+    function onExternalUnload() { top.externalUnloads += 1; player.quit() }
   }
 
   // The controller's children, told apart by what they are before any step.
@@ -181,6 +183,7 @@ Item {
   function act(name, arg) {
     if (name === "none") return null
     if (name === "socketPath") player.socketPath = arg
+    else if (name === "mprisScript") player.mprisScript = arg
     else if (name === "play") return player.play(arg.path, arg.start, { "lavf": arg.key, "chaptersFile": "" })
     else if (name === "quit") player.quit()
     else if (name === "attach") player.attach()
@@ -189,6 +192,11 @@ Item {
     else if (name === "up") return SocketHub.current ? set(SocketHub.current, true) : "no socket"
     else if (name === "down") return SocketHub.current ? set(SocketHub.current, false) : "no socket"
     else if (name === "line") return SocketHub.current ? read(SocketHub.current, arg) : "no socket"
+    else if (name === "externalStop") {
+      if (!SocketHub.current) return "no socket"
+      read(SocketHub.current, { "event": "property-change", "name": "path", "data": null })
+      read(SocketHub.current, { "event": "property-change", "name": "idle-active", "data": true })
+    }
     else if (name === "retry") return fire(retryTimer)
     else if (name === "relaunch") return fire(relaunchTimer)
     else if (name === "probeExit") return exit(probe, arg)
@@ -207,6 +215,7 @@ Item {
     var result = act(request.name, request.arg)
     var snapshot = {
       "result": result === undefined ? null : result,
+      "externalUnloads": top.externalUnloads,
       "connection": player.connection, "lastError": player.lastError,
       "connected": player.connected, "wanted": player.wanted,
       "attaching": player.attaching, "launching": player.launching,

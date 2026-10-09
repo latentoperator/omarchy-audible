@@ -2,6 +2,32 @@
 
 Hand-run journeys from `docs/SCOPE.md` §3, one line per run. Chris does all the clicking; the driving CLI checks state over IPC and writes the line. Real mode unless a line says otherwise.
 
+## R3 — MPRIS (optional), fake mode
+
+Run on HMSP-OMARCHYBEE in fake mode. The live folder was switched to the R3 head once and restored to `main` after testing. Do not use media keys or `omarchy-shell media` here; those target whichever MPRIS player is active.
+
+| # | Check | Result |
+|---|---|---|
+| 1 | `status` reports `/usr/lib/mpv-mpris/mpris.so`; `doctor` marks it optional and `ok: true`. | Pending |
+| 2 | New fake mpv argv includes `--script=/usr/lib/mpv-mpris/mpris.so`; the secret key is absent from argv. Its own MPRIS name appears; real mpv has no MPRIS name. | Pending |
+| 3 | Fake instance `Metadata` reports the catalog title and has no key material; `Identity` and `PlaybackStatus` are readable. | Pending |
+| 4 | D-Bus PlayPause pauses and saves/pushes; a second call resumes. | Pending |
+| 5 | D-Bus Next/Previous leave the book loaded and unchanged. | Pending |
+| 6 | D-Bus Stop saves/pushes once, returns the panel to Library, does not relaunch, and subsequent `stop` IPC says nothing loaded; replay resumes at the saved spot. | Pending |
+| 7 | Shell restart while the fake book plays keeps the same mpv PID and MPRIS name and reattaches. | Pending |
+| 8 | Read-only `qs ipc show` confirms the stock media target; §3 smoke journey and post-restart plugin QML warning check. | Pending |
+
+**Hand check for Chris (real mode, pending):**
+
+| # | Check | Result |
+|---|---|---|
+| 1 | Start a book from the drawer in a new mpv; play/pause keys on the keyboard control it. | Pending |
+| 2 | Stock media widget shows the book title; its play/pause and seek work. | Pending |
+| 3 | ■ in Mini still works. | Pending |
+| 4 | Pause from the media widget, then ⏯ in Mini. | Pending |
+
+Found, not fixed: a paused seek made through MPRIS is not marked as a user move. If Stop arrives before a play/resume position report, the seek may not be saved. MPRIS resume also skips the UI catch-up read after a long pause; the existing push staleness check protects the account.
+
 ## R1 (desktop) — 2026-10-09, HMSP-OMARCHYBEE, live folder on `main` (R1a at `a50f32d`, R1b at `cc0cfa2`)
 
 Real mode (no dev-fake flag), connected, 91 books, Dungeon Crawler Carl (`B08V8B2CGV`) loaded and paused in mpv 99684 throughout (16 104 035 ms before and after). Chris edited our entry in `~/.config/omarchy/shell.json` by hand and looked; Dante read IPC, the books-location record and the journal over SSH. No shell restart between edits. The R1b live folder was pulled once and the shell restarted once after #101 merged (new shell 319300: zero non-DEBUG lines from our files, no crash).

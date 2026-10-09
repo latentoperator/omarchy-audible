@@ -14,6 +14,7 @@ DOCTOR_CHECKS = (
     "systemd-run",
     "venv",
     "auth",
+    "mpris_script",
 )
 
 
@@ -25,6 +26,7 @@ def test_status_fake_validates_against_schema(run_cli, validate_stream):
     assert status["ready"] is True
     assert status["authenticated"] is True
     assert status["missing"] == []
+    assert status["mpris_script"] is None or status["mpris_script"].startswith("/")
 
 
 def test_doctor_fake_validates_against_schema(run_cli, validate_stream):
@@ -37,6 +39,11 @@ def test_doctor_fake_validates_against_schema(run_cli, validate_stream):
         assert expected in names
     for check in doctor["checks"]:
         assert isinstance(check["ok"], bool)
+    mpris = next(check for check in doctor["checks"] if check["name"] == "mpris_script")
+    assert mpris["ok"] is True
+    assert mpris["detail"] == "not installed (optional)" or mpris["detail"].startswith(
+        "/"
+    )
 
 
 def test_status_real_mode_works_without_venv(run_cli, validate_stream, paths):
