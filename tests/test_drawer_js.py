@@ -358,6 +358,14 @@ def test_banner_urgent(drawer, banner, urgent):
     assert drawer.call("bannerUrgent", banner) is urgent
 
 
+def test_banner_urgent_matches_the_library_ui_banner_names(drawer):
+    ui = qjs.load("LibraryUi")
+    assert drawer.call("bannerUrgent", ui.evaluate("BANNER_RECONNECT")) is True
+    assert drawer.call("bannerUrgent", ui.evaluate("BANNER_CONNECTION")) is True
+    assert drawer.call("bannerUrgent", ui.evaluate("BANNER_OFFLINE")) is False
+    assert drawer.call("bannerUrgent", ui.evaluate("BANNER_SYNCING")) is False
+
+
 def test_library_view_colours_problem_banners_through_banner_urgent():
     view = (qjs.REPO_ROOT / "qml/views/LibraryView.qml").read_text(encoding="utf-8")
     assert (

@@ -285,7 +285,8 @@ _p.indexByAsin = function (value) {
 };
 
 // The `local` scan is the backend's `local` event: a list of
-// `{asin, size, downloaded_at}`. A map keyed by ASIN is tolerated too.
+// `{asin, size, downloaded_at, title, duration_ms, authors}` (ARCHITECTURE
+// §4.2). A map keyed by ASIN is tolerated too.
 _p.indexLocal = function (value) {
   var out = {};
   var entries = Array.isArray(value) ? value : null;
