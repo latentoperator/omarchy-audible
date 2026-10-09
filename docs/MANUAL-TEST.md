@@ -2,6 +2,16 @@
 
 Hand-run journeys from `docs/SCOPE.md` §3, one line per run. Chris does all the clicking; the driving CLI checks state over IPC and writes the line. Real mode unless a line says otherwise.
 
+## R8 (desktop) — 2026-10-08, HMSP-OMARCHYBEE, live folder on `main` at `88c51a5`
+
+PR #98 merged; the live folder was pulled once and the shell restarted once (new shell 577997: zero warnings from our files; no crash). Start state: real mode (no dev-fake flag), one `quickshell`, connected, 91 books, Dungeon Crawler Carl (`B08V8B2CGV`) loaded and paused in mpv 262406. Chris did the clicking; Dante read IPC, `state.json` and the account over SSH. Times are local (UTC−5). These rows also close the two P9 §5 "Stop, then play again" steps (P9 rows 1 and 4).
+
+| # | Check | Steps | Result | Date |
+|---|---|---|---|---|
+| 1 | F38 move while paused, then Stop | Open Mini, ⏯, a few seconds, ⏯ (pause), ⏩15 twice while paused, ■ | **Pass.** mpv ended (no `mpv` process), `playerStatus` unloaded/idle, panel on Library, bar glyph the book. `state.json` held 13 632 711 ms (3:47:12), 30 s past the pause; `pushState` `last: done`, queue empty; a real `position-get` read back 13 632 711 (`own: true`). Pushes: one on pause, one on Stop with the moved spot. Note: the first ⏯ ran catch-up (`catchup jump 21452895 -> 13595201`): the account held a newer position (3:46:35, 02:35 UTC) than BEE's paused 5:57:32, so the book resumed from the account's. That is catch-up working as designed (P9 §5 row 2); the source of that account position was outside this check. | 2026-10-08 |
+| 2 | Play again after Stop | Play Carl from its Library row | **Pass** (Chris): resumed at the stopped spot. | 2026-10-08 |
+| 3 | Stop, then play again (player machine) | A few seconds of play, ■, play Carl again from its row | **Pass** (Chris): a new mpv (598283) started and resumed where it stopped; `state.json` 13 651 399 ms, push done, queue empty; zero warnings from our files. | 2026-10-08 |
+
 ## P9 (desktop) — 2026-10-08, HMSP-OMARCHYBEE (two 1920×1080 monitors, DP-4 and DP-5), live folder on `main` at `3899312`
 
 Brief: [briefs/P9-desktop.md](briefs/P9-desktop.md) §5, after #86–#96 merged. Start state: real mode (no dev-fake flag), one `quickshell`, one bar per monitor, connected, 91 books. BEE had rebooted at 18:47, so no mpv was running and nothing was loaded; the live folder was pulled to `3899312` and the shell restarted once. Chris did the clicking and listening; Dante drove IPC, `state.json` and the journal over SSH. Times are local (UTC−5). Book: Dungeon Crawler Carl (`B08V8B2CGV`).
