@@ -108,7 +108,8 @@ Rectangle {
         }
 
         Text {
-          text: Format.duration(Drawer.runtimeMs(root.row))
+          // Unknown runtime (0) shows nothing rather than "0m".
+          text: Drawer.runtimeMs(root.row) > 0 ? Format.duration(Drawer.runtimeMs(root.row)) : ""
           textFormat: Text.PlainText
           color: Color.muted
           font.family: Style.font.family

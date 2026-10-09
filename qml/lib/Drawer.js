@@ -248,6 +248,12 @@ function bannerText(banner, age) {
   return "";
 }
 
+// Banners that report a problem use the theme's urgent colour; the offline
+// and syncing notes stay muted (R2 cosmetic: the connection banner was faint).
+function bannerUrgent(banner) {
+  return banner === "reconnect" || banner === "connection";
+}
+
 // A row's author names as a plain array for `Format.names`. A row that
 // reaches a ListView delegate carries its lists as Qt sequences, which are
 // not `Array.isArray`, so anything with a length is copied.

@@ -262,6 +262,54 @@ def test_local_book_missing_from_catalog_remains_playable_and_searchable(
     assert asins(library.call("searchRows", rows, asin)) == [asin]
 
 
+def test_local_book_missing_from_catalog_takes_its_runtime_from_the_download(
+    library, catalog
+):
+    asin = "B0ORPHAN03"
+    rows = rows_by_asin(
+        build(
+            library,
+            catalog,
+            state={
+                "books": {asin: {"ms": 1800000, "updated_at": "2026-01-01T00:00:00Z"}}
+            },
+            local=[
+                {
+                    "asin": asin,
+                    "size": 1,
+                    "downloaded_at": None,
+                    "title": "Lost Harbor",
+                    "duration_ms": 7200000,
+                }
+            ],
+        )
+    )
+    assert rows[asin]["runtimeMin"] == 120
+    assert rows[asin]["percent"] == 25
+
+
+@pytest.mark.parametrize("duration", [None, 0, -1, "7200000"])
+def test_local_book_missing_from_catalog_has_no_runtime_without_a_duration(
+    library, catalog, duration
+):
+    asin = "B0ORPHAN04"
+    rows = rows_by_asin(
+        build(
+            library,
+            catalog,
+            local=[
+                {
+                    "asin": asin,
+                    "size": 1,
+                    "downloaded_at": None,
+                    "duration_ms": duration,
+                }
+            ],
+        )
+    )
+    assert rows[asin]["runtimeMin"] is None
+
+
 def test_local_book_missing_catalog_uses_asin_and_no_progress_if_unknown(
     library, catalog
 ):
