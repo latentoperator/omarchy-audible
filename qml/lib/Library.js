@@ -297,7 +297,9 @@ _p.indexLocal = function (value) {
       }
       out[entry.asin] = {
         "size": _p.numberOrNull(entry.size),
-        "downloadedAt": _p.stringOrNull(entry.downloaded_at)
+        "downloadedAt": _p.stringOrNull(entry.downloaded_at),
+        "title": _p.stringOrNull(entry.title),
+        "authors": Array.isArray(entry.authors) ? entry.authors.slice() : []
       };
     }
     return out;
@@ -309,10 +311,12 @@ _p.indexLocal = function (value) {
       if (_p.isObject(mapped)) {
         out[asins[index]] = {
           "size": _p.numberOrNull(mapped.size),
-          "downloadedAt": _p.stringOrNull(mapped.downloaded_at)
+          "downloadedAt": _p.stringOrNull(mapped.downloaded_at),
+          "title": _p.stringOrNull(mapped.title),
+          "authors": Array.isArray(mapped.authors) ? mapped.authors.slice() : []
         };
       } else if (mapped === true) {
-        out[asins[index]] = { "size": null, "downloadedAt": null };
+        out[asins[index]] = { "size": null, "downloadedAt": null, "title": null, "authors": [] };
       }
     }
   }
@@ -402,6 +406,7 @@ _p.buildRow = function (book, asin, remoteEntry, stateBook, localEntry, jobEntry
     "multipart": book.multipart === true,
     "state": state,
     "local": localEntry !== null,
+    "inLibrary": book.inLibrary !== false,
     "size": localEntry === null ? null : localEntry.size,
     "downloadedAt": localEntry === null ? null : localEntry.downloadedAt,
     "positionMs": merged.ms,
@@ -460,8 +465,9 @@ _p.firstAuthor = function (row) {
     : "";
 };
 
-_p.searchText = function (row) {
+_p.searchText = function (row, includeAsin) {
   var parts = [];
+  if (includeAsin === true) _p.appendText(parts, row.asin);
   _p.appendText(parts, row.title);
   _p.appendText(parts, row.subtitle);
   _p.appendText(parts, row.authors);
@@ -594,6 +600,20 @@ function buildRows(catalog, remote, state, local, jobs) {
       Object.prototype.hasOwnProperty.call(jobMap, asin) ? jobMap[asin] : null
     ));
   }
+  var catalogAsins = {};
+  for (index = 0; index < rows.length; index++) catalogAsins[rows[index].asin] = true;
+  var localAsins = Object.keys(localMap).sort();
+  for (index = 0; books.length > 0 && index < localAsins.length; index++) {
+    var localAsin = localAsins[index];
+    if (catalogAsins[localAsin]) continue;
+    var localEntry = localMap[localAsin];
+    var orphan = { "asin": localAsin, "title": localEntry.title || localAsin,
+      "authors": localEntry.authors, "inLibrary": false };
+    rows.push(_p.buildRow(orphan, localAsin,
+      Object.prototype.hasOwnProperty.call(remoteMap, localAsin) ? remoteMap[localAsin] : null,
+      Object.prototype.hasOwnProperty.call(stateBooks, localAsin) ? stateBooks[localAsin] : null,
+      localEntry, null));
+  }
   return rows;
 }
 
@@ -636,7 +656,7 @@ function filterRows(rows, filter) {
   }
   if (filter === FILTER_IN_PROGRESS) {
     return items.filter(function (row) {
-      return row.percent > 0 && row.percent < 100 && row.isFinished !== true;
+      return (row.percent > 0 || row.positionMs > 0) && row.percent < 100 && row.isFinished !== true;
     });
   }
   return items.slice();
@@ -650,9 +670,10 @@ function searchRows(rows, text) {
   if (!query) {
     return items.slice();
   }
+  var asinQuery = /^[a-z0-9]{10}$/i.test(query);
   var tokens = query.split(/\s+/);
   return items.filter(function (row) {
-    var haystack = _p.searchText(row);
+    var haystack = _p.searchText(row, asinQuery);
     for (var index = 0; index < tokens.length; index++) {
       if (haystack.indexOf(tokens[index]) === -1) {
         return false;

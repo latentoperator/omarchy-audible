@@ -81,6 +81,13 @@ function syncFailure(code) {
   return { "offline": false, "errorCode": code };
 }
 
+// True for unexpected failures that need the connection-problem diagnostic.
+// Known offline/auth/job outcomes have their own UI and do not run doctor.
+function connectionProblem(code) {
+  if (typeof code !== "string" || code.length === 0) return false;
+  return ["network", "auth_failed", "busy", "cancelled"].indexOf(code) === -1;
+}
+
 // What a key pressed in the search field does (ARCHITECTURE 6): Esc closes,
 // ↑/↓ move, Enter picks, Space plays/pauses only while the field is empty;
 // everything else is typed.
@@ -148,7 +155,7 @@ function removableAsins(rows) {
   var out = [];
   if (!Array.isArray(rows)) return out;
   for (var i = 0; i < rows.length; i++) {
-    if (canRemove(rows[i])) out.push(rows[i].asin);
+    if (canRemove(rows[i]) && rows[i].inLibrary !== false) out.push(rows[i].asin);
   }
   return out;
 }
@@ -218,8 +225,24 @@ function stateText(state) {
 }
 
 // The banner line for a `LibraryUi.listState` banner, or "".
-function bannerText(banner) {
-  if (banner === "offline") return "Offline — showing your saved library";
+function offlineAge(age) {
+  var value = _p.number(age);
+  if (value === null || value < 0) return "";
+  if (value < 60) return "just now";
+  if (value < 3600) return Math.floor(value / 60) + " min";
+  if (value < 86400) return Math.floor(value / 3600) + " h";
+  var days = Math.floor(value / 86400);
+  return days + (days === 1 ? " day" : " days");
+}
+
+function bannerText(banner, age) {
+  if (banner === "connection") return "Audible connection problem";
+  if (banner === "offline") {
+    var label = "Offline — showing your saved library";
+    var elapsed = offlineAge(age);
+    if (elapsed.length === 0) return label;
+    return label + " · Last synced " + elapsed + (elapsed === "just now" ? "" : " ago");
+  }
   if (banner === "reconnect") return "Audible needs you to sign in again";
   if (banner === "syncing") return "Updating your library…";
   return "";

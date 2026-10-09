@@ -14,7 +14,9 @@
         "properties": {
           "asin": { "type": "string", "minLength": 1 },
           "size": { "type": "integer", "minimum": 0 },
-          "downloaded_at": { "type": "string" }
+          "downloaded_at": { "type": "string" },
+          "title": { "type": ["string", "null"] },
+          "authors": { "type": "array", "items": { "type": "string" } }
         },
         "additionalProperties": false
       }

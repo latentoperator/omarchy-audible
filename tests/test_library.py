@@ -217,7 +217,7 @@ def test_unknown_job_states_are_ignored(library: qjs.JsModule, catalog: dict) ->
     assert rows[A2]["state"] == "cloud"
 
 
-def test_local_and_jobs_for_books_outside_the_catalog_are_ignored(
+def test_local_outside_catalog_is_retained_but_unknown_jobs_are_ignored(
     library: qjs.JsModule, catalog: dict
 ) -> None:
     rows = build(
@@ -226,7 +226,93 @@ def test_local_and_jobs_for_books_outside_the_catalog_are_ignored(
         local=[{"asin": "NOTINCAT1", "size": 1, "downloaded_at": None}],
         jobs=[{"asin": "NOTINCAT2", "state": "error"}],
     )
-    assert asins(rows) == ALL_ASINS
+    assert asins(rows) == ALL_ASINS + ["NOTINCAT1"]
+    orphan = rows_by_asin(rows)["NOTINCAT1"]
+    assert orphan["local"] is True and orphan["inLibrary"] is False
+    assert orphan["title"] == "NOTINCAT1"
+
+
+def test_local_book_missing_from_catalog_remains_playable_and_searchable(
+    library, catalog
+):
+    asin = "B0ORPHAN01"
+    rows = build(
+        library,
+        catalog,
+        state={"books": {asin: {"ms": 30000, "updated_at": "2026-01-01T00:00:00Z"}}},
+        local=[
+            {
+                "asin": asin,
+                "size": 42,
+                "downloaded_at": None,
+                "title": "Lost Harbor",
+                "authors": ["Mara Quill"],
+            }
+        ],
+    )
+    row = rows_by_asin(rows)[asin]
+    assert row["title"] == "Lost Harbor"
+    assert row["authors"] == ["Mara Quill"]
+    assert row["local"] is True and row["state"] == "local"
+    assert row["inLibrary"] is False
+    assert row["positionMs"] == 30000
+    assert asins(library.call("filterRows", rows, "local"))[-1] == asin
+    assert asins(library.call("filterRows", rows, "in-progress"))[-1] == asin
+    assert asins(library.call("searchRows", rows, "lost mara")) == [asin]
+    assert asins(library.call("searchRows", rows, asin)) == [asin]
+
+
+def test_local_book_missing_catalog_uses_asin_and_no_progress_if_unknown(
+    library, catalog
+):
+    row = rows_by_asin(
+        build(
+            library,
+            catalog,
+            local=[{"asin": "B0ORPHAN02", "size": 1, "downloaded_at": None}],
+        )
+    )["B0ORPHAN02"]
+    assert row["title"] == "B0ORPHAN02"
+    assert row["authors"] == []
+    assert row["inLibrary"] is False
+    assert row["percent"] == 0
+
+
+@pytest.mark.parametrize("catalog_value", [{}, {"books": "x"}, {"books": []}, None])
+def test_malformed_or_empty_catalog_does_not_mark_local_books_as_orphans(
+    library, catalog_value
+):
+    rows = build(
+        library,
+        catalog_value,
+        local=[{"asin": "B0ORPHAN03", "size": 1, "downloaded_at": None}],
+    )
+    assert rows == []
+
+
+def test_catalog_asin_search_requires_a_complete_asin(library, catalog):
+    rows = build(library, catalog)
+    assert asins(library.call("searchRows", rows, A1.lower())) == [A1]
+    assert asins(library.call("searchRows", rows, "b0")) == []
+
+
+def test_catalog_row_with_position_but_zero_percent_is_in_progress(library, catalog):
+    rows = build(
+        library,
+        [
+            {
+                "asin": A1,
+                "title": "Invented book",
+                "runtime_min": None,
+                "percent_complete": 0,
+            }
+        ],
+        state={"books": {A1: {"ms": 1, "updated_at": "2026-01-01T00:00:00Z"}}},
+    )
+    row = rows_by_asin(rows)[A1]
+    assert row["percent"] == 0
+    assert row["positionMs"] == 1
+    assert A1 in asins(library.call("filterRows", rows, "in-progress"))
 
 
 def test_build_rows_never_throws_on_bad_input(library: qjs.JsModule) -> None:
@@ -251,6 +337,7 @@ def test_build_rows_never_throws_on_bad_input(library: qjs.JsModule) -> None:
             "multipart": False,
             "state": "cloud",
             "local": False,
+            "inLibrary": True,
             "size": None,
             "downloadedAt": None,
             "positionMs": 0,

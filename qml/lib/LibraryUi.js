@@ -74,6 +74,7 @@ var STATE_LIST = "list";
 var BANNER_OFFLINE = "offline";
 var BANNER_RECONNECT = "reconnect";
 var BANNER_SYNCING = "syncing";
+var BANNER_CONNECTION = "connection";
 
 var _p = {};
 
@@ -235,13 +236,12 @@ function resumeChoice(row, durationMs) {
 }
 
 // The Library view's state and banner (FR-L2, FR-A4). Inputs: `catalogLoaded`,
-// `syncing`, `total`, `shown`, `offline`, `errorCode`.
+// `syncing`, `total`, `shown`, `offline`, `connectionProblem`, `errorCode`.
 //
 // With no catalog yet the view is `loading`, or `error` when `errorCode` says
 // the load failed. Once the catalog is loaded the view is `empty` for no books
 // at all, `no-results` for a search/filter that matched none, otherwise `list`.
-// A cached catalog keeps listing even if a later sync failed; an `auth_failed`
-// error is a reconnect banner, and offline still wins over syncing.
+// Banner priority is reconnect > connection > offline > syncing.
 function listState(state) {
   var source = _p.isObject(state) ? state : {};
   var errorCode = _p.stringOrNull(source.errorCode);
@@ -252,6 +252,8 @@ function listState(state) {
   var banner = null;
   if (errorCode === "auth_failed") {
     banner = BANNER_RECONNECT;
+  } else if (source.connectionProblem === true) {
+    banner = BANNER_CONNECTION;
   } else if (source.offline === true) {
     banner = BANNER_OFFLINE;
   } else if (source.syncing === true) {

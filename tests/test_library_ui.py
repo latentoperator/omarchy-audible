@@ -28,6 +28,7 @@ EXPECTED_API = {
     "BADGE_QUEUED",
     "BANNER_OFFLINE",
     "BANNER_RECONNECT",
+    "BANNER_CONNECTION",
     "BANNER_SYNCING",
     "BYTES_PER_HOUR",
     "CHOICE_ASK",
@@ -455,6 +456,42 @@ def test_list_state_loaded_with_a_background_error_still_lists(
     ) == {"state": "list", "banner": None}
 
 
+def test_list_state_internal_sync_error_shows_connection_error_with_cached_catalog(
+    ui: qjs.JsModule,
+) -> None:
+    assert ui.call(
+        "listState",
+        {
+            "catalogLoaded": True,
+            "total": 5,
+            "shown": 5,
+            "errorCode": "internal",
+            "connectionProblem": True,
+        },
+    ) == {"state": "list", "banner": "connection"}
+
+
+def test_list_state_connection_error_without_cached_catalog_is_full_error(ui):
+    assert ui.call(
+        "listState",
+        {"catalogLoaded": False, "errorCode": "internal", "connectionProblem": True},
+    ) == {"state": "error", "banner": "connection"}
+
+
+@pytest.mark.parametrize("code", ["internal", "no_venv", "disk_space", "setup_failed"])
+def test_list_state_loaded_connection_errors_keep_the_list(ui, code):
+    assert ui.call(
+        "listState",
+        {
+            "catalogLoaded": True,
+            "total": 5,
+            "shown": 5,
+            "errorCode": code,
+            "connectionProblem": True,
+        },
+    ) == {"state": "list", "banner": "connection"}
+
+
 def test_list_state_syncing_banner(ui: qjs.JsModule) -> None:
     assert ui.call("listState", {"catalogLoaded": False, "syncing": True}) == {
         "state": "loading",
@@ -466,7 +503,7 @@ def test_list_state_syncing_banner(ui: qjs.JsModule) -> None:
 
 
 def test_list_state_banner_precedence(ui: qjs.JsModule) -> None:
-    # Offline beats syncing; reconnect beats offline.
+    # Reconnect beats connection, which beats offline, which beats syncing.
     assert ui.call(
         "listState", {"catalogLoaded": False, "syncing": True, "offline": True}
     ) == {"state": "loading", "banner": "offline"}
@@ -478,6 +515,29 @@ def test_list_state_banner_precedence(ui: qjs.JsModule) -> None:
         "listState",
         {"catalogLoaded": False, "offline": True, "errorCode": "auth_failed"},
     ) == {"state": "error", "banner": "reconnect"}
+    assert ui.call(
+        "listState",
+        {
+            "catalogLoaded": True,
+            "total": 5,
+            "shown": 5,
+            "offline": True,
+            "syncing": True,
+            "connectionProblem": True,
+        },
+    ) == {"state": "list", "banner": "connection"}
+    assert ui.call(
+        "listState",
+        {
+            "catalogLoaded": True,
+            "total": 5,
+            "shown": 5,
+            "offline": True,
+            "syncing": True,
+            "connectionProblem": True,
+            "errorCode": "auth_failed",
+        },
+    ) == {"state": "list", "banner": "reconnect"}
 
 
 def test_list_state_ignores_bad_counts(ui: qjs.JsModule) -> None:

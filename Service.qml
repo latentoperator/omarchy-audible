@@ -4,6 +4,7 @@ import Quickshell.Io
 import "qml"
 import "qml/lib/Drawer.js" as Drawer
 import "qml/lib/EventLog.js" as EventLog
+import "qml/lib/Diagnostic.js" as Diagnostic
 import "qml/lib/Format.js" as Format
 import "qml/lib/Library.js" as Library
 import "qml/lib/LibraryUi.js" as LibraryUi
@@ -152,12 +153,20 @@ Item {
   property real statusAtMs: 0
   property real lastSyncAtMs: 0
   property string lastSyncCode: ""
+  property string lastSyncMessage: ""
+  property string lastSyncHint: ""
+  property var doctorChecks: []
+  property real catalogAgeSeconds: 0
+  readonly property string diagnosticText: Diagnostic.build(manifest ? manifest.version : "0.0.1",
+    "sync", lastSyncCode, lastSyncMessage, lastSyncHint, doctorChecks)
   readonly property bool syncing: Drawer.syncing(runner.pendingJobs, runner.activeJob)
   readonly property var syncFailure: Drawer.syncFailure(lastSyncCode)
   readonly property var listState: LibraryUi.listState({
     "catalogLoaded": library.catalogLoaded, "syncing": syncing,
     "total": library.allRows.length, "shown": library.count,
-    "offline": syncFailure.offline, "errorCode": authFailed ? "auth_failed" : syncFailure.errorCode
+    "offline": syncFailure.offline,
+    "connectionProblem": Drawer.connectionProblem(authFailed ? "auth_failed" : lastSyncCode),
+    "errorCode": authFailed ? "auth_failed" : syncFailure.errorCode
   })
   // A downloaded book plays when its `get` finishes; a finished book far
   // from its end asks first (`askAsin`); a book picked from the drawer
@@ -262,6 +271,7 @@ Item {
   function disconnect() { return signinFlow.disconnect() }
   function reconnect() { signinFlow.reconnect() }
   function copyText(text) { signinFlow.copyText(text) }
+  function copyDiagnostic() { signinFlow.copyText(diagnosticText) }
   function readClipboard(target) { signinFlow.readClipboard(target) }
 
   // Re-sent from SigninFlow for the onboarding views: clipboard chunks for
@@ -584,8 +594,14 @@ Item {
     confirmAsin = ""
     var now = Date.now()
     if (syncing || Drawer.autoSyncBlocked(lastSyncAttemptAtMs, now)) return
-    var age = Drawer.catalogAgeS(status ? status.catalog_age_s : null, statusAtMs, lastSyncAtMs, now)
+    refreshCatalogAge()
+    var age = catalogAgeSeconds
     if (LibraryUi.syncDue(age, syncOnOpenHours)) startSync("auto")
+  }
+
+  function refreshCatalogAge() {
+    catalogAgeSeconds = Drawer.catalogAgeS(status ? status.catalog_age_s : null,
+      statusAtMs, lastSyncAtMs, Date.now())
   }
 
   function refreshLibrary() {
@@ -866,6 +882,7 @@ Item {
       if (record.type === "status") {
         root.status = record
         root.statusAtMs = Date.now()
+        root.refreshCatalogAge()
         root.refreshLocal()
         var ackStep = BooksLocation.ackStep(root.booksAckState, record,
           root.downloadActive(), root.settingsReceived)
@@ -875,6 +892,8 @@ Item {
           root.run("books-location-ack", ["--if-no-old-books"], "books-location-ack-silent")
       } else if (record.type === "local") {
         library.localBooks = record.books
+      } else if (record.type === "doctor" && job.purpose === "sync-doctor") {
+        root.doctorChecks = record.checks || []
       } else if (record.type === "play_info") {
         root.startPlayInfo(job, record)
       } else if (record.type === "positions" && job.purpose === "resume") {
@@ -909,8 +928,20 @@ Item {
       }
       if (job.command === "sync") {
         root.lastSyncCode = outcome.ok ? "" : String(outcome.code || "internal")
-        if (outcome.ok) root.lastSyncAtMs = Date.now()
+        root.lastSyncMessage = outcome.ok ? "" : String(outcome.message || "")
+        root.lastSyncHint = outcome.ok ? "" : String(outcome.hint || "")
+        if (outcome.ok) {
+          root.lastSyncAtMs = Date.now()
+          root.refreshCatalogAge()
+          root.doctorChecks = []
+        }
+        if (!outcome.ok && Drawer.connectionProblem(root.lastSyncCode)) {
+          root.doctorChecks = []
+          root.run("doctor", [], "sync-doctor")
+        }
         root.reloadSync()
+      } else if (job.command === "doctor" && job.purpose === "sync-doctor") {
+        if (!outcome.ok) root.doctorChecks = []
       } else if (job.command === "position-get") {
         remoteFile.reload()
       } else if (job.command === "get" || job.command === "remove") {

@@ -58,7 +58,7 @@ from typing import Any, BinaryIO
 
 from . import fakestate, fsutil, protocol
 from .chapters import Chapter, build_ffmetadata, parse_chapters
-from .errors import Cancelled, PipelineError
+from .errors import Cancelled, PipelineError, classify_audible_error
 from .library import (
     AUDIO_FILENAMES,
     CHAPTERS_FILENAME,
@@ -532,6 +532,14 @@ def _real_content_metadata(asin: str, paths: Paths) -> dict[str, Any]:
         )
     try:
         auth = audible.Authenticator.from_file(paths.auth_file)
+    except Exception as exc:  # any credential failure is auth_failed, as in sync
+        log(f"opening the Audible client failed: {type(exc).__name__}")
+        raise PipelineError(
+            protocol.ErrorCode.AUTH_FAILED,
+            "the saved Audible login could not be used",
+            hint="sign in again from the drawer",
+        ) from exc
+    try:
         with audible.Client(auth=auth) as client:
             return client.get(
                 f"1.0/content/{asin}/metadata",
@@ -543,10 +551,15 @@ def _real_content_metadata(asin: str, paths: Paths) -> dict[str, Any]:
         # The exception type only: a repr could carry the request URL, and the
         # message could echo credentials back (F4).
         log(f"content metadata request failed: {type(exc).__name__}")
+        code = classify_audible_error(exc)
         raise PipelineError(
-            protocol.ErrorCode.NETWORK,
+            code,
             "could not read the book's metadata",
-            hint="check the network and retry",
+            hint=(
+                "check the network and retry"
+                if code == protocol.ErrorCode.NETWORK
+                else "copy the diagnostic and reconnect if requested"
+            ),
         ) from exc
 
 

@@ -12,7 +12,9 @@ from __future__ import annotations
 import json
 import os
 import stat
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -575,6 +577,56 @@ def test_real_get_never_puts_key_material_in_a_subprocess_argv(paths, monkeypatc
     key_file = final.parent / "key.json"
     assert key_file.is_file()
     assert stat.S_IMODE(key_file.stat().st_mode) == 0o600
+
+
+@pytest.mark.parametrize(
+    "error_name,expected", [("Unauthorized", "auth_failed"), ("BadRequest", "internal")]
+)
+def test_real_get_classifies_metadata_errors_before_creating_partial(
+    paths, monkeypatch, error_name, expected
+):
+    paths.config_dir.mkdir(parents=True, exist_ok=True)
+    paths.auth_file.write_text("stub", encoding="utf-8")
+    error_type = type(error_name, (Exception,), {})
+
+    class Client:
+        def __init__(self, **_kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def get(self, *_args, **_kwargs):
+            raise error_type("stub response")
+
+    audible = SimpleNamespace(
+        Authenticator=SimpleNamespace(from_file=lambda _path: object()), Client=Client
+    )
+    monkeypatch.setitem(sys.modules, "audible", audible)
+    with pytest.raises(PipelineError) as info:
+        dl.run_get("B0REAL0001", paths, fake=False, emit=lambda *a, **k: None)
+    assert info.value.code == expected
+    assert not (paths.books_dir / "B0REAL0001").exists()
+
+
+def test_real_get_reports_an_unreadable_login_as_auth_failed(paths, monkeypatch):
+    paths.config_dir.mkdir(parents=True, exist_ok=True)
+    paths.auth_file.write_text("stub", encoding="utf-8")
+
+    def broken(_path):
+        raise ValueError("corrupt auth file")
+
+    audible = SimpleNamespace(
+        Authenticator=SimpleNamespace(from_file=broken), Client=object
+    )
+    monkeypatch.setitem(sys.modules, "audible", audible)
+    with pytest.raises(PipelineError) as info:
+        dl.run_get("B0REAL0001", paths, fake=False, emit=lambda *a, **k: None)
+    assert info.value.code == dl.protocol.ErrorCode.AUTH_FAILED
+    assert not (paths.books_dir / "B0REAL0001").exists()
 
 
 # --- ASIN validation (ARCHITECTURE 4.4; shared library.validate_asin) --------

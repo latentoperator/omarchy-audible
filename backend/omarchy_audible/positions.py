@@ -45,7 +45,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from . import fsutil, protocol
-from .errors import PipelineError
+from .errors import PipelineError, classify_audible_error
 from .library import book_dir, iso_now, read_meta
 from .log import log
 
@@ -399,7 +399,7 @@ class RealPositions:
 
 
 def fetch_positions(
-    asins: Sequence[str], port: PositionsPort
+    asins: Sequence[str], port: PositionsPort, *, classify_errors: bool = False
 ) -> dict[str, dict[str, Any]]:
     """Read every ASIN's position in batches of at most 25 (ARCHITECTURE 4.6)."""
     unique = list(dict.fromkeys(asins))
@@ -411,10 +411,19 @@ def fetch_positions(
             raise
         except Exception as exc:  # any library failure is a read failure
             log(f"reading remote positions failed: {type(exc).__name__}")
+            code = (
+                classify_audible_error(exc)
+                if classify_errors
+                else protocol.ErrorCode.NETWORK
+            )
             raise PipelineError(
-                protocol.ErrorCode.NETWORK,
+                code,
                 "could not read the remote positions",
-                hint="check the network and retry",
+                hint=(
+                    "check the network and retry"
+                    if code == protocol.ErrorCode.NETWORK
+                    else "copy the diagnostic and reconnect if requested"
+                ),
             ) from exc
     return {asin: collected.get(asin, empty_entry()) for asin in unique}
 

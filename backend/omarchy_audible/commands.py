@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Self
 
-from . import fakestate, joblock, protocol
+from . import catalog, fakestate, joblock, protocol
 from .auth import (
     AudiblePort,
     account_from_auth_file,
@@ -39,7 +39,7 @@ from .catalog import open_client, run_sync
 from .download import FAKE_FAIL_MODES, parse_fake_chapters, run_get
 from .errors import Cancelled, PipelineError
 from .fsutil import atomic_write_json
-from .library import play_info_payload, remove_book, scan_local, validate_asin
+from .library import _ASIN_RE, play_info_payload, remove_book, scan_local, validate_asin
 from .paths import Paths
 from .positions import (
     FakePositions,
@@ -283,6 +283,80 @@ def cmd_setup(args: Sequence[str], *, command: str, fake: bool, paths: Paths) ->
 
 def cmd_sync(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> int:
     """Page the library and refresh ``catalog.json``/``remote.json`` (4.5, 4.6)."""
+    fake_fail = None
+    hidden = None
+    index = 0
+    while index < len(args):
+        token = args[index]
+        if token in ("--fake-fail", "--fake-hide") and index + 1 < len(args):
+            if token == "--fake-fail":
+                fake_fail = args[index + 1]
+            else:
+                hidden = args[index + 1]
+            index += 2
+            continue
+        index += 1
+    if fake_fail is not None:
+        if not fake or fake_fail not in ("network", "internal"):
+            protocol.error(
+                protocol.ErrorCode.INVALID_ARGS,
+                "invalid fake sync failure",
+                hint="use network or internal in fake mode",
+            )
+            return protocol.EXIT_USAGE
+        code = (
+            protocol.ErrorCode.NETWORK
+            if fake_fail == "network"
+            else protocol.ErrorCode.INTERNAL
+        )
+        message = (
+            "simulated network failure"
+            if fake_fail == "network"
+            else "simulated Audible API incompatibility"
+        )
+        protocol.error(
+            code,
+            message,
+            hint="check connectivity"
+            if fake_fail == "network"
+            else "inspect omarchy-audible doctor",
+        )
+        return protocol.EXIT_ERROR
+    fake_library = None
+    if fake:
+        hidden_path = paths.config_dir / "fake-hidden-asins.json"
+        try:
+            current = json.loads(hidden_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            current = []
+        hidden_asins = (
+            current
+            if isinstance(current, list)
+            and all(isinstance(item, str) for item in current)
+            else []
+        )
+        if hidden is not None:
+            if not _ASIN_RE.fullmatch(hidden):
+                protocol.error(
+                    protocol.ErrorCode.INVALID_ARGS,
+                    "--fake-hide requires a fake-mode ASIN",
+                )
+                return protocol.EXIT_USAGE
+            hidden_asins = sorted(set(hidden_asins + [hidden]))
+            atomic_write_json(hidden_path, hidden_asins)
+        fake_library = catalog.FakeLibrary(
+            [
+                item
+                for item in catalog.fixture_items()
+                if item.get("asin") not in hidden_asins
+            ]
+        )
+    elif hidden is not None:
+        protocol.error(
+            protocol.ErrorCode.INVALID_ARGS,
+            "--fake-hide requires fake mode",
+        )
+        return protocol.EXIT_USAGE
     record = read_account_record(paths)
     marketplace = record.get("marketplace")
     if not isinstance(marketplace, str) or not marketplace:
@@ -293,6 +367,7 @@ def cmd_sync(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> 
             fake=fake,
             full="--full" in args,
             marketplace=marketplace,
+            library=fake_library,
         )
     except PipelineError as exc:
         protocol.error(exc.code, exc.message, exc.hint)

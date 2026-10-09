@@ -152,12 +152,13 @@ ColumnLayout {
   RowLayout {
     Layout.fillWidth: true
     visible: banner.text.length > 0
+      && (root.list.banner !== LibraryUi.BANNER_CONNECTION || (root.library && root.library.catalogLoaded))
     spacing: Style.spacing.md
 
     Text {
       id: banner
       Layout.fillWidth: true
-      text: Drawer.bannerText(root.list.banner)
+      text: Drawer.bannerText(root.list.banner, root.service ? root.service.catalogAgeSeconds : null)
       textFormat: Text.PlainText
       wrapMode: Text.WordWrap
       color: root.list.banner === LibraryUi.BANNER_RECONNECT ? Color.urgent : Color.muted
@@ -170,6 +171,12 @@ ColumnLayout {
       visible: root.list.banner === LibraryUi.BANNER_RECONNECT
       text: "Reconnect"
       onClicked: root.service.reconnect()
+    }
+
+    Button {
+      visible: root.list.banner === LibraryUi.BANNER_CONNECTION && root.library && root.library.catalogLoaded
+      text: "Copy diagnostic"
+      onClicked: root.service.copyDiagnostic()
     }
   }
 
@@ -277,14 +284,46 @@ ColumnLayout {
     Text {
       anchors.centerIn: parent
       width: parent.width
-      visible: root.list.state !== LibraryUi.STATE_LIST
       horizontalAlignment: Text.AlignHCenter
       wrapMode: Text.WordWrap
+      visible: !(root.list.state === LibraryUi.STATE_ERROR
+        && root.list.banner === LibraryUi.BANNER_CONNECTION)
       text: Drawer.stateText(root.list.state)
       textFormat: Text.PlainText
       color: Color.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.body
+    }
+
+    ColumnLayout {
+      anchors.centerIn: parent
+      width: parent.width
+      visible: root.list.state === LibraryUi.STATE_ERROR
+        && root.list.banner === LibraryUi.BANNER_CONNECTION
+      spacing: Style.spacing.sm
+
+      Text {
+        Layout.fillWidth: true
+        text: "Audible connection problem"
+        textFormat: Text.PlainText
+        horizontalAlignment: Text.AlignHCenter
+        color: Color.muted
+        font.family: Style.font.family
+        font.pixelSize: Style.font.body
+      }
+      Text {
+        Layout.fillWidth: true
+        text: "The library could not be read. Copy the diagnostic to help resolve the problem."
+        textFormat: Text.PlainText
+        wrapMode: Text.WordWrap
+        color: Color.muted
+        font.family: Style.font.family
+        font.pixelSize: Style.font.bodySmall
+      }
+      Button {
+        text: "Copy diagnostic"
+        onClicked: root.service.copyDiagnostic()
+      }
     }
 
     ListView {

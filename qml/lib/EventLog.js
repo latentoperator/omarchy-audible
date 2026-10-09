@@ -39,6 +39,15 @@ function summarize(record, maxLength) {
   return text;
 }
 
+function scrubText(text) {
+  return String(text || "")
+    .replace(/(["']?lavf_options["']?\s*:\s*)\{[^}]*\}/gi, "$1{[redacted]}")
+    .replace(/(["']?(?:activation_bytes|lavf_options|audible_key|audible_iv|access_token|refresh_token|token|password|secret|voucher|aeskey)["']?)(\s*[=:]\s*)(["']?)([^\s&,"']+)/gi, "$1$2$3[redacted]")
+    .replace(/(["'](?:key|iv)["']\s*[=:]\s*)(["']?)([^\s&,"']+)/gi, "$1$2[redacted]")
+    .replace(/\b(key|iv)(\s*=\s*)(["']?)([^\s&,"']+)/gi, "$1$2$3[redacted]")
+    .replace(/\bBearer\s+[A-Za-z0-9._~+\/-]+=*/gi, "Bearer [redacted]");
+}
+
 function isNull(value) {
   return value === null || value === undefined;
 }

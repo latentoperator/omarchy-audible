@@ -80,6 +80,22 @@ Rectangle {
 
       RowLayout {
         Layout.fillWidth: true
+        visible: root.row && root.row.inLibrary === false
+        spacing: Style.spacing.md
+
+        SoftText {
+          Layout.fillWidth: true
+          visible: root.row && root.row.inLibrary === false
+          text: "No longer in your Audible library"
+          textFormat: Text.PlainText
+          wrapMode: Text.WordWrap
+          font.family: Style.font.family
+          font.pixelSize: Style.font.bodySmall
+        }
+      }
+
+      RowLayout {
+        Layout.fillWidth: true
         spacing: Style.spacing.md
 
         SoftText {

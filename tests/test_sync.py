@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 from omarchy_audible import catalog, commands, positions, protocol
-from omarchy_audible.errors import PipelineError
+from omarchy_audible.errors import PipelineError, classify_audible_error
 
 FIXTURE = catalog.fixture_items()
 FIXTURE_ASINS = [item["asin"] for item in FIXTURE]
@@ -177,10 +177,66 @@ def test_fake_sync_writes_the_fixture_catalog(run_cli, validate_stream, fake_pat
     assert [book["asin"] for book in built["books"]] == FIXTURE_ASINS
     for book in built["books"]:
         assert set(book) == BOOK_KEYS
-
     remote = json.loads(fake_paths.remote_file.read_text(encoding="utf-8"))
     assert set(remote) == set(FIXTURE_ASINS)
     assert remote["B0FAKE0001"] == {"ms": 0, "updated_at": None}
+
+
+@pytest.mark.parametrize(
+    "mode,code", [("network", "network"), ("internal", "internal")]
+)
+def test_fake_sync_can_fail_for_ui_scenarios(run_cli, events, mode, code):
+    result = run_cli("sync", "--fake-fail", mode, fake=True)
+    assert result.returncode != 0
+    assert events(result)[-1]["code"] == code
+
+
+def test_sync_accepts_a_valid_empty_audible_library(
+    run_cli, events, fake_paths, tmp_path
+):
+    fixture = tmp_path / "empty-library.json"
+    fixture.write_text('{"items": []}', encoding="utf-8")
+    result = run_cli(
+        "sync", fake=True, extra_env={"OMARCHY_AUDIBLE_FIXTURE": str(fixture)}
+    )
+    assert result.returncode == 0
+    assert events(result)[-1]["type"] == "done"
+    assert (
+        json.loads(fake_paths.catalog_file.read_text(encoding="utf-8"))["books"] == []
+    )
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["--fake-fail", "network"],
+        ["--fake-fail", "internal"],
+        ["--fake-hide", "B0FAKE0001"],
+    ],
+)
+def test_fake_sync_controls_are_rejected_without_fake_mode(paths, capsys, args):
+    exit_code = commands.cmd_sync(args, command="sync", fake=False, paths=paths)
+    assert exit_code != 0
+    terminal = json.loads(capsys.readouterr().out.splitlines()[-1])
+    assert terminal["code"] == "invalid_args"
+
+
+def test_fake_hide_requires_valid_asin_and_rejects_full_asin_confusion(
+    run_cli, fake_paths
+):
+    result = run_cli("sync", "--fake-hide", "--full", fake=True)
+    assert result.returncode != 0
+    assert json.loads(result.stdout.splitlines()[-1])["code"] == "invalid_args"
+    assert not (fake_paths.config_dir / "fake-hidden-asins.json").exists()
+
+
+def test_fake_sync_can_hide_a_catalog_book_persistently(run_cli, events, fake_paths):
+    assert run_cli("sync", "--fake-hide", "B0FAKE0001", fake=True).returncode == 0
+    assert run_cli("sync", fake=True).returncode == 0
+    catalog_doc = json.loads(fake_paths.catalog_file.read_text(encoding="utf-8"))
+    assert "B0FAKE0001" not in [book["asin"] for book in catalog_doc["books"]]
+    override = fake_paths.config_dir / "fake-hidden-asins.json"
+    assert json.loads(override.read_text(encoding="utf-8")) == ["B0FAKE0001"]
 
 
 def test_sync_writes_remote_json_but_never_state_json(run_cli, fake_paths):
@@ -519,3 +575,102 @@ def test_real_library_does_not_report_an_empty_trailing_page():
 
     assert len(pages) == 1
     assert len(client.calls) == 2  # the short/empty page is still inspected
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [None, [], {}, {"items": "x"}, {"library_items": [_item("B0RESHAPE01")]}],
+)
+def test_real_library_rejects_malformed_first_page(payload):
+    with pytest.raises(PipelineError) as info:
+        list(catalog.RealLibrary(_FakeClient([payload])).pages())
+    assert info.value.code == protocol.ErrorCode.INTERNAL
+    assert info.value.message == "unexpected library response"
+    assert info.value.hint == "the Audible API may have changed; copy the diagnostic"
+
+
+def test_real_library_accepts_a_valid_empty_first_page():
+    pages = list(
+        catalog.RealLibrary(_FakeClient([{"items": [], "total_results": 0}])).pages()
+    )
+    assert pages == [([], 0)]
+
+
+@pytest.mark.parametrize(
+    "name,expected",
+    [
+        ("Unauthorized", "auth_failed"),
+        ("NoRefreshToken", "auth_failed"),
+        ("AuthFlowError", "auth_failed"),
+        ("NetworkError", "network"),
+        ("NotResponding", "network"),
+        ("RatelimitError", "network"),
+        ("ServerError", "network"),
+        ("TransportError", "network"),
+        ("TimeoutException", "network"),
+        ("ConnectError", "network"),
+        ("ConnectionError", "network"),
+        ("TimeoutError", "network"),
+        ("gaierror", "network"),
+        ("BadRequest", "internal"),
+        ("NotFoundError", "internal"),
+        ("UnexpectedError", "internal"),
+        ("StatusError", "internal"),
+        ("ValueError", "internal"),
+        ("KeyError", "internal"),
+        ("TypeError", "internal"),
+    ],
+)
+def test_audible_error_classifier_uses_exception_mro_names(name, expected):
+    error_type = type(name, (Exception,), {})
+    error = error_type("stub")
+    assert classify_audible_error(error) == expected
+
+    class StubLibrary:
+        def pages(self):
+            raise error
+            yield  # pragma: no cover
+
+    with pytest.raises(PipelineError) as info:
+        catalog._read_library(StubLibrary(), lambda *_args, **_kwargs: None)
+    assert info.value.code == expected
+
+
+def test_audible_error_classifier_uses_base_class_names():
+    status_error = type("StatusError", (Exception,), {})
+    lookalike = type("BadRequest", (status_error,), {})
+    assert classify_audible_error(lookalike("stub")) == "internal"
+
+
+def test_position_read_classification_is_enabled_only_for_sync():
+    unauthorized = type("Unauthorized", (Exception,), {})("stub")
+
+    class StubPositions:
+        def fetch_batch(self, _asins):
+            raise unauthorized
+
+    with pytest.raises(PipelineError) as position_get_error:
+        positions.fetch_positions(["B0FAKE0001"], StubPositions())
+    assert position_get_error.value.code == protocol.ErrorCode.NETWORK
+    with pytest.raises(PipelineError) as sync_error:
+        positions.fetch_positions(["B0FAKE0001"], StubPositions(), classify_errors=True)
+    assert sync_error.value.code == protocol.ErrorCode.AUTH_FAILED
+
+
+def test_run_sync_classifies_an_auth_error_from_the_position_read(paths):
+    unauthorized = type("Unauthorized", (Exception,), {})("stub")
+
+    class StubPositions:
+        def fetch_batch(self, _asins):
+            raise unauthorized
+
+    with pytest.raises(PipelineError) as info:
+        catalog.run_sync(
+            paths,
+            fake=True,
+            library=_StaticLibrary([_item("B0FAKE0001")]),
+            positions_port=StubPositions(),
+            cover_fetch=None,
+            emit=lambda *_args, **_kwargs: None,
+        )
+    assert info.value.code == protocol.ErrorCode.AUTH_FAILED
