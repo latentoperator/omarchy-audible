@@ -15,11 +15,15 @@ How to cut a release of Omarchy Audible. Users install from the repository's def
    - `manifest.json` → `version` (the version Omarchy and the marketplace read; the diagnostic report quotes it)
    - `pyproject.toml` → `[project] version`
    - `backend/pyproject.toml` → `[project] version`
+
+   `Service.qml` also has a fallback version for the diagnostic report, used only if the manifest cannot be read; keep it in step too.
 3. **Update `CHANGELOG.md`.** Replace `(unreleased)` with today's date and check the entry against the merged pull requests since the last tag:
 
    ```sh
    git log --merges --format='%s%n  %b' v<previous>..main
    ```
+
+   For the first release there is no earlier tag; use the whole history.
 
 4. **Check the release locally.**
 

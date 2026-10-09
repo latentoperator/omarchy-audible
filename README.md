@@ -5,7 +5,7 @@ Your Audible library in the [Omarchy](https://omarchy.org) bar. Click the book i
 ![The library drawer and the full player](preview.png)
 
 - **A library drawer** with search, four sorts (recently listened, recently added, title, author) and filters for downloaded or in-progress books.
-- **A mini player** with cover, chapter, back and forward skips, speed, scrub and Stop. Expand it to a full view with the chapter list and a sleep timer.
+- **A mini player** with cover, chapter, back and forward skips, speed, scrub and Stop. Open the full view for the chapter list and a sleep timer.
 - **Downloads on demand.** A book downloads only when you pick it, and one click removes it from your computer again. Removing never touches your Audible account.
 - **Your place follows you.** Start on your phone and carry on here at the same spot, or the other way round.
 - **Sign in from the drawer.** Amazon's own sign-in page opens in your browser, so passwords, passkeys, two-step codes and captchas all stay there.
@@ -42,15 +42,15 @@ omarchy plugin update latentoperator.audible
 
 | | |
 |---|---|
-| ![Mini player](docs/screenshots/mini.png) | Playing a book opens the **mini player**. Space plays or pauses, ← and → skip back and forward, and ■ stops and saves your place. Click away to hide it; the book keeps playing, and the bar icon brings it back. |
-| ![Full player](docs/screenshots/full.png) | **Expand** opens the full view: chapter list, speed (presets, or fine steps of 0.05×), sleep timer (15 to 60 minutes, or end of chapter), and **Remove from this device**. Backspace returns to the mini player. |
+| ![Mini player](docs/screenshots/mini.png) | Playing a book opens the **mini player**. Space plays or pauses, ← and → skip back and forward, and **Stop** saves your place and ends playback. Press Esc or click away to hide it; the book keeps playing, and the bar icon brings it back. |
+| ![Full player](docs/screenshots/full.png) | The **Full player** button opens the full view: chapter list, speed (presets, or fine steps of 0.05×), sleep timer (15 to 60 minutes, or end of chapter), and **Remove from this device**. Backspace returns to the mini player. |
 | ![Library drawer](docs/screenshots/library.png) | The **library drawer**. Type to search, ↑ and ↓ to move, Enter to pick a book, Esc to close. Space plays or pauses while the search box is empty. The footer shows how much space downloaded books use, with **Remove all downloads** and **Disconnect**. |
 
 A middle click on the bar icon plays or pauses the loaded book.
 
-When you play a book, the plugin checks Audible for a newer position from another device and moves there if it finds one. While you listen, it sends your position back about once a minute and again when you pause or stop, so your phone can pick up where you left off. It never moves Audible's position backwards: if the phone has listened further, the phone's position wins.
+When you play a book, the plugin checks Audible for a newer position from another device and moves there if it finds one. While you listen, it sends your position back about once a minute and again when you pause or stop, so your phone can pick up where you left off. Whichever device you listened on most recently wins: the plugin never overwrites a position from more recent listening on another device.
 
-Without a network connection, downloaded books still play and the drawer shows the last synced library, with cloud books marked unavailable. A book that has left your Audible library but is still downloaded stays playable and is marked **No longer in your Audible library**.
+Without a network connection, downloaded books still play and the drawer shows the last synced library, with cloud books marked **Offline**. A book that has left your Audible library but is still downloaded stays playable and is marked **No longer in your Audible library**.
 
 ## Hotkeys and IPC
 
@@ -70,7 +70,7 @@ omarchy-shell latentoperator.audible <method> [args]
 | `prevChapter` | Jump to the previous chapter |
 | `stop` | Stop playback and save the current position |
 
-Every method returns a short string: `ok` on success, or an error such as `error: nothing loaded`.
+Every method returns a short string: `ok` on success, or an error such as `error: nothing loaded`. `playPause` can also return `busy` or `cancelled` while it is reading a newer position from Audible.
 
 To bind one, add a line to `~/.config/hypr/bindings.lua`. That file is yours, and this project never edits it. Pick a free combination (`omarchy menu keybindings --print` lists the ones in use), for example:
 
@@ -82,7 +82,7 @@ The target also has read-only status methods, such as `playerStatus`, and test m
 
 ## Media keys (optional)
 
-Install `mpv-mpris` with `sudo pacman -S mpv-mpris`, then start a book. New players expose the book to Omarchy's stock media widget and the keyboard play/pause keys; the widget can play, pause and seek. A player started before installing the package needs a Stop and a new play to load the MPRIS script. Next and Previous do not change audiobook chapters. Resuming with a media key or widget after a long pause skips the plugin's account catch-up read; later position pushes still follow the stale-position protection rules. Stop from the media widget saves your place and stops playback; after a shell restart it saves and stops but leaves the idle player running until the next book. A seek made through MPRIS while paused is not currently saved as a user move if playback is stopped before resuming.
+Install `mpv-mpris` with `omarchy pkg add mpv-mpris`, then start a book. New players expose the book to Omarchy's stock media widget and the keyboard play/pause keys; the widget can play, pause and seek. A player started before installing the package needs a Stop and a new play to load the MPRIS script. Next and Previous do not change audiobook chapters. Resuming with a media key or widget after a long pause skips the plugin's account catch-up read; later position pushes still follow the stale-position protection rules. Stop from the media widget saves your place and stops playback; after a shell restart it saves and stops but leaves the idle player running until the next book. A seek made through MPRIS while paused is not currently saved as a user move if playback is stopped before resuming.
 
 ## Settings
 
@@ -120,13 +120,13 @@ The plugin itself is QML and Python source. Nothing is compiled, and the plugin 
 1. Creates a Python virtual environment at `~/.local/share/omarchy-audible/venv` with your system `python3`.
 2. Runs `pip install -r backend/requirements.lock` inside it. That downloads two packages from [PyPI](https://pypi.org) at pinned versions, [`audible-cli`](https://pypi.org/project/audible-cli/) 0.6.0 and [`audible[cryptography]`](https://pypi.org/project/audible/) 0.12.0 (both AGPL-3.0, by mkb79), plus the libraries they depend on: about 30 packages and 75 MB in all. The two named packages are pinned by version, not by hash, and their dependencies resolve to current releases.
 3. Installs this repository's `backend/` package into the same environment. pip fetches the `hatchling` build tool from PyPI to do it.
-4. Imports both packages once to prove the environment works, then writes a ready marker.
+4. Imports `audible` and the backend once to prove the environment works, then writes a ready marker.
 
-Setup runs once. Running it again does nothing unless `backend/requirements.lock` has changed, and a run that fails or is interrupted removes the half-built environment so the next run starts clean. Nothing is installed system-wide.
+Setup runs once. Running it again does nothing unless `backend/requirements.lock` has changed, A run that fails removes the half-built environment, and a run that was interrupted is cleaned up by the next one, so setup always starts clean. Nothing is installed system-wide.
 
 **Network traffic after setup** goes only to Amazon and Audible: sign-in, library sync, cover images, book downloads, and reading and writing your listening position. All of it comes from the Python backend; the shell side of the plugin makes no network requests.
 
-**System tools it uses**, none of which it installs: `python3`, `mpv` and `ffmpeg`/`ffprobe`, which ship with Omarchy, plus `wl-paste`, `xdg-open` and `systemd-run --user`, which starts the player in its own user scope. `mpv-mpris` is optional.
+**System tools it uses**, none of which it installs: `python3`, `mpv` and `ffmpeg`/`ffprobe`, plus `wl-copy`/`wl-paste`, `xdg-open`, `notify-send`, and `systemd-run --user`/`systemctl --user`, which run and stop the player in its own user scope. All ship with Omarchy. `mpv-mpris` is optional.
 
 **Files it writes:**
 
@@ -142,22 +142,23 @@ It reads `~/.audible` only if you choose **Use existing audible-cli login**, and
 
 ## Remove
 
-1. Optionally, click **Remove all downloads** in the drawer to delete the books from this computer. Your Audible library is not affected.
-2. Click **Disconnect**. This removes the plugin's login and, if you signed in through the drawer, deregisters this computer from your Amazon account. An imported audible-cli login stays registered, because audible-cli still uses it. Downloaded books stay unless you removed them in step 1.
-3. Remove the plugin. This takes the icon off the bar and deletes the plugin folder:
+1. Click **Stop** in the player, so no player is left running.
+2. Optionally, click **Remove all downloads** in the drawer to delete the books from this computer. Your Audible library is not affected.
+3. Click **Disconnect**. This removes the plugin's login and, if you signed in through the drawer, deregisters this computer from your Amazon account. An imported audible-cli login stays registered, because audible-cli still uses it. Downloaded books stay unless you removed them in step 2.
+4. Remove the plugin. This takes the icon off the bar and deletes the plugin folder:
 
    ```sh
    omarchy plugin remove latentoperator.audible
    ```
 
-4. Delete what setup and the plugin wrote:
+5. Delete what setup and the plugin wrote:
 
    ```sh
    rm -rf ~/.local/share/omarchy-audible ~/.config/omarchy-audible
-   rm -rf ~/Audiobooks/Audible   # only if you also want the downloaded books gone
+   rm -rf ~/Audiobooks/Audible   # or your booksDir; only if you also want the downloaded books gone
    ```
 
-If you remove the plugin without disconnecting first, this computer stays listed as a device on your Amazon account. You can deregister it from Amazon's **Manage Your Content and Devices** page.
+Deregistering needs a network connection. If you remove the plugin without disconnecting, or disconnect while offline, this computer can stay listed as a device on your Amazon account. You can deregister it from Amazon's **Manage Your Content and Devices** page.
 
 ## FAQ
 
@@ -165,10 +166,10 @@ If you remove the plugin without disconnecting first, this computer stays listed
 No. **Remove from this device** and **Remove all downloads** delete only the files on this computer. The book stays in your Audible library as a cloud book, and downloading it again resumes where you were.
 
 **Does it change anything on my Audible account?**
-Two things. It writes your listening position, and never backwards past a newer one from another device. Signing in from the drawer also registers this computer as a device on your account, as the phone app does, and **Disconnect** removes it. It never buys, returns, rates or deletes anything.
+Two things. It writes your listening position, but never over a position from more recent listening on another device. Signing in from the drawer also registers this computer as a device on your account, as the phone app does, and **Disconnect** removes it. It never buys, returns, rates or deletes anything.
 
 **Are my books stored unlocked?**
-No. Each book is stored exactly as Audible sent it (`book.aaxc` or `book.aax`). The key that plays it sits beside it in a `0600` file and is used only in memory while the book plays. No decrypted copy is ever written to disk, and there is no export.
+No. Each book is stored exactly as Audible sent it (`book.aaxc` or `book.aax`). The key that plays it is kept in a `0600` file (beside the book, or for older `aax` books with your login) and is used only in memory while the book plays. No decrypted copy is ever written to disk, and there is no export.
 
 **Does the plugin see my Amazon password?**
 No. You sign in on Amazon's own page in your browser, so the plugin never sees your password, passkey or two-step code. It keeps the device login Amazon issues, in `~/.config/omarchy-audible/` with mode `0600`, and never logs it or shows it in the drawer.
