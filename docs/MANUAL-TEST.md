@@ -60,7 +60,7 @@ Took the lock, backed up `shell.json`, checked out `7258847` in the live folder 
 
 Restored: live `main` `9c7c920`, fake flag removed, `shell.json` cmp clean, shell answered with 91 books / 4 local; real mpv 99684 loaded and paused at 16,104,035 ms. Screenshots `~/.cache/dante-oa/r2check-shots/`. Not shell-checked: Remove all sparing orphans (test-covered only). Cosmetic for R6: faint connection-banner text; an orphan row shows "0m" length.
 
-## R3 — MPRIS (optional), fake mode — 2026-10-09, HMSP-OMARCHYBEE (branch `r3-mpris`)
+## R3 — MPRIS (optional) — fake mode 2026-10-09 on HMSP-OMARCHYBEE (branch `r3-mpris`); hand check 2026-10-09 on HMSP-OMARCHYXPS
 
 Run on HMSP-OMARCHYBEE in fake mode. The live folder was switched to the R3 head once and restored to `main` after testing. Do not use media keys or `omarchy-shell media` here; those target whichever MPRIS player is active.
 
@@ -75,17 +75,19 @@ Run on HMSP-OMARCHYBEE in fake mode. The live folder was switched to the R3 head
 | 7 | Shell restart while the fake book plays keeps the same mpv PID and MPRIS name and reattaches. | **Pass.** During playback, fake PID 589915 and its MPRIS service survived restart; the new shell reattached to the same PID (the six-second fixture reached EOF during restart). A longer fake book also retained PID 606652 and its MPRIS name through a restart; it reattached paused at 23 ms. |
 | 8 | Read-only `qs ipc show` confirms the stock media target; §3 smoke journey and post-restart plugin QML warning check. | **Pass.** `qs ipc --pid 576402 show` listed `media`; read-only `media status` while fake mpv 589915 was active returned `hasPlayer:true`, `hasMedia:true`, title `A Short Course in Starlight`, and `canTogglePlaying:true`. §3 journey ran with `B0FAKE0001` (download, pick, answer Resume, skip, play/pause twice, chapter 1, quit, remove, sync); final local storage 0 books, push queue empty. After restart, shell PID 607640 had zero warnings/errors from our plugin files. |
 
-**Hand check for Chris (real mode, pending):**
+**Hand check (real mode) — 2026-10-09, HMSP-OMARCHYXPS (not BEE: Chris was at the laptop), `main` at `8a599fc`, mpv-mpris 1.2.** Fresh mpv after the pull loaded `--script=/usr/lib/mpv-mpris/mpris.so`; `omarchy-shell media status` showed title, author and cover. Finding: Omarchy's stock **Media** bar widget (`omarchy.media`) is not in Chris's bar, and in this Omarchy version it has only previous / play-pause / next and a source picker: **no seek and no Stop** (its service never calls seek or stop). Rows that named the widget's seek or Stop were run as MPRIS `Stop` over D-Bus (`busctl --user call org.mpris.MediaPlayer2.mpv … Player Stop`), which is what a headset, `playerctl` or KDE Connect sends. The README's "the widget can play, pause and seek" is wrong and is corrected in the 0.1.0 PR.
 
 | # | Check | Result |
 |---|---|---|
-| 1 | Start a book from the drawer in a new mpv; play/pause keys on the keyboard control it. | Pending |
-| 2 | Stock media widget shows the book title; its play/pause and seek work. | Pending |
-| 3 | ■ in Mini still works. | Pending |
-| 4 | Pause from the media widget, then ⏯ in Mini. | Pending |
-| 5 | Audio plays from the speakers/headphones after a widget or key resume. | Pending |
-| 6 | Stop from the media widget, then pick the book again: it resumes at the spot Stop saved (compare `pushState`/`playerStatus` before and after; not just "near"). | Pending |
-| 7 | Play, restart the shell, then Stop from the media widget: the position is saved, the drawer goes to Library, and the idle mpv stays until the next play (expected after a reattach). | Pending |
+| 1 | Keyboard play/pause keys control a book started from the drawer in a new mpv. | **Pass** (Chris): paused and resumed, audio heard both ways. |
+| 2 | Stock media widget shows the title; its play/pause and seek work. | **Partly n/a.** Title/artist/cover reach Omarchy's media service (`media status`). The widget isn't in Chris's bar and has no seek; play/pause is the same `playPause` action the keys use (row 1). |
+| 3 | ■ in Mini still works. | **Pass** (Chris; also covered by R5 J1–J7 the same evening). |
+| 4 | Pause from MPRIS, then ⏯ in Mini. | **Pass** (Chris: key pause, then Mini ⏯ resumed). |
+| 5 | Audio after a key resume. | **Pass** (Chris). |
+| 6 | MPRIS Stop, then pick the book again: resumes at exactly the saved spot. | **Pass.** Stop at 15,958,999 ms paused → saved/pushed 15,958,934, mpv ended, panel Library, queue empty. Replay: `position-get` read 15,958,934 (`own`) and playback started there; Chris paused at 15,968,619. |
+| 7 | Play, restart the shell, then MPRIS Stop: saved, Library, idle mpv stays. | **Pass (second run, hands off).** Playing at 15,910,466 in mpv 335737; restart 336981 → 342064; same mpv reattached and kept playing (15,921,389 → 15,925,421 over 4 s, same chapter). Stop at 18:24:41: saved/pushed 15,927,426, read back `own: true`, panel Library, queue empty, `playerStatus` unloaded and stayed so for 12 s, MPRIS `Stopped`, the idle mpv 335737 stays (expected after a reattach). Zero plugin warnings. First run was disturbed by Chris's keyboard: space bar while a transport button had focus pressed that button (⏭), and further input moved the book ~36 min and replayed it; not a plugin fault, but see the focus follow-up. |
+
+**Follow-ups:** (a) transport buttons take keyboard focus, so Space presses the last-clicked button instead of play/pause; make them not take focus (or route Space to play/pause) in the 0.1.0 PR. (b) README Media keys paragraph: drop "seek" for the stock widget, say Stop/seek come from other MPRIS clients, plain wording.
 
 Fake row 6's "near" is IPC latency (the book plays on after the resume), not a drift in the saved spot; hand-check row 6 confirms it. Found, not fixed: a paused MPRIS `SetPosition` is not marked as a user move. After setting it to 0 while paused, the saved account position remained at the prior 5,949 ms through the next pause; because it is not dirty, a Stop before any playing position report will not save that move. mpv does not identify seek origin, and `playback-restart` also covers the internal catch-up jump. MPRIS resume also skips the UI catch-up read after a long pause; the existing push staleness check protects the account. The mpv-mpris 1.2 source does not use the PID name described in the task prompt: it requests `org.mpris.MediaPlayer2.mpv` when available, and falls back on a random `.instance-<id>` suffix after a name collision. This run had only the fake mpv exporting MPRIS, so the canonical name was owned by the fake PID; the already-running real mpv had no MPRIS service.
 
