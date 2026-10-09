@@ -21,7 +21,7 @@ M1  B1 → B2 → B3 → B4 ; B5, B6, B7 after B1                 ──▶ GATE
 M2  P1 → P2 → P3 ; P4 after P2                              ──▶ GATE G2
 M3  B9 → B10 ; L1 → L2 → L3 (Hopebox) ; U1 → U4 → U2a → U2 → U3 (laptop) ──▶ GATE G3  (first usable build)
 M4  U5, U6, U7 after G3 ; S7 (desktop spike) → B11 if it passes ──▶ GATE G4
-M5  R1 … R7                                                 ──▶ release v0.1.0
+M5  R1 … R8                                                 ──▶ release v0.1.0
 ```
 M1 (backend) and M2/M3 (QML) can overlap after G0 because the fake backend freezes the protocol.
 
@@ -274,6 +274,7 @@ Placed by Dante. Order: B14 lands on `b11` before it merges, then the rest in th
 - [ ] **R5 — Clean-install test** (tier B) — on a fresh Omarchy install (VM or a spare user account): `omarchy plugin add <repo-url> --enable --yes`, then J1 → J7 using only the UI. Record time to first audio (target ≤ 5 min).
 - [ ] **R6 — Docs and release assets** (tier A) — README with screenshots/GIF, install, hotkeys, FAQ ("Does removing a book delete it from Audible?" → no), the legal/ToS statement from SCOPE §7, a **"What setup installs" section** documenting the first-run venv and `pip install` (what is downloaded, from where, where it is written, how to remove it) as the marketplace asks, CHANGELOG, LICENSE (AGPL-3.0-only, added at G0), `docs/RELEASING.md` (including `omarchy plugin validate .`), tag `v0.1.0`. For the test IPC methods R6 keeps or removes: `libraryQuery` sets the drawer's live sort, filter and search (G4 finding), so it must not be documented as a read. Use `libraryState` to read counts, or make `libraryQuery` side-effect-free.
 - [ ] **R7 — Marketplace submission** (tier maintainer) — repo must be public with `manifest.json`, README, and license. Read https://plugins.omarchy.org/publish.html first, then submit via its issue form with a category and 1–3 tags. Expect automated validation of the exact commit and a maintainer decision; a maintainer may decline a plugin that decrypts DRM, so be ready to rely on `omarchy plugin add <git-url>` instead.
+- [ ] **R8 — A Stop control** (tier A/B; Dante placed 2026-10-08 from MANUAL-TEST P9) — Mini and Full have no way to stop: `Service.quitPlayer` is reachable only through the dev-only IPC, so in real mode a book can be unloaded and mpv ended only by quitting the shell. Add a visible Stop (■) in Mini and Full (and decide whether the bar widget or a public IPC method gets one), wired to `Service.quitPlayer`, with the push on stop that FR-P5 already describes. Then run the two P9 §5 steps left out for want of it: F38 (move while paused, Stop, play again: resumes at the moved spot) and the player machine (Stop, play again). Do it before R6's screenshots.
 
 ---
 
@@ -288,4 +289,4 @@ Placed by Dante. Order: B14 lands on `b11` before it merges, then the rest in th
 
 ## Suggested order for a single agent working alone
 
-A0 → S6 → S5 → S1 → S2 → S4 → S3 → (G0) → B1 → B7 → B5 → B4 → B2 → B3 → B6 → (G1) → P1 → P2 → P3 → P5 → P4 → (G2) → U4 → U1 → U2a → U2 → U3 → (G3) → U5 → U6 → U7 → (G4) → B11 (+B14) → P6 → B12 → B13 → P7 → H1 → U10 → U8 → U9 → P8 → P9 → R1 … R7.
+A0 → S6 → S5 → S1 → S2 → S4 → S3 → (G0) → B1 → B7 → B5 → B4 → B2 → B3 → B6 → (G1) → P1 → P2 → P3 → P5 → P4 → (G2) → U4 → U1 → U2a → U2 → U3 → (G3) → U5 → U6 → U7 → (G4) → B11 (+B14) → P6 → B12 → B13 → P7 → H1 → U10 → U8 → U9 → P8 → P9 → R1 … R8.
