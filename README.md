@@ -88,7 +88,7 @@ Known limits:
 
 - A book that was already playing when you installed `mpv-mpris` needs a **Stop** and a new play before the keys reach it.
 - Next and previous don't change chapters; use the player's chapter buttons.
-- Resuming with a media key skips the check for a newer spot from your phone that ⏯ in the player makes. Your phone's newer position is still never overwritten.
+- Resuming with a media key skips the check for a newer spot from your phone that ⏯ in the player makes, so the book carries on from this computer's spot and that becomes your latest position. If you listened somewhere else in the meantime, resume with ⏯ in the player instead.
 - A seek made through a media remote while paused isn't saved if you then stop without playing.
 - After a shell restart, a media Stop saves your place and stops the book, but the idle player stays open in the background until you play another book.
 

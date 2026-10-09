@@ -12,7 +12,7 @@ Environment for S5 and S6: HMSP-OMARCHYXPS, Omarchy 4.0.4, quickshell 0.3.1, mpv
 
 **Question.** SCOPE §8.7: with nothing playing, does the plugin run timers, poll or start processes, and is its resident memory (excluding mpv) under ~100 MB?
 
-**Method.** HMSP-OMARCHYBEE, Omarchy 4.0.4, Quickshell 0.3.1, live folder on `main`'s code commit `cc0cfa2`, 2026-10-09, read-only (no account calls). Real mode had Chris's book loaded and **paused** (the usual idle state: mpv alive, nothing playing); fake mode had nothing loaded. Two scripts, kept in `spikes/`:
+**Method.** HMSP-OMARCHYBEE, Omarchy 4.0.4, Quickshell 0.3.1, live folder on `main`'s code commit `cc0cfa2`, 2026-10-09, read-only (no account calls). Real mode had Chris's book loaded and **paused** (the usual idle state: mpv alive, nothing playing); fake mode had nothing loaded. Two scripts, kept in `spikes/` (`r4_mem.sh` removed before 0.1.0; see git history):
 1. *Code audit:* every `Timer`, `FileView`, `Socket`, `Process` and animation in `Service.qml`, `BarWidget.qml` and `qml/`.
 2. *`spikes/r4_idle.py`* (root, read-only `/proc`): over a window, the shell's CPU ticks and RSS, the paused mpv's CPU ticks and context switches, every process whose parent chain reaches the shell (polled every 50 ms), and every file whose mtime changed under the plugin's real and fake config/data/runtime dirs.
 3. *`spikes/r4_mem.sh`* (removed before 0.1.0; it drove the desktop over `sudo -u` and is in git history): a fresh shell's RSS/PSS 75 s after `omarchy-restart-shell`, with our bar entry and with it removed from `shell.json` (backed up and restored, `cmp` clean), then with the panel opened and closed; three rounds.
