@@ -4,6 +4,8 @@
 
 A book icon in the [Omarchy](https://omarchy.org) bar. Click it to browse your Audible library in a themed drawer, pick a book, and a mini player takes over. Dismiss it and the book keeps playing. Only the books you're listening to live on your laptop. Removing one never touches your Audible account.
 
+When offline, the drawer keeps the saved catalog and downloaded books available, shows when that catalog was last synced, and marks cloud books unavailable. If Audible's library API stops working, the Library shows an Audible connection problem with a copyable, redacted diagnostic. A downloaded book removed from the Audible library stays playable and is marked as no longer in the library.
+
 ## Planned features
 
 - Library drawer: search, sort by recently listened/added/title/author, filter by downloaded or in progress
@@ -25,6 +27,8 @@ Add `--fake` (or set `OMARCHY_AUDIBLE_FAKE=1`) to any command to run against a b
 Fake mode also carries its own onboarding state, so the sign-in and setup screens can be tested without an account. A fresh fake tree starts signed in; `logout --fake` signs the fake account out and `login-finish --fake` / `login-import-cli --fake` sign it back in (fake `login-finish` accepts any pasted text containing `openid.oa2.authorization_code=`). To preview the missing-tools or setup screen, write `~/.config/omarchy-audible-fake/fake-status.json` — `{"missing": ["mpv"]}` or `{"venv_ready": false}` (both keys optional) — and delete it afterward; `setup --fake` clears the `venv_ready` override again. Real mode reads neither the marker nor `fake-status.json`.
 
 To exercise the player against a long book, fake `get <asin> --fake-chapters 120` (or `OMARCHY_AUDIBLE_FAKE_CHAPTERS=120`) writes 120 evenly spaced chapters instead of the default 5; the range is 1–500, and real mode ignores it. Fake `get` also fakes the failures that matter: `--fake-fail disk` (the volume is treated as nearly full), `network` (the download breaks part-way), `decrypt` (the voucher arrives without key/iv) and `novoucher` (no aaxc voucher, so the aax fallback runs).
+
+For Library error states, fake `sync --fake-fail network|internal` exercises offline and connection-problem UI. Fake `sync --fake-hide <asin>` persistently hides a fixture book until `~/.config/omarchy-audible-fake/fake-hidden-asins.json` is removed. These controls work only in fake mode.
 
 **Setup and health**
 
@@ -55,11 +59,13 @@ omarchy-audible sync [--full]       # refresh the catalog, missing covers and Au
 omarchy-audible get <asin>          # download the locked original (aaxc, falls back to aax) → {"type":"done","path":"…/book.aaxc"}
 omarchy-audible play-info <asin>    # how to play a local book: {"type":"play_info","path":"…","chapters_file":"…"|null,"lavf_options":"…"}
 omarchy-audible cancel <asin>       # stop a running get and clean up its partial files
-omarchy-audible local               # {"type":"local","books":[{"asin":"…","size":…,"downloaded_at":"…"}]}
+omarchy-audible local               # includes cached title/authors when meta.json has them
 omarchy-audible remove <asin>       # delete the book from this computer only → {"type":"done","freed_bytes":…}
 ```
 
 `get` checks free space first, reports `progress` lines while it works, and refuses anything that isn't a plain ASIN (`error` code `bad_asin`). **It does not store a decrypted copy**: the book directory keeps the file exactly as Audible sent it (`book.aaxc` or `book.aax`), the key material in a `0600` `key.json`, the chapter list in `chapters.txt` and the metadata in `meta.json`. No `.m4b` is written, and the download needs about 1.1× the book's size free rather than twice it. `play-info` then hands the player the audio path, the chapter file and the ready-made mpv option that unlocks it in memory; those key options are a secret, are never logged, and are not part of any command line. Old `book.m4b` downloads keep playing as before. `remove` never touches your Audible account or library.
+
+Downloaded books missing from a later Audible catalog sync stay in the drawer. Their local metadata supplies the title and authors when available; otherwise the ASIN is shown. They can be played or removed from this device, and don't offer a download action.
 
 **Listening positions**
 

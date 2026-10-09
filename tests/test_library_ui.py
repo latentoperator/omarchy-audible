@@ -455,6 +455,15 @@ def test_list_state_loaded_with_a_background_error_still_lists(
     ) == {"state": "list", "banner": None}
 
 
+def test_list_state_internal_sync_error_shows_connection_error_with_cached_catalog(
+    ui: qjs.JsModule,
+) -> None:
+    assert ui.call(
+        "listState",
+        {"catalogLoaded": True, "total": 5, "shown": 5, "errorCode": "internal"},
+    ) == {"state": "error", "banner": None}
+
+
 def test_list_state_syncing_banner(ui: qjs.JsModule) -> None:
     assert ui.call("listState", {"catalogLoaded": False, "syncing": True}) == {
         "state": "loading",

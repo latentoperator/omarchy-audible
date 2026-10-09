@@ -78,6 +78,20 @@ def test_local_lists_only_downloaded_books(run_cli, validate_stream, fake_paths)
     assert local["books"][1]["size"] >= 250
 
 
+def test_local_scan_includes_safe_catalog_metadata(
+    run_cli, validate_stream, fake_paths
+):
+    directory = _make_book(fake_paths, "B00META01")
+    (directory / "meta.json").write_text(
+        json.dumps({"title": "Invented Harbor", "authors": ["Mara Quill", 3]}),
+        encoding="utf-8",
+    )
+    parsed = validate_stream(run_cli("local", fake=True), expect_last="done")
+    book = next(event for event in parsed if event["type"] == "local")["books"][0]
+    assert book["title"] == "Invented Harbor"
+    assert book["authors"] == ["Mara Quill"]
+
+
 def test_local_falls_back_to_the_file_mtime_without_meta(
     run_cli, validate_stream, fake_paths
 ):

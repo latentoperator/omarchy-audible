@@ -53,3 +53,43 @@ def test_summarize_redacts_an_empty_lavf_options_too(lib):
 def test_summarize_never_throws_on_odd_records(lib):
     for record in (None, 5, "text", [], {"a": {"b": {"c": {"d": {"e": {"f": 1}}}}}}):
         assert isinstance(lib.call("summarize", record, 40), str)
+
+
+def test_diagnostic_redacts_secret_options_and_limits_doctor_details(lib):
+    diagnostic = qjs.load("Diagnostic")
+    text = diagnostic.call(
+        "build",
+        "0.0.1",
+        "sync",
+        "internal",
+        "bad lavf_options=activation_bytes=beefcafefeed and access_token=tokenvalue",
+        "check key=deadbeef",
+        [
+            {"name": "mpv", "ok": False, "detail": "mpv not found on PATH"},
+            {"name": "auth", "ok": True, "detail": "/private/auth.json"},
+            {"name": "venv", "ok": False, "detail": "/private/venv"},
+        ],
+    )
+    assert "0.0.1" in text and "Command: sync" in text and "Error: internal" in text
+    assert (
+        "beefcafefeed" not in text
+        and "tokenvalue" not in text
+        and "deadbeef" not in text
+    )
+    assert "mpv not found on PATH" in text
+    assert "/private/auth.json" not in text and "/private/venv" not in text
+
+
+def test_service_runs_doctor_and_copies_diagnostic_through_stdin():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    service = (root / "Service.qml").read_text(encoding="utf-8")
+    signin = (root / "qml" / "SigninFlow.qml").read_text(encoding="utf-8")
+    ipc = (root / "qml" / "ServiceIpc.qml").read_text(encoding="utf-8")
+    assert 'root.run("doctor", [], "sync-doctor")' in service
+    assert (
+        "function copyDiagnostic() { signinFlow.copyText(diagnosticText) }" in service
+    )
+    assert "function diagnostic(): string { if (!service.fake)" in ipc
+    assert 'command: ["wl-copy"]' in signin and "write(text)" in signin

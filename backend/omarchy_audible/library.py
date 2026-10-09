@@ -145,6 +145,14 @@ def scan_local(books_dir: Path) -> list[dict[str, Any]]:
                 "asin": entry.name,
                 "size": dir_size(entry),
                 "downloaded_at": downloaded_at,
+                "title": meta.get("title")
+                if isinstance(meta.get("title"), str)
+                else None,
+                "authors": [
+                    name for name in meta.get("authors", []) if isinstance(name, str)
+                ]
+                if isinstance(meta.get("authors", []), list)
+                else [],
             }
         )
     return books

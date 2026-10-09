@@ -8,6 +8,7 @@
 // the IPC socket while it is set, so it must never reach the event log (B11,
 // SPIKE-RESULTS S7). The input is never mutated.
 function redactOptions(value, depth) {
+  if (typeof value === "string") return scrubText(value);
   if (depth > 12 || isNull(value) || typeof value !== "object") {
     return value;
   }
@@ -37,6 +38,12 @@ function summarize(record, maxLength) {
     text = text.slice(0, maxLength) + "…";
   }
   return text;
+}
+
+function scrubText(text) {
+  return String(text || "")
+    .replace(/(activation_bytes|lavf_options|audible_key|audible_iv|access_token|refresh_token|token|password|secret|\bkey|\biv)(\s*[=:]\s*)(["']?)([^\s&,"']+)/gi, "$1$2$3[redacted]")
+    .replace(/\bBearer\s+[A-Za-z0-9._~+\/-]+=*/gi, "Bearer [redacted]");
 }
 
 function isNull(value) {

@@ -154,7 +154,7 @@ play-info <asin>            → {"type":"play_info","path":".../book.aaxc","chap
                               (for a legacy aax it may fetch the account AAX key once, §4.7)
 cancel <asin>               → done | error(code=not_running)   (signals the running `get`, see §4.8)
 remove <asin>               → {"type":"done","freed_bytes":N}      (LOCAL ONLY — see §4.4)
-local                       → {"type":"local","books":[{"asin":…,"size":N,"downloaded_at":…}]}
+local                       → {"type":"local","books":[{"asin":…,"size":N,"downloaded_at":…,"title":…|null,"authors":[…]}]}
 position-get <asin…>        → {"type":"positions","items":{"<asin>":{"ms":N,"updated_at":"…"|null,"own":true?}}}
 position-push <asin> <ms> --at <iso-8601> → done | error(code=invalid_args|stale|unsupported|network)
 doctor                      → {"type":"doctor","checks":[{"name":…,"ok":bool,"detail":…}]}
@@ -163,6 +163,8 @@ doctor                      → {"type":"doctor","checks":[{"name":…,"ok":bool
 The first settings object causes Service to re-read `status`; before settings arrive, the UI does not show books-folder notices or silently acknowledge a folder. The silent acknowledgement runs only when `old_books` is null, the current folder is not recorded, and no `get` is active or queued. Service re-runs `status` after each `get` and `remove`, so a download that finishes in the prior folder is counted before an acknowledgement can hide it.
 
 `--fake` (or env `OMARCHY_AUDIBLE_FAKE=1`) runs the same protocol against `fixtures/` with no network and no account. This lets UI work and tests proceed without credentials, and is what CI runs. Fake `get` produces the same layout as real mode — a short sine served as `book.aaxc`, a fake-hex `key.json`, `chapters.txt` and `meta.json` — and simulates progress and failures (`--fake-fail <code>`). `OMARCHY_AUDIBLE_FAKE_CHAPTERS=<n>` (1–500) or `--fake-chapters <n>` on a fake `get` gives the fake book `n` evenly spaced chapters, for UI checks on 100+ chapter books; real mode ignores it.
+
+Fake-mode UI development also supports `sync --fake-fail network|internal` for controlled sync errors and `sync --fake-hide <asin>` to persistently omit a fixture book in `<fake config>/fake-hidden-asins.json`. These controls are rejected outside fake mode.
 
 `play-info` is the only event that carries a key. Its `lavf_options` value is a secret: never log it, never store it (the service redacts it in `recentEvents`, `qml/lib/EventLog.js`), and clear it from mpv as soon as the file is loaded. PlayerController holds it only in `pendingLoad` until the load is sent; its connection machine (`PlayerMachine.step`, §5.2) is told only that a load is waiting. Since B13 it is also the only non-job command that may make a network call: a legacy aax book with no `activation_bytes` on disk and a saved login makes **one** fetch for the account-wide key, writes it `0600`, and continues; if that fetch fails it stays `error(code=decrypt)` with a retry hint, and aaxc/old-`.m4b` books never go near the network. There is no key value in any log line or error — on failure `play-info` emits `error(decrypt)`.
 

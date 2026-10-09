@@ -94,6 +94,9 @@ Item {
     function libraryQuery(sort: string, filter: string, search: string): string { if (!service.fake) return Ipc.DEV_ONLY; return service.libraryQuery(sort, filter, search) }
     function flushState(): string { if (!service.fake) return Ipc.DEV_ONLY; store.flush(); return "ok" }
     function syncNow(): string { if (!service.fake) return Ipc.DEV_ONLY; return service.run("sync", [], "ipc") ? "ok" : "refused" }
+    function fakeFailSync(mode: string): string { if (!service.fake) return Ipc.DEV_ONLY; return service.run("sync", ["--fake-fail", mode], "ipc") ? "ok" : "refused" }
+    function fakeHideCatalog(asin: string): string { if (!service.fake) return Ipc.DEV_ONLY; return service.run("sync", ["--fake-hide", asin], "ipc") ? "ok" : "refused" }
+    function diagnostic(): string { if (!service.fake) return Ipc.DEV_ONLY; return service.diagnosticText }
     function pick(asin: string): string { if (!service.fake) return Ipc.DEV_ONLY; return service.pick(asin) }
     function answer(choice: string): string { if (!service.fake) return Ipc.DEV_ONLY; return service.answerAsk(choice === "resume") }
     function confirmDownload(): string { if (!service.fake) return Ipc.DEV_ONLY; return service.confirmDownload() }

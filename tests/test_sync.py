@@ -177,10 +177,36 @@ def test_fake_sync_writes_the_fixture_catalog(run_cli, validate_stream, fake_pat
     assert [book["asin"] for book in built["books"]] == FIXTURE_ASINS
     for book in built["books"]:
         assert set(book) == BOOK_KEYS
-
     remote = json.loads(fake_paths.remote_file.read_text(encoding="utf-8"))
     assert set(remote) == set(FIXTURE_ASINS)
     assert remote["B0FAKE0001"] == {"ms": 0, "updated_at": None}
+
+
+@pytest.mark.parametrize(
+    "mode,code", [("network", "network"), ("internal", "internal")]
+)
+def test_fake_sync_can_fail_for_ui_scenarios(run_cli, events, mode, code):
+    result = run_cli("sync", "--fake-fail", mode, fake=True)
+    assert result.returncode != 0
+    assert events(result)[-1]["code"] == code
+
+
+def test_fake_sync_controls_are_rejected_without_fake_mode(paths, capsys):
+    exit_code = commands.cmd_sync(
+        ["--fake-hide", "B0FAKE0001"], command="sync", fake=False, paths=paths
+    )
+    assert exit_code != 0
+    terminal = json.loads(capsys.readouterr().out.splitlines()[-1])
+    assert terminal["code"] == "invalid_args"
+
+
+def test_fake_sync_can_hide_a_catalog_book_persistently(run_cli, events, fake_paths):
+    assert run_cli("sync", "--fake-hide", "B0FAKE0001", fake=True).returncode == 0
+    assert run_cli("sync", fake=True).returncode == 0
+    catalog_doc = json.loads(fake_paths.catalog_file.read_text(encoding="utf-8"))
+    assert "B0FAKE0001" not in [book["asin"] for book in catalog_doc["books"]]
+    override = fake_paths.config_dir / "fake-hidden-asins.json"
+    assert json.loads(override.read_text(encoding="utf-8")) == ["B0FAKE0001"]
 
 
 def test_sync_writes_remote_json_but_never_state_json(run_cli, fake_paths):

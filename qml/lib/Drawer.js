@@ -218,8 +218,23 @@ function stateText(state) {
 }
 
 // The banner line for a `LibraryUi.listState` banner, or "".
-function bannerText(banner) {
-  if (banner === "offline") return "Offline — showing your saved library";
+function offlineAge(age) {
+  var value = _p.number(age);
+  if (value === null || value < 0) return "";
+  if (value < 60) return "just now";
+  if (value < 3600) return Math.floor(value / 60) + " min";
+  if (value < 86400) return Math.floor(value / 3600) + " h";
+  var days = Math.floor(value / 86400);
+  return days + (days === 1 ? " day" : " days");
+}
+
+function bannerText(banner, age) {
+  if (banner === "offline") {
+    var label = "Offline — showing your saved library";
+    var elapsed = offlineAge(age);
+    if (elapsed.length === 0) return label;
+    return label + " · Last synced " + elapsed + (elapsed === "just now" ? "" : " ago");
+  }
   if (banner === "reconnect") return "Audible needs you to sign in again";
   if (banner === "syncing") return "Updating your library…";
   return "";

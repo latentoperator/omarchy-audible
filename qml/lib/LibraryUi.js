@@ -261,6 +261,9 @@ function listState(state) {
   var view;
   if (!loaded) {
     view = errorCode === null ? STATE_LOADING : STATE_ERROR;
+  } else if (errorCode !== null && errorCode !== "network" && errorCode !== "auth_failed"
+      && errorCode !== "busy" && errorCode !== "cancelled") {
+    view = STATE_ERROR;
   } else if (total === 0) {
     view = STATE_EMPTY;
   } else if (shown === 0) {
