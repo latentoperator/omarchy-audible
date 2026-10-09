@@ -8,6 +8,39 @@ Environment for S5 and S6: HMSP-OMARCHYXPS, Omarchy 4.0.4, quickshell 0.3.1, mpv
 
 ---
 
+## R4 — Idle cost — measured; no offenders, no code change
+
+**Question.** SCOPE §8.7: with nothing playing, does the plugin run timers, poll or start processes, and is its resident memory (excluding mpv) under ~100 MB?
+
+**Method.** HMSP-OMARCHYBEE, Omarchy 4.0.4, Quickshell 0.3.1, live folder on `main`'s code commit `cc0cfa2`, 2026-10-09, read-only (no account calls). Real mode had Chris's book loaded and **paused** (the usual idle state: mpv alive, nothing playing); fake mode had nothing loaded. Two scripts, kept in `spikes/`:
+1. *Code audit:* every `Timer`, `FileView`, `Socket`, `Process` and animation in `Service.qml`, `BarWidget.qml` and `qml/`.
+2. *`spikes/r4_idle.py`* (root, read-only `/proc`): over a window, the shell's CPU ticks and RSS, the paused mpv's CPU ticks and context switches, every process whose parent chain reaches the shell (polled every 50 ms), and every file whose mtime changed under the plugin's real and fake config/data/runtime dirs.
+3. *`spikes/r4_mem.sh`*: a fresh shell's RSS/PSS 75 s after `omarchy-restart-shell`, with our bar entry and with it removed from `shell.json` (backed up and restored, `cmp` clean), then with the panel opened and closed; three rounds.
+
+**Result — timers and polling.** Every repeating timer is gated on playback or a pending job: Service's 10 s save and 60 s push (`running: player.playing`), the controller's 250 ms sleep tick (`sleepTimer !== null && playing`), Full view's 1 s clock (`visible && sleepTimer !== null`), and `PositionSync`'s retry (`queue.length > 0 && !flushing`, 1 min doubling to 30 min, only while a position push is unsent; F18). All other timers are single-shot. No `FileView` sets `watchChanges`, there is no infinite animation, and the mpv `Socket` is event-driven: a paused mpv sends nothing (0 context switches and 0 CPU ticks in every window below). The only work on a panel open is one-shot and on demand: a `sync` when the catalog is older than `syncOnOpenHours`, and the catch-up read.
+
+| Window | Shell children from our plugin | Files changed in our dirs | Paused mpv |
+|---|---|---|---|
+| Real, panel closed, 180 s | 0 | 0 | 0 ticks, 0 switches |
+| Real, Library open, 120 s | 0 | 0 | 0 ticks, 0 switches |
+| Fake, nothing loaded, panel closed, 180 s | 0 | 0 | — |
+
+The whole shell used 159–171 ticks per window (about 1 % of one core). That is other plugins: in the 180 s real window the shell started 676 processes, none ours, 391 of them from `io.github.fabean.herdr`'s `state.sh` and 240 its `ssh` agent polls.
+
+**Result — memory.** The shell is one process, so the plugin's share is the difference between fresh shells with and without it.
+
+| Round | RSS with / without | PSS with / without | Plugin share (RSS / PSS) | Panel open (RSS) | Panel closed again |
+|---|---|---|---|---|---|
+| 1 | 697.5 / 655.9 MB | 598.5 / 557.6 MB | 41.7 / 41.0 MB | +13.3 MB | −0.4 MB |
+| 2 | 669.0 / 625.7 MB | 570.6 / 527.1 MB | 43.3 / 43.5 MB | +28.6 MB | +14.8 MB |
+| 3 | 669.8 / — | 571.1 / — | — | +56.3 MB | +31.6 MB |
+
+So the plugin costs about **42 MB** at rest with a book loaded, under the ~100 MB target; an open Library (91 rows, covers decoded at row size) adds 13–56 MB while it is open, part of which Qt keeps cached after it closes. Fresh shells vary by ±30 MB from run to run, so these figures are good to about that. Round 3's "without" shell crashed on start (SIGSEGV in `QQmlObjectCreator::finalize` → `__dynamic_cast`, Quickshell 0.3.1, with our entry already removed from `shell.json`), so that round has no valid "without" reading. The paused mpv held 42–49 MB and is outside the target.
+
+**Decision.** No offenders; no code change. R2–R7 keep the rule: no new repeating timer or polling that runs while nothing plays.
+
+---
+
 ## U9 — Pause lag (G4 finding) — measured; nothing in our launch options to change
 
 **Question.** Chris hears about a second of audio after ⏯. Is any of it in the plugin or in how we start mpv?
