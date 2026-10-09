@@ -104,6 +104,16 @@ def test_speed_accepts_numeric_preset_and_garbage_object_falls_back(settings) ->
 
 
 @pytest.mark.parametrize(
+    "raw,expected",
+    [({}, False), (None, False), ([], False), ({"defaultSpeed": "1.5x"}, True)],
+)
+def test_initial_empty_settings_are_not_a_received_settings_object(
+    settings, raw, expected
+):
+    assert settings.call("hasValues", raw) is expected
+
+
+@pytest.mark.parametrize(
     "saved,setting,last,expected",
     [
         (1.25, 1.0, 1.0, {"apply": False, "speed": 1.25}),
@@ -156,6 +166,7 @@ def test_service_owns_and_applies_widget_settings() -> None:
         in service
     )
     assert "property bool settingsReceived: false" in service
+    assert "if (!settingsReceived && !Settings.hasValues(raw)) return" in service
     assert "if (!settingsReceived || !store.loaded) return" in service
     assert (
         "if (choice.apply && player.connected) player.setSpeed(choice.speed)" in service
@@ -199,6 +210,16 @@ def test_widget_rebuild_empty_settings_is_ignored(settings) -> None:
     assert chosen_sort == "author"
 
 
-def test_store_first_does_not_write_speed_marker_before_settings() -> None:
+def test_store_first_does_not_write_speed_marker_before_settings(settings) -> None:
     service = (ROOT / "Service.qml").read_text(encoding="utf-8")
     assert "if (!settingsReceived || !store.loaded) return" in service
+    assert "if (!settingsReceived && !Settings.hasValues(raw)) return" in service
+    settings_received = False
+    marker = None
+    if settings.call("hasValues", {}):
+        settings_received = True
+    store_loaded = True
+    if settings_received and store_loaded:
+        marker = 1.0
+    assert marker is None
+    assert settings.call("hasValues", {"defaultSpeed": "1.5x"}) is True

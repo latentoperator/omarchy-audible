@@ -51,6 +51,7 @@ Item {
   property bool flagKnown: false
 
   function applySettings(raw) {
+    if (!settingsReceived && !Settings.hasValues(raw)) return
     settingsReceived = true
     var next = Settings.normalize(raw)
     skipSeconds = next.skipSeconds

@@ -27,6 +27,11 @@ function normalize(raw) {
   };
 }
 
+function hasValues(raw) {
+  return raw !== null && typeof raw === "object" && !Array.isArray(raw)
+    && Object.keys(raw).length > 0;
+}
+
 function sortKey(label) {
   if (label === "Recently added") return "added";
   if (label === "Title") return "title";
