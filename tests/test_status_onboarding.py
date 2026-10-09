@@ -49,6 +49,17 @@ def test_mpris_script_detection_prefers_fixed_system_paths_and_user_fallback(tmp
     assert find_mpris_script([system, other], tmp_path / "config") is None
 
 
+def test_mpris_script_detection_ignores_a_relative_xdg_config_home(
+    tmp_path, monkeypatch
+):
+    user = tmp_path / ".config" / "mpv" / "scripts" / "mpris.so"
+    user.parent.mkdir(parents=True)
+    user.write_bytes(b"")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", "relative/config")
+    assert find_mpris_script([]) == str(user)
+
+
 def _status_event(result, events) -> dict:
     return next(event for event in events(result) if event["type"] == "status")
 

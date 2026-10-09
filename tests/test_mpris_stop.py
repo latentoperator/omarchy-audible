@@ -35,3 +35,7 @@ def test_mpris_unload_decision_vectors():
     assert not playback.call("externalUnload", True, True, False, False, False, "B0A")
     assert not playback.call("externalUnload", True, True, False, True, True, "B0A")
     assert not playback.call("externalUnload", True, False, False, False, True, "B0A")
+    assert not playback.call("externalUnload", False, True, False, False, True, "B0A")
+    assert not playback.call("externalUnload", True, True, True, False, True, "B0A")
+    assert not playback.call("externalUnload", True, True, False, False, True, "")
+    assert not playback.call("externalUnload", True, True, False, False, True, None)

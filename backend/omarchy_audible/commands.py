@@ -109,8 +109,10 @@ def find_mpris_script(
 ) -> str | None:
     """Find the first readable optional mpv-mpris script."""
     if config_home is None:
-        config_home = Path(
-            os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
+        # The XDG spec says a relative value is invalid and must be ignored.
+        configured = os.environ.get("XDG_CONFIG_HOME") or ""
+        config_home = (
+            Path(configured) if os.path.isabs(configured) else Path.home() / ".config"
         )
     candidates = (*system_paths, config_home / "mpv/scripts/mpris.so")
     for candidate in candidates:

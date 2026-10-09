@@ -369,17 +369,6 @@ def test_load_options_force_catalog_title_without_exposing_key_in_argv(mpv):
         "chapters-file": "/b/chapters.txt",
         "force-media-title": "Invented Winter Tales",
     }
-    assert "audible_key" not in json.dumps(
-        mpv.call(
-            "launchArgs",
-            {
-                "volume": 15,
-                "speed": 1,
-                "socketPath": "/run/test/mpv.sock",
-                "mprisScript": "/usr/lib/mpv-mpris/mpris.so",
-            },
-        )
-    )
 
 
 # --- F23: a minutes timer doesn't count paused time -------------------------

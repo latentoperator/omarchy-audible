@@ -2,7 +2,7 @@
 
 Hand-run journeys from `docs/SCOPE.md` §3, one line per run. Chris does all the clicking; the driving CLI checks state over IPC and writes the line. Real mode unless a line says otherwise.
 
-## R3 — MPRIS (optional), fake mode
+## R3 — MPRIS (optional), fake mode — 2026-10-09, HMSP-OMARCHYBEE (branch `r3-mpris`)
 
 Run on HMSP-OMARCHYBEE in fake mode. The live folder was switched to the R3 head once and restored to `main` after testing. Do not use media keys or `omarchy-shell media` here; those target whichever MPRIS player is active.
 
@@ -25,8 +25,11 @@ Run on HMSP-OMARCHYBEE in fake mode. The live folder was switched to the R3 head
 | 2 | Stock media widget shows the book title; its play/pause and seek work. | Pending |
 | 3 | ■ in Mini still works. | Pending |
 | 4 | Pause from the media widget, then ⏯ in Mini. | Pending |
+| 5 | Audio plays from the speakers/headphones after a widget or key resume. | Pending |
+| 6 | Stop from the media widget, then pick the book again: it resumes at the spot Stop saved (compare `pushState`/`playerStatus` before and after; not just "near"). | Pending |
+| 7 | Play, restart the shell, then Stop from the media widget: the position is saved, the drawer goes to Library, and the idle mpv stays until the next play (expected after a reattach). | Pending |
 
-Found, not fixed: a paused MPRIS `SetPosition` is not marked as a user move. After setting it to 0 while paused, the saved account position remained at the prior 5,949 ms through the next pause; because it is not dirty, a Stop before any playing position report will not save that move. mpv does not identify seek origin, and `playback-restart` also covers the internal catch-up jump. MPRIS resume also skips the UI catch-up read after a long pause; the existing push staleness check protects the account. The mpv-mpris 1.2 source does not use the PID name described in the task prompt: it requests `org.mpris.MediaPlayer2.mpv` when available, and falls back on a random `.instance-<id>` suffix after a name collision. This run had only the fake mpv exporting MPRIS, so the canonical name was owned by the fake PID; the already-running real mpv had no MPRIS service.
+Fake row 6's "near" is IPC latency (the book plays on after the resume), not a drift in the saved spot; hand-check row 6 confirms it. Found, not fixed: a paused MPRIS `SetPosition` is not marked as a user move. After setting it to 0 while paused, the saved account position remained at the prior 5,949 ms through the next pause; because it is not dirty, a Stop before any playing position report will not save that move. mpv does not identify seek origin, and `playback-restart` also covers the internal catch-up jump. MPRIS resume also skips the UI catch-up read after a long pause; the existing push staleness check protects the account. The mpv-mpris 1.2 source does not use the PID name described in the task prompt: it requests `org.mpris.MediaPlayer2.mpv` when available, and falls back on a random `.instance-<id>` suffix after a name collision. This run had only the fake mpv exporting MPRIS, so the canonical name was owned by the fake PID; the already-running real mpv had no MPRIS service.
 
 ## R1 (desktop) — 2026-10-09, HMSP-OMARCHYBEE, live folder on `main` (R1a at `a50f32d`, R1b at `cc0cfa2`)
 

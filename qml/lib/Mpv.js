@@ -145,11 +145,13 @@ function toMs(seconds) {
 
 // ---- commands (argv arrays for mpv's `command` field) ----
 
-// `loadfile` for a book. With no `options` this is the plain form used for an
-// old unlocked `.m4b`. With `{lavf, chaptersFile}` it becomes mpv's per-file
-// option map: mpv >= 0.38 takes the index (-1 = "no index") before the map
-// (ARCHITECTURE 5.1). Empty or null option values are left out, so an old book
-// and a locked one both load through this one function.
+// `loadfile` for a book. With no `options` this is the plain form (no key, no
+// chapters file and no title). With `{lavf, chaptersFile, title}` it becomes
+// mpv's per-file option map: mpv >= 0.38 takes the index (-1 = "no index")
+// before the map (ARCHITECTURE 5.1). Empty or null option values are left out,
+// so an old book and a locked one both load through this one function. The
+// service always passes the catalog title (R3: `force-media-title`, for MPRIS),
+// so in practice every book from the drawer loads with the map.
 function loadCommand(path, startSec, options) {
   var start = typeof startSec === "number" && startSec > 0 ? startSec : 0;
   if (isNull(options) || typeof options !== "object" || Array.isArray(options)) {
@@ -168,9 +170,9 @@ function loadCommand(path, startSec, options) {
   return ["loadfile", String(path), "replace", -1, map];
 }
 
-// The `loadCommand` options for a book from `play-info`'s {lavf, chaptersFile},
-// or null when both are empty (an old `.m4b`), so that book keeps the plain
-// loadfile form it has always used.
+// The `loadCommand` options for a book from `play-info`'s {lavf, chaptersFile}
+// and the catalog `title`, or null when all three are empty, which gives the
+// plain loadfile form.
 function loadOptions(options) {
   if (isNull(options) || typeof options !== "object") {
     return null;

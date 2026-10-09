@@ -20,10 +20,6 @@ The drawer drives everything through one command, `bin/omarchy-audible`. You can
 
 Exit codes: `0` ok, `1` failed, `2` bad arguments, `3` busy (another job is running). Errors look like `{"type":"error","code":"bad_asin","message":"…","hint":"…"}`.
 
-## Media keys (optional)
-
-Install `mpv-mpris` with `sudo pacman -S mpv-mpris`, then start a book. New players expose the book to Omarchy's stock media widget and the keyboard play/pause keys; the widget can play, pause and seek. A player started before installing the package needs a Stop and a new play to load the MPRIS script. Next and Previous do not change audiobook chapters. Resuming with a media key or widget after a long pause skips the plugin's account catch-up read; later position pushes still follow the stale-position protection rules. MPRIS Stop saves and stops playback. A seek made through MPRIS while paused is not currently saved as a user move if playback is stopped before resuming.
-
 Add `--fake` (or set `OMARCHY_AUDIBLE_FAKE=1`) to any command to run against a built-in fake library with no network and no account. Real paths follow XDG: login in `~/.config/omarchy-audible/`, catalog and covers in `~/.local/share/omarchy-audible/`, books in `~/Audiobooks/Audible/` (override with `OMARCHY_AUDIBLE_BOOKS_DIR`). Fake mode uses a separate tree (`~/.config/omarchy-audible-fake/`, `~/.local/share/omarchy-audible-fake/`, books in `~/.local/share/omarchy-audible-fake/books`) so it never reads or writes the real login, catalog or books. It honours a books-folder override only when it resolves strictly inside the fake data directory; an outside value is ignored and reported as a problem.
 
 Fake mode also carries its own onboarding state, so the sign-in and setup screens can be tested without an account. A fresh fake tree starts signed in; `logout --fake` signs the fake account out and `login-finish --fake` / `login-import-cli --fake` sign it back in (fake `login-finish` accepts any pasted text containing `openid.oa2.authorization_code=`). To preview the missing-tools or setup screen, write `~/.config/omarchy-audible-fake/fake-status.json` — `{"missing": ["mpv"]}` or `{"venv_ready": false}` (both keys optional) — and delete it afterward; `setup --fake` clears the `venv_ready` override again. Real mode reads neither the marker nor `fake-status.json`.
@@ -73,6 +69,10 @@ omarchy-audible position-push <asin> <ms> --at <iso-8601>
 ```
 
 `position-push` is the only command that changes anything on your Audible account. It re-reads Audible's position first and refuses (`error` code `stale`) if Audible's is newer than your local listening time, so it can't move your phone backwards; `--at` (the local listening time the position came from) is required, and omitting it is `error` code `invalid_args`. Audible stamps a push with its own server clock, so the command also remembers its own writes in `<data dir>/pushed.json` and treats an exactly-matching remote position as its own echo rather than a newer listening — that keeps a computer whose clock runs behind Audible's from locking itself out. `position-get` marks such an echo with `"own": true`. The Audible phone app follows a pushed position on its own, with an undo notice. With `--fake`, positions are kept in `<fake data dir>/fake-account-positions.json` instead of the account, so a push, a resume and the stale check can all be tried with no account.
+
+## Media keys (optional)
+
+Install `mpv-mpris` with `sudo pacman -S mpv-mpris`, then start a book. New players expose the book to Omarchy's stock media widget and the keyboard play/pause keys; the widget can play, pause and seek. A player started before installing the package needs a Stop and a new play to load the MPRIS script. Next and Previous do not change audiobook chapters. Resuming with a media key or widget after a long pause skips the plugin's account catch-up read; later position pushes still follow the stale-position protection rules. Stop from the media widget saves your place and stops playback; after a shell restart it saves and stops but leaves the idle player running until the next book. A seek made through MPRIS while paused is not currently saved as a user move if playback is stopped before resuming.
 
 ## Hotkeys and IPC
 
