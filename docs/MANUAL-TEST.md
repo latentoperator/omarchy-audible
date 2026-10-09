@@ -2,6 +2,25 @@
 
 Hand-run journeys from `docs/SCOPE.md` §3, one line per run. Chris does all the clicking; the driving CLI checks state over IPC and writes the line. Real mode unless a line says otherwise.
 
+## R5 — Clean install (laptop) — 2026-10-09, HMSP-OMARCHYXPS, Chris's own account, `main` at `2acadfc`
+
+Omarchy allows one user account, so R5 ran in Chris's. Dante backed up and moved aside the plugin link (`~/.config/omarchy/plugins/latentoperator.audible` → `~/Projects/omarchy-audible`), `shell.json` (SHA-256 recorded), `~/.config/omarchy-audible`, `~/.local/share/omarchy-audible`, `~/.audible`, `~/Audiobooks/Audible` (824 MB, one book) and `/run/user/1000/omarchy-audible`, and ended the real mpv by stopping its scope (no plugin Stop, so no push). `omarchy plugin remove` unlinked the plugin and dropped its bar entry. Then, at 17:50:21, `omarchy plugin add https://github.com/latentoperator/omarchy-audible --enable --yes`: anonymous clone of the public repo, validation passed, enabled and placed in the bar; `listPlugins` showed the name **Omaudible**; first state `setup`, nothing missing. Chris did the clicking; Dante read IPC, `state.json`, `pushed.json` and the event log over SSH. Times are local (UTC−5).
+
+| # | Journey | Result |
+|---|---|---|
+| J1 | First run: Set up → Connect Audible → browser sign-in → paste | **Pass.** Setup built the venv in ~37 s; signed in and 91 books listed at 17:51. A new device was registered (account `Christopher`, US). |
+| J2 | Start a book | **Pass.** Carl (cloud) downloaded, 780 MB `aaxc`, done 17:52; played from the account's spot (4:29:20). **Install to first audio ≈ 3 min (target ≤ 5).** Chris deliberately went back to the chapter start; pause saved and pushed 4:25:08, read back `own: true`. Chris felt the download was "prompted"; the code needs two picks (question, then download) and nothing downloads after sign-in, so most likely a stray Enter: the library opens with the empty search focused and Enter picks the top row. Follow-up below. |
+| J3 | Dismiss and keep listening | **Pass** (Chris). |
+| J4 | Control it: ⏪15, ⏩15, chapter popup, speed 1.25× and back | **Pass** (Chris). |
+| J5 | Maximize: Full view, chapter jump, 15 min sleep timer + Cancel, speed chips and ±0.05, collapse by button and Backspace | **Pass** (Chris). |
+| J6 | Free up space: Remove from this device | **Pass.** Position 4:24:40 saved and pushed (`own: true`) first; `remove` freed 784,329,047 bytes; books folder empty; mpv ended; Carl stayed in the list as cloud; storage 0. Re-download then worked (done 18:02). |
+| J7 | Switch devices | **Pass.** Laptop at 4:24:40; Chris listened on the phone (9h 5m left); pressing play on the laptop read the account's 4:25:45 (`updated_at` 23:03:11 UTC) and resumed there. |
+| — | Disconnect | **Pass.** `logout` ok, the four login files removed, view back to Connect Audible; the test device deregistered. |
+
+**Restore:** the test player's scope stopped (already pushed), `omarchy plugin remove`, test state moved aside and deleted, originals moved back, symlink recreated, `shell.json` copied back: **`cmp` identical** to the backup. One `omarchy-restart-shell` (145535 → 320108): signed in as before, 91 books, Carl downloaded (784,329,047 bytes), symlink to `~/Projects/omarchy-audible` (clean `main`), zero plugin warnings. Chris's original login is a different device and was not touched by Disconnect.
+
+**Follow-ups found:** (a) an Enter carried from sign-in (or a stray one) on the freshly opened library picks the top row and asks to download it; consider no default pick until the user types or moves. (b) The README "Media keys" paragraph reads like developer notes; rewrite in plain words with a short Known limits list in the 0.1.0 PR. (c) The GitHub repo description said "Planning stage"; fixed the same day (description and topics).
+
 ## R2 — Error and edge-case sweep
 
 Round 1's regression proof against starting `main` found four missing offline-age cases and orphan rows dropped by `buildRows`. Round 2 used a `git archive 9da9ccf` scratch copy: the cached-catalog state vectors, connection-classifier vectors and five malformed first-page vectors failed there. Replacing the Service doctor guard with `if (true)` failed `test_service_runs_doctor_and_copies_diagnostic_through_stdin`; removing `not fake or` from the fake-sync guard failed the network and internal real-mode refusal vectors.
