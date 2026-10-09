@@ -655,3 +655,22 @@ def test_position_read_classification_is_enabled_only_for_sync():
     with pytest.raises(PipelineError) as sync_error:
         positions.fetch_positions(["B0FAKE0001"], StubPositions(), classify_errors=True)
     assert sync_error.value.code == protocol.ErrorCode.AUTH_FAILED
+
+
+def test_run_sync_classifies_an_auth_error_from_the_position_read(paths):
+    unauthorized = type("Unauthorized", (Exception,), {})("stub")
+
+    class StubPositions:
+        def fetch_batch(self, _asins):
+            raise unauthorized
+
+    with pytest.raises(PipelineError) as info:
+        catalog.run_sync(
+            paths,
+            fake=True,
+            library=_StaticLibrary([_item("B0FAKE0001")]),
+            positions_port=StubPositions(),
+            cover_fetch=None,
+            emit=lambda *_args, **_kwargs: None,
+        )
+    assert info.value.code == protocol.ErrorCode.AUTH_FAILED

@@ -9,7 +9,7 @@ Round 1's regression proof against starting `main` found four missing offline-ag
 | SCOPE §6 / note | Result and evidence |
 |---|---|
 | Offline | **Fixed here.** `tests/test_drawer_js.py::test_offline_banner_includes_known_catalog_age` checks unknown age has no suffix and known ages render just now/minutes/hours/days. The earlier fake sync failure `network` showed “Offline — showing your saved library · Last synced just now”; screenshot `~/.cache/dante-oa/r2-shots/offline-age.png`. Round 2 did not rerun the shell scenario. |
-| Credentials expired or revoked (F15) | **Covered; v1 limitation recorded.** `tests/test_get.py::test_real_get_classifies_metadata_errors_before_creating_partial` and the sync classifier vectors check 401-like `Unauthorized` errors become `auth_failed`; `tests/test_library_ui.py::test_list_state_auth_failed_is_reconnect` checks Reconnect with and without a cached catalog. Real mode detects expiry only when Audible returns an auth error during sync or `get` metadata lookup; `status.authenticated` means the auth file exists and does not check expiry. The prior fake `authfail` check showed Reconnect while a local book played (loaded and playing at 1,262 ms). No Round 2 fake-shell rerun was possible; see run notes. |
+| Credentials expired or revoked (F15) | **Covered; v1 limitations recorded** (audible 0.12 raises `Unauthorized` for HTTP 403 as well as 401, so a region/marketplace or title-specific 403 also shows Reconnect until the next sign-in). `tests/test_get.py::test_real_get_classifies_metadata_errors_before_creating_partial` and the sync classifier vectors check 401-like `Unauthorized` errors become `auth_failed`; `tests/test_library_ui.py::test_list_state_auth_failed_is_reconnect` checks Reconnect with and without a cached catalog. Real mode detects expiry only when Audible returns an auth error during sync or `get` metadata lookup; `status.authenticated` means the auth file exists and does not check expiry. The prior fake `authfail` check showed Reconnect while a local book played (loaded and playing at 1,262 ms). No Round 2 fake-shell rerun was possible; see run notes. |
 | Download fails or is cancelled | **Covered and manually checked.** `tests/test_get.py::test_get_failure_removes_everything_and_never_leaves_a_book` asserts failed downloads leave no book/partial; `tests/test_cancel.py::test_cancel_mid_download_stops_the_job_and_cleans_up` asserts cancellation cleans partial work. Fake network failure showed “Failed — Retry” and no `.partial`; screenshot `~/.cache/dante-oa/r2-shots/download-fail-network.png`. A fake B0FAKE0004 download was cancelled after its first 200 KB progress event; final event was `cancelled`, no partial directory remained. |
 | Disk full or low | **Covered and manually checked.** `tests/test_get.py::test_get_disk_failure_refuses_before_writing` and `test_free_space_preflight_requires_1_1x` assert preflight failure before writes. Fake `disk` failure showed its row error and left no `.partial`; screenshot `~/.cache/dante-oa/r2-shots/download-fail-disk.png`. |
 | Missing dependency | **Covered and manually checked.** `tests/test_onboarding.py::test_install_command` checks the generated install command. Fake status override with missing `mpv` and `ffmpeg` showed the install command `omarchy-pkg add mpv ffmpeg`; screenshot `~/.cache/dante-oa/r2-shots/missing-tools.png`. The override was removed afterward. |
@@ -26,6 +26,20 @@ Round 1's regression proof against starting `main` found four missing offline-ag
 ### R2 run notes
 
 Round 2 took the lock, backed up `shell.json`, confirmed the real baseline (`playerStatus`: loaded, paused, 16,104,035 ms; `libraryState`: 91 total, 4 local), set the fake flag, and checked out code head `83c694a` in the live plugin. `omarchy-restart-shell` returned 0, but subsequent IPC said “omarchy-shell is not running” and `qs list --all` showed no running instances; no fake sync, play, remove-all, or screenshot checks were attempted. Cleanup restored the live folder to clean `main` at `a294590`, removed the flag, and confirmed `shell.json` was byte-identical to its backup. The required final restart registered shell PID 660331; real IPC then reported loaded/paused at 16,104,035 ms and library count 91, with mpv PID 99684 still present. The new PID logged a warning from `qml/PlayerController.qml:389` (“Property 'apply' … is not a function”), plus stock Omarchy/Omamail warnings. No Round 2 fake screenshots were captured.
+
+### R2 fake-mode shell check (Dante, 2026-10-09, branch head `7258847`)
+
+Took the lock, backed up `shell.json`, checked out `7258847` in the live folder with the fake flag; shell came up first try. Downloaded B0FAKE0001.
+
+| # | Check | Result |
+|---|-------|--------|
+| a | `fakeFailSync internal` with a loaded catalog | List kept, `banner: "connection"`, "Audible connection problem" + Copy diagnostic; diagnostic text redacted (no key/token material); downloaded fake book played. |
+| b | `fakeFailSync network` | List kept, "Offline — showing your saved library · Last synced just now"; no connection banner; doctor not re-run (4/4 doctor events). |
+| c | `syncNow` after both | Banner cleared, `lastSyncCode` empty, saved doctor checks cleared. |
+| d | Hide B0FAKE0001 from the fake catalog | Row stays with "No longer in your Audible library"; Remove took it out (5 → 4 rows, storage 3 → 2); unhiding restored 5 rows. |
+| e | Shell restart on the branch | No `latentoperator.audible` warnings. |
+
+Restored: live `main` `9c7c920`, fake flag removed, `shell.json` cmp clean, shell answered with 91 books / 4 local; real mpv 99684 loaded and paused at 16,104,035 ms. Screenshots `~/.cache/dante-oa/r2check-shots/`. Not shell-checked: Remove all sparing orphans (test-covered only). Cosmetic for R6: faint connection-banner text; an orphan row shows "0m" length.
 
 ## R3 — MPRIS (optional), fake mode — 2026-10-09, HMSP-OMARCHYBEE (branch `r3-mpris`)
 

@@ -124,6 +124,10 @@ def test_service_runs_doctor_and_copies_diagnostic_through_stdin():
     assert "if (!outcome.ok && Drawer.connectionProblem(root.lastSyncCode))" in service
     assert 'authFailed ? "auth_failed" : syncFailure.errorCode' in service
     assert (
+        '"connectionProblem": Drawer.connectionProblem('
+        'authFailed ? "auth_failed" : lastSyncCode)'
+    ) in service
+    assert (
         "function copyDiagnostic() { signinFlow.copyText(diagnosticText) }" in service
     )
     assert "function diagnostic(): string { if (!service.fake)" in ipc

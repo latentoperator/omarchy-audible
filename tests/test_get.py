@@ -612,6 +612,23 @@ def test_real_get_classifies_metadata_errors_before_creating_partial(
     assert not (paths.books_dir / "B0REAL0001").exists()
 
 
+def test_real_get_reports_an_unreadable_login_as_auth_failed(paths, monkeypatch):
+    paths.config_dir.mkdir(parents=True, exist_ok=True)
+    paths.auth_file.write_text("stub", encoding="utf-8")
+
+    def broken(_path):
+        raise ValueError("corrupt auth file")
+
+    audible = SimpleNamespace(
+        Authenticator=SimpleNamespace(from_file=broken), Client=object
+    )
+    monkeypatch.setitem(sys.modules, "audible", audible)
+    with pytest.raises(PipelineError) as info:
+        dl.run_get("B0REAL0001", paths, fake=False, emit=lambda *a, **k: None)
+    assert info.value.code == dl.protocol.ErrorCode.AUTH_FAILED
+    assert not (paths.books_dir / "B0REAL0001").exists()
+
+
 # --- ASIN validation (ARCHITECTURE 4.4; shared library.validate_asin) --------
 # These mirror the traversal and symlink refusals in test_local_remove.py: an
 # ASIN is a single path component and `get` must never write or delete outside

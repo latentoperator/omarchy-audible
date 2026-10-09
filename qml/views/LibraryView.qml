@@ -286,8 +286,8 @@ ColumnLayout {
       width: parent.width
       horizontalAlignment: Text.AlignHCenter
       wrapMode: Text.WordWrap
-      visible: !(root.list.state === LibraryUi.STATE_ERROR && root.service
-        && Drawer.connectionProblem(root.service.lastSyncCode) && !root.library.catalogLoaded)
+      visible: !(root.list.state === LibraryUi.STATE_ERROR
+        && root.list.banner === LibraryUi.BANNER_CONNECTION)
       text: Drawer.stateText(root.list.state)
       textFormat: Text.PlainText
       color: Color.muted
@@ -298,8 +298,8 @@ ColumnLayout {
     ColumnLayout {
       anchors.centerIn: parent
       width: parent.width
-      visible: root.list.state === LibraryUi.STATE_ERROR && root.service
-        && Drawer.connectionProblem(root.service.lastSyncCode) && !root.library.catalogLoaded
+      visible: root.list.state === LibraryUi.STATE_ERROR
+        && root.list.banner === LibraryUi.BANNER_CONNECTION
       spacing: Style.spacing.sm
 
       Text {
