@@ -54,4 +54,11 @@ RowLayout {
     tooltipText: "Next chapter"
     onClicked: root.player.nextChapter()
   }
+
+  Button {
+    enabled: root.loaded
+    iconText: Glyphs.GLYPH_STOP
+    tooltipText: "Stop"
+    onClicked: root.service.quitPlayer()
+  }
 }

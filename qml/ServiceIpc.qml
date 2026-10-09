@@ -69,6 +69,12 @@ Item {
       return "ok"
     }
 
+    function stop(): string {
+      if (!player.loaded && !player.pendingLoad && service.pendingResume.length === 0 && !service.playRequest) return "error: nothing loaded"
+      service.quitPlayer()
+      return "ok"
+    }
+
     // Test methods so agents can drive the service without input. Each one
     // works only in fake mode and returns Ipc.DEV_ONLY otherwise (H1 F27);
     // Ipc.js lists the public and read-only status methods that stay.

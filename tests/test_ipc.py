@@ -100,8 +100,10 @@ def test_the_public_and_status_lists(ipc):
         "skip",
         "nextChapter",
         "prevChapter",
+        "stop",
     ]
     assert ipc.call("isRealModeMethod", "toggle") is True
+    assert ipc.call("isRealModeMethod", "stop") is True
     assert ipc.call("isRealModeMethod", "playerStatus") is True
     assert ipc.call("isRealModeMethod", "removeBook") is False
     assert ipc.call("isRealModeMethod", None) is False
@@ -111,6 +113,17 @@ def test_every_listed_method_exists(ipc):
     methods = ipc_methods()
     for name in ipc.evaluate("PUBLIC_METHODS") + ipc.evaluate("STATUS_METHODS"):
         assert name in methods, name
+
+
+def test_stop_is_public_and_uses_the_service_quit_path():
+    body = ipc_methods()["stop"]
+    assert (
+        "if (!player.loaded && !player.pendingLoad && service.pendingResume.length === 0 && !service.playRequest)"
+        in body
+    )
+    assert 'return "error: nothing loaded"' in body
+    assert "service.quitPlayer()" in body
+    assert 'return "ok"' in body
 
 
 def test_test_only_methods_are_gated_first(ipc):

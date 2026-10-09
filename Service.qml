@@ -674,7 +674,10 @@ Item {
   Connections {
     target: player
 
-    function onPathChanged() { root.onBookSwitched() }
+    function onPathChanged() {
+      root.onBookSwitched()
+      if (!player.loaded) root.showView(root.view)
+    }
 
     function onPositionMsChanged() {
       // A null time-pos (a file being swapped) is not a position, and nothing

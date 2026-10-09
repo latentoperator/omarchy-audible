@@ -220,6 +220,14 @@ def test_view_mini_needs_a_loaded_book(onboarding: qjs.JsModule) -> None:
     assert onboarding.call("view", "ready", False, "mini") == "library"
 
 
+@pytest.mark.parametrize("requested", ["mini", "full"])
+def test_view_after_stop_falls_back_to_library(
+    onboarding: qjs.JsModule, requested: str
+) -> None:
+    assert onboarding.call("view", "ready", True, requested) == requested
+    assert onboarding.call("view", "ready", False, requested) == "library"
+
+
 def test_view_library_is_always_library(onboarding: qjs.JsModule) -> None:
     assert onboarding.call("view", "ready", True, "library") == "library"
     assert onboarding.call("view", "ready", False, "library") == "library"

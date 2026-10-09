@@ -35,7 +35,7 @@ var DEV_ONLY = "error: dev only";
 
 // Methods anyone may call in real mode: the documented controls (README
 // "Hotkeys and IPC", ARCHITECTURE 6) that keybindings use.
-var PUBLIC_METHODS = ["toggle", "openLibrary", "playPause", "skip", "nextChapter", "prevChapter"];
+var PUBLIC_METHODS = ["toggle", "openLibrary", "playPause", "skip", "nextChapter", "prevChapter", "stop"];
 
 // Methods that only read state. They stay in real mode so a session can
 // confirm which mode the shell is in and that the service is attached
