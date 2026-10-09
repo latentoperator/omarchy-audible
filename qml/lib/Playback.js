@@ -202,6 +202,15 @@ function withPlayerSettings(state, volume, speed) {
   return next;
 }
 
+function withDefaultSpeedSetting(state, speed) {
+  if (!state || typeof speed !== "number" || !isFinite(speed)) return state;
+  if (state.default_speed_setting === speed) return state;
+  var next = {};
+  for (var key in state) next[key] = state[key];
+  next.default_speed_setting = speed;
+  return next;
+}
+
 // A copy of `state` with the push queue replaced.
 function withQueue(state, queue) {
   var next = {};

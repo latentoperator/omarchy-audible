@@ -67,7 +67,7 @@ def test_f21_mpv_starts_with_the_saved_volume_and_speed():
     assert '"--speed=" + initialSpeed' in function_body(player, "launchMpv")
     service = read("Service.qml")
     assert "initialVolume: Mpv.startVolume(store.doc.volume" in service
-    assert "initialSpeed: Mpv.startSpeed(store.doc.speed)" in service
+    assert "initialSpeed: Mpv.startSpeed(store.doc.speed, root.defaultSpeed)" in service
     note = function_body(service, "noteSettings")
     assert "if (!player.connected) return" in note
     assert "Mpv.userVolume(player.volume, player.fadeBaseVolume)" in note

@@ -75,6 +75,10 @@ Item {
     apply({ "type": "set_player_settings", "volume": volume, "speed": speed })
   }
 
+  function setDefaultSpeedSetting(speed) {
+    apply({ "type": "set_default_speed_setting", "speed": speed })
+  }
+
   function markFinished(asin) {
     apply({ "type": "finished", "asin": asin })
     apply({ "type": "save" })

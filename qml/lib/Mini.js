@@ -9,9 +9,6 @@
 // Pure ECMAScript for the Qt JS engine: no imports but `Glyphs.js`, no Qt
 // types, and nothing here throws on bad input.
 
-// Seconds one skip moves. Fixed until the setting arrives in R1.
-var SKIP_SECONDS = 15;
-
 // Shown when the loaded file has no catalog row, or the row has no title.
 var UNKNOWN_TITLE = "Unknown title";
 
@@ -75,8 +72,9 @@ function keyAction(view, loaded, kind, dx) {
 }
 
 // The skip in seconds for a back/forward action, else 0.
-function skipSeconds(action) {
-  if (action === ACTION_BACK) return -SKIP_SECONDS;
-  if (action === ACTION_FORWARD) return SKIP_SECONDS;
+function skipSeconds(action, amount) {
+  var seconds = typeof amount === "number" && isFinite(amount) && amount > 0 ? amount : 15;
+  if (action === ACTION_BACK) return -seconds;
+  if (action === ACTION_FORWARD) return seconds;
   return 0;
 }

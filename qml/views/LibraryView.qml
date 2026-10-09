@@ -401,8 +401,8 @@ ColumnLayout {
 
       PanelActionButton {
         iconText: Glyphs.GLYPH_BACK
-        tooltipText: "Back " + Mini.SKIP_SECONDS + " s"
-        onClicked: if (root.service) root.service.player.skip(Mini.skipSeconds(Mini.ACTION_BACK))
+        tooltipText: "Back " + (root.service ? root.service.skipSeconds : 15) + " s"
+        onClicked: if (root.service) root.service.player.skip(Mini.skipSeconds(Mini.ACTION_BACK, root.service.skipSeconds))
       }
 
       PanelActionButton {
@@ -413,8 +413,8 @@ ColumnLayout {
 
       PanelActionButton {
         iconText: Glyphs.GLYPH_FORWARD
-        tooltipText: "Forward " + Mini.SKIP_SECONDS + " s"
-        onClicked: if (root.service) root.service.player.skip(Mini.skipSeconds(Mini.ACTION_FORWARD))
+        tooltipText: "Forward " + (root.service ? root.service.skipSeconds : 15) + " s"
+        onClicked: if (root.service) root.service.player.skip(Mini.skipSeconds(Mini.ACTION_FORWARD, root.service.skipSeconds))
       }
     }
   }

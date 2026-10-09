@@ -8,9 +8,6 @@
 // Pure ECMAScript for the Qt JS engine: no imports, no Qt types, and nothing
 // here throws on bad input.
 
-// SCOPE 4.6 `syncOnOpenHours` default; the setting arrives in R1.
-var SYNC_HOURS = 6;
-
 // After any sync attempt, an automatic sync waits this long, so a failing
 // sync (offline) is not retried on every open.
 var SYNC_RETRY_MS = 600000;

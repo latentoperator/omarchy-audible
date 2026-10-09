@@ -92,6 +92,19 @@ Every method returns a short string: `ok` on success, or an error such as `error
 
 The target also has read-only status methods, such as `playerStatus`, and test methods. The test methods only work in the plugin's development fake mode; otherwise they return `error: dev only`.
 
+## Settings
+
+Omarchy's bar settings let you tune playback and library behavior without restarting the shell:
+
+- `skipSeconds`: 15 seconds (5–120, in 5-second steps)
+- `defaultSort`: Recently listened
+- `autoRemoveFinished`: Off
+- `showTitleInBar`: Off
+- `defaultSpeed`: 1.0× (the Full view speed presets)
+- `syncOnOpenHours`: 6 hours (1–48)
+
+Changing the default speed explicitly applies and saves it; an unchanged setting preserves the speed last chosen with the player pill.
+
 **The plugin does not add any keybinding.** To add your own, put this in your Hyprland config — that file is yours, this project never edits it:
 
 ```ini

@@ -46,7 +46,7 @@ var FILTER_IN_PROGRESS = "in-progress";
 var _p = {};
 
 // The keys `state.json` v1 defines, in their canonical order.
-_p.TOP_KEYS = ["schema", "books", "push_queue", "volume", "speed"];
+_p.TOP_KEYS = ["schema", "books", "push_queue", "volume", "speed", "default_speed_setting"];
 _p.BOOK_KEYS = ["ms", "updated_at", "last_played_at", "played_since_download", "finished"];
 _p.QUEUE_KEYS = ["asin", "ms", "at"];
 
@@ -527,6 +527,8 @@ function parseState(text) {
   out.push_queue = queue;
   out.volume = _p.numberOrNull(data.volume);
   out.speed = _p.numberOrNull(data.speed);
+  var appliedSpeed = _p.numberOrNull(data.default_speed_setting);
+  if (appliedSpeed !== null) out.default_speed_setting = appliedSpeed;
   out.recovered = recovered;
   return _p.withExtras(out, data, _p.TOP_KEYS.concat(["recovered"]));
 }
@@ -557,6 +559,8 @@ function serializeState(obj) {
   out.push_queue = queue;
   out.volume = _p.numberOrNull(data.volume);
   out.speed = _p.numberOrNull(data.speed);
+  var appliedSpeed = _p.numberOrNull(data.default_speed_setting);
+  if (appliedSpeed !== null) out.default_speed_setting = appliedSpeed;
   return JSON.stringify(_p.withExtras(out, data, _p.TOP_KEYS.concat(["recovered"])));
 }
 

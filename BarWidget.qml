@@ -18,7 +18,7 @@ BarWidget {
   readonly property var service: bar && bar.shell
     ? bar.shell.serviceFor("latentoperator.audible") : null
   readonly property var player: service ? service.player : null
-  readonly property string barTitle: Panel.barTitle(String(setting("showTitleInBar", "Off")), vertical,
+  readonly property string barTitle: Panel.barTitle(service ? service.showTitleInBar : String(setting("showTitleInBar", "Off")), vertical,
     player ? player.loaded : false, service && service.loadedRow ? service.loadedRow.title : "")
 
   property bool opened: false
@@ -51,7 +51,7 @@ BarWidget {
     if (!service || !player) return
     var action = Mini.keyAction(service.view, player.loaded, kind, dx)
     if (action === Mini.ACTION_TOGGLE) service.playPause()
-    else if (action !== Mini.ACTION_NONE) player.skip(Mini.skipSeconds(action))
+    else if (action !== Mini.ACTION_NONE) player.skip(Mini.skipSeconds(action, service.skipSeconds))
   }
 
   // Backspace in Full collapses to Mini.
@@ -87,8 +87,15 @@ BarWidget {
   implicitWidth: barTitle.length > 0 ? titled.implicitWidth : button.implicitWidth
   implicitHeight: barTitle.length > 0 ? titled.implicitHeight : button.implicitHeight
 
-  onServiceChanged: if (service) service.registerSurface(root)
-  Component.onCompleted: if (service) service.registerSurface(root)
+  onServiceChanged: if (service) {
+    service.applySettings(settings)
+    service.registerSurface(root)
+  }
+  onSettingsChanged: if (service) service.applySettings(settings)
+  Component.onCompleted: if (service) {
+    service.applySettings(settings)
+    service.registerSurface(root)
+  }
   Component.onDestruction: if (service) service.unregisterSurface(root)
 
   BarIconButton {

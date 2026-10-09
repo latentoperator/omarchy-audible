@@ -28,9 +28,9 @@ RowLayout {
   Button {
     enabled: root.loaded
     iconText: Glyphs.GLYPH_BACK
-    text: String(Mini.SKIP_SECONDS)
-    tooltipText: "Back " + Mini.SKIP_SECONDS + " s (←)"
-    onClicked: root.player.skip(Mini.skipSeconds(Mini.ACTION_BACK))
+    text: root.service ? String(root.service.skipSeconds) : "15"
+    tooltipText: "Back " + (root.service ? root.service.skipSeconds : 15) + " s (←)"
+    onClicked: root.player.skip(Mini.skipSeconds(Mini.ACTION_BACK, root.service ? root.service.skipSeconds : 15))
   }
 
   Button {
@@ -43,9 +43,9 @@ RowLayout {
   Button {
     enabled: root.loaded
     iconText: Glyphs.GLYPH_FORWARD
-    text: String(Mini.SKIP_SECONDS)
-    tooltipText: "Forward " + Mini.SKIP_SECONDS + " s (→)"
-    onClicked: root.player.skip(Mini.skipSeconds(Mini.ACTION_FORWARD))
+    text: root.service ? String(root.service.skipSeconds) : "15"
+    tooltipText: "Forward " + (root.service ? root.service.skipSeconds : 15) + " s (→)"
+    onClicked: root.player.skip(Mini.skipSeconds(Mini.ACTION_FORWARD, root.service ? root.service.skipSeconds : 15))
   }
 
   Button {
