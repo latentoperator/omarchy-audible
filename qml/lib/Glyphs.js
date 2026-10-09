@@ -22,6 +22,7 @@ var GLYPH_LIBRARY = "";
 // Mini and Full view controls.
 var GLYPH_PREV_CHAPTER = "";
 var GLYPH_NEXT_CHAPTER = "";
+var GLYPH_STOP = "";
 var GLYPH_MAXIMIZE = "";
 var GLYPH_CHAPTERS = "";
 var GLYPH_COLLAPSE = "";

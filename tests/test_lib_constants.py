@@ -147,7 +147,7 @@ def test_each_constant_has_one_home(pattern, home):
 def test_every_glyph_is_one_icon_font_code_point():
     text = (LIB / "Glyphs.js").read_text(encoding="utf-8")
     glyphs = dict(re.findall(r'^var (GLYPH_[A-Z_]+) = "([^"]*)";$', text, re.MULTILINE))
-    assert len(glyphs) == 19
+    assert len(glyphs) == 20
     # Font Awesome lives in the Private Use Area.
     assert all(len(g) == 1 and 0xE000 <= ord(g) <= 0xF8FF for g in glyphs.values())
     assert re.search(r"^\.import", text, re.MULTILINE) is None

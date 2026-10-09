@@ -86,6 +86,7 @@ omarchy-shell latentoperator.audible <method> [args]
 | `skip <seconds>` | Seek by a signed number of seconds, e.g. `skip -15` |
 | `nextChapter` | Jump to the next chapter |
 | `prevChapter` | Jump to the previous chapter |
+| `stop` | Stop playback and save the current position |
 
 Every method returns a short string: `ok` on success, or an error such as `error: nothing loaded`.
 
