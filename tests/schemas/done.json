@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "done event",
-  "description": "Final event of a successful backend run (ARCHITECTURE 4.2). The optional fields carry the payload of the command that finished: `path` for `get`, `freed_bytes` for `remove`, and `clipboard_history_contains_code` for `login-finish` (ARCHITECTURE 4.7). `warning` is a stable code for a non-fatal problem (B13: `activation_bytes` when `login-finish` saved the login but could not fetch the account-wide AAX key).",
+  "description": "Final event of a successful backend run (ARCHITECTURE 4.2). Optional fields carry command results: `path` for `get`, `freed_bytes` for `remove`, `clipboard_history_contains_code` for `login-finish` (ARCHITECTURE 4.7), and `acked` for conditional books-location acknowledgement. `warning` is a stable code for a non-fatal problem (B13: `activation_bytes` when `login-finish` saved the login but could not fetch the account-wide AAX key).",
   "type": "object",
   "required": ["type"],
   "properties": {
@@ -9,7 +9,8 @@
     "path": { "type": "string" },
     "freed_bytes": { "type": "integer", "minimum": 0 },
     "clipboard_history_contains_code": { "type": "boolean" },
-    "warning": { "type": "string", "minLength": 1 }
+    "warning": { "type": "string", "minLength": 1 },
+    "acked": { "type": "boolean" }
   },
   "additionalProperties": false
 }

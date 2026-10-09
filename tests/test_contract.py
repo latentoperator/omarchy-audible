@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from omarchy_audible.commands import KNOWN_COMMANDS
+from omarchy_audible.commands import KNOWN_COMMANDS, REGISTRY
 
 TERMINAL_TYPES = frozenset({"done", "error"})
 
@@ -42,6 +42,7 @@ DOCUMENTED_EVENT_TYPES = frozenset(
 # when the registry grows and this table does not.
 COMMAND_CASES: tuple[tuple[str, tuple[str, ...], str | None], ...] = (
     ("status", (), None),
+    ("books-location-ack", (), None),
     ("doctor", (), None),
     ("setup", (), None),
     ("sync", (), None),
@@ -71,6 +72,7 @@ def _load_schemas(schemas_dir: Path) -> dict[str, dict]:
 def test_contract_covers_every_registered_command():
     """A command added to the registry must get a contract case in this file."""
     assert {name for name, _, _ in COMMAND_CASES} == set(KNOWN_COMMANDS)
+    assert REGISTRY["books-location-ack"].is_job is False
 
 
 def test_schema_files_cover_the_documented_protocol(schemas_dir):
@@ -120,6 +122,20 @@ def test_validator_rejects_a_malformed_event(validate_event):
     # `status` without its required payload keys.
     with pytest.raises(jsonschema.ValidationError):
         validate_event({"type": "status", "ready": True})
+
+
+def test_conditional_books_location_ack_contract_noop(
+    fake_paths, run_cli, events, validate_event
+):
+    old = fake_paths.data_dir / "books-old"
+    book = old / "B00FAKE01"
+    book.mkdir(parents=True)
+    (book / "book.m4b").write_bytes(b"fake")
+    fake_paths.books_location_file.parent.mkdir(parents=True, exist_ok=True)
+    fake_paths.books_location_file.write_text(json.dumps({"books_dir": str(old)}))
+    result = events(run_cli("books-location-ack", "--if-no-old-books", fake=True))
+    assert result == [{"type": "done", "acked": False}]
+    validate_event(result[0])
 
 
 def test_validator_rejects_an_unknown_done_payload_field(validate_event):

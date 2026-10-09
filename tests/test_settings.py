@@ -18,6 +18,7 @@ EXPECTED_KEYS = {
     "showTitleInBar",
     "defaultSpeed",
     "syncOnOpenHours",
+    "booksDir",
 }
 DEFAULTS = {
     "skipSeconds": 15,
@@ -26,6 +27,7 @@ DEFAULTS = {
     "showTitleInBar": "Off",
     "defaultSpeed": 1.0,
     "syncOnOpenHours": 6,
+    "booksDir": "~/Audiobooks/Audible",
 }
 
 
@@ -46,11 +48,9 @@ def test_manifest_matches_library_defaults_and_scope(settings: qjs.JsModule) -> 
     } == manifest_defaults
     scope = (ROOT / "docs/SCOPE.md").read_text(encoding="utf-8")
     settings_table = scope.split("### 4.6 Settings", 1)[1].split("\n### ", 1)[0]
-    scope_keys = set(re.findall(r"^\| `([^`]+)` \|", settings_table, re.MULTILINE)) - {
-        "booksDir"
-    }
+    scope_keys = set(re.findall(r"^\| `([^`]+)` \|", settings_table, re.MULTILINE))
     assert scope_keys == set(by_key)
-    assert "booksDir" not in by_key
+    assert by_key["booksDir"]["type"] == "path"
     assert settings.call("normalize", manifest["barWidget"]["defaults"]) == DEFAULTS
 
 
@@ -63,6 +63,7 @@ def test_manifest_matches_library_defaults_and_scope(settings: qjs.JsModule) -> 
         ("showTitleInBar", "On", "maybe", False),
         ("defaultSpeed", "1.5×", "fast", {"speed": 1.5}),
         ("syncOnOpenHours", "7", 49, []),
+        ("booksDir", "  /tmp/books  ", "   ", 3),
     ],
 )
 def test_each_setting_defaults_validates_range_and_type(
@@ -78,6 +79,7 @@ def test_each_setting_defaults_validates_range_and_type(
             "showTitleInBar": "On",
             "skipSeconds": 30,
             "syncOnOpenHours": 7,
+            "booksDir": "/tmp/books",
         }[key]
     )
     assert settings.call("normalize", {key: invalid})[key] == DEFAULTS[key]
@@ -154,8 +156,31 @@ def test_service_owns_and_applies_widget_settings() -> None:
         "showTitleInBar",
         "defaultSpeed",
         "syncOnOpenHours",
+        "booksDir",
     ):
         assert setting in service
+    assert "values.OMARCHY_AUDIBLE_BOOKS_DIR = root.booksDirSetting" in service
+    assert "if (root.booksDirSetting !== Settings.DEFAULTS.booksDir)" in service
+    assert (
+        "Settings.settingStep(booksDirSetting, step.settings.booksDir, settingsReceived)"
+        in service
+    )
+    assert 'if (booksStep.rerunStatus && flagKnown) run("status", [])' in service
+    assert "BooksLocation.ackStep(root.booksAckState, record," in service
+    assert "BooksLocation.hasActiveGet(runner.activeJob, runner.pendingJobs)" in service
+    assert (
+        'else if (job.command === "get" || job.command === "remove") {\n        root.run("status", [])'
+        in service
+    )
+    library_view = (ROOT / "qml/views/LibraryView.qml").read_text(encoding="utf-8")
+    assert "BooksLocation.shouldShowOldBooks" in library_view
+    assert "BooksLocation.shouldShowProblem" in library_view
+    assert (
+        'root.run("books-location-ack", ["--if-no-old-books"], "books-location-ack-silent")'
+        in service
+    )
+    assert 'job.command === "books-location-ack" && outcome.ok' in service
+    assert 'root.run("status", [])' in service
     assert "LibraryUi.syncDue(age, syncOnOpenHours)" in service
     assert (
         "Settings.speedChoice(store.doc.speed, defaultSpeed, store.doc.default_speed_setting)"
@@ -208,6 +233,20 @@ def test_settings_reducer_shell_order_and_foreign_module(settings) -> None:
     later_foreign = settings.call("applyStep", real["state"], "omarchy.clock", {})
     assert later_foreign["accepted"] is False
     assert later_foreign["state"] == real["state"]
+
+
+def test_books_dir_setting_step_vectors(settings) -> None:
+    assert settings.call(
+        "settingStep", "~/Audiobooks/Audible", "~/Audiobooks/Audible", False
+    ) == {"value": "~/Audiobooks/Audible", "rerunStatus": True}
+    assert settings.call("settingStep", "~/Audiobooks/Audible", "/tmp/books", True) == {
+        "value": "/tmp/books",
+        "rerunStatus": True,
+    }
+    assert settings.call("settingStep", "/tmp/books", "/tmp/books", True) == {
+        "value": "/tmp/books",
+        "rerunStatus": False,
+    }
 
 
 def test_settings_reducer_store_first_and_empty_user_edit(settings) -> None:

@@ -133,6 +133,7 @@ Item {
       return service.run("get", [asin, "--fake-fail", mode], "download") ? "ok" : "refused"
     }
     function autoRemove(value: string): string { if (!service.fake) return Ipc.DEV_ONLY; service.autoRemoveFinished = value === "on"; return "ok" }
+    function ackBooksLocation(): string { if (!service.fake) return Ipc.DEV_ONLY; return service.acknowledgeBooksLocation() ? "ok" : "refused" }
     function pushState(): string { return JSON.stringify({ "queue": sync.queue, "flushing": sync.flushing, "last": sync.lastResult,
       "staleCount": sync.consecutiveStale, "staleNotice": sync.staleNotice,
       "failedFlushes": sync.failedFlushes, "retryMs": sync.retryIntervalMs }) }

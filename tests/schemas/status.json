@@ -4,18 +4,9 @@
   "description": "Payload of the `status` command (ARCHITECTURE 4.2).",
   "type": "object",
   "required": [
-    "type",
-    "ready",
-    "missing",
-    "authenticated",
-    "venv_ready",
-    "marketplace",
-    "account",
-    "catalog_age_s",
-    "config_dir",
-    "data_dir",
-    "runtime_dir",
-    "books_dir"
+    "type", "ready", "missing", "authenticated", "venv_ready", "marketplace",
+    "account", "catalog_age_s", "config_dir", "data_dir", "runtime_dir", "books_dir",
+    "books_dir_problem", "old_books", "books_location_recorded"
   ],
   "properties": {
     "type": { "const": "status" },
@@ -29,7 +20,18 @@
     "config_dir": { "type": "string", "pattern": "^/" },
     "data_dir": { "type": "string", "pattern": "^/" },
     "runtime_dir": { "type": "string", "pattern": "^/" },
-    "books_dir": { "type": "string", "pattern": "^/" }
+    "books_dir": { "type": "string", "pattern": "^/" },
+    "books_dir_problem": { "type": ["string", "null"] },
+    "old_books": {
+      "type": ["object", "null"],
+      "required": ["dir", "count"],
+      "properties": {
+        "dir": { "type": "string", "pattern": "^/" },
+        "count": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "books_location_recorded": { "type": "boolean" }
   },
   "additionalProperties": false
 }

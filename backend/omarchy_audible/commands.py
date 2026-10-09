@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 import functools
+import json
 import os
 import shutil
 import signal
@@ -37,6 +38,7 @@ from .bootstrap import run_setup, venv_ready
 from .catalog import open_client, run_sync
 from .download import FAKE_FAIL_MODES, parse_fake_chapters, run_get
 from .errors import Cancelled, PipelineError
+from .fsutil import atomic_write_json
 from .library import play_info_payload, remove_book, scan_local, validate_asin
 from .paths import Paths
 from .positions import (
@@ -97,6 +99,45 @@ def _status_dirs(paths: Paths) -> dict[str, str]:
     }
 
 
+def _books_location(paths: Paths) -> dict[str, object]:
+    """Describe books left in the previously acknowledged folder."""
+    recorded = False
+    previous = paths.default_books_dir
+    try:
+        data = json.loads(paths.books_location_file.read_text(encoding="utf-8"))
+        value = data.get("books_dir") if isinstance(data, dict) else None
+        if isinstance(value, str) and Path(value).is_absolute():
+            candidate = Path(value)
+            if value == str(paths.books_dir):
+                previous = candidate
+                recorded = True
+            elif not paths.fake_mode or (
+                candidate.resolve().is_relative_to(paths.data_dir.resolve())
+                and candidate.resolve() != paths.data_dir.resolve()
+            ):
+                previous = candidate
+                recorded = candidate.resolve() == paths.books_dir.resolve()
+    except (OSError, ValueError, TypeError):
+        pass
+    old_books = None
+    try:
+        previous_is_current = previous.resolve() == paths.books_dir.resolve()
+    except (OSError, RuntimeError, ValueError):
+        previous_is_current = True
+    if not previous_is_current:
+        try:
+            count = len(scan_local(previous))
+        except OSError:
+            count = 0
+        if count:
+            old_books = {"dir": str(previous), "count": count}
+    return {
+        "books_dir_problem": paths.books_dir_problem,
+        "old_books": old_books,
+        "books_location_recorded": recorded,
+    }
+
+
 def cmd_status(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> int:
     """Report readiness (ARCHITECTURE 4.2)."""
     if fake:
@@ -117,6 +158,7 @@ def cmd_status(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -
             marketplace=DEFAULT_MARKETPLACE,
             account=FAKE_ACCOUNT,
             catalog_age_s=None,
+            **_books_location(paths),
             **_status_dirs(paths),
         )
         protocol.done()
@@ -142,6 +184,7 @@ def cmd_status(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -
         marketplace=marketplace,
         account=account if isinstance(account, str) else None,
         catalog_age_s=_catalog_age_s(paths),
+        **_books_location(paths),
         **_status_dirs(paths),
     )
     protocol.done()
@@ -442,6 +485,28 @@ def cmd_local(args: Sequence[str], *, command: str, fake: bool, paths: Paths) ->
     return protocol.EXIT_OK
 
 
+def cmd_books_location_ack(
+    args: Sequence[str], *, command: str, fake: bool, paths: Paths
+) -> int:
+    """Record the current effective books folder after the user acknowledges it."""
+    conditional = list(args) == ["--if-no-old-books"]
+    if args and not conditional:
+        protocol.error(
+            protocol.ErrorCode.INVALID_ARGS,
+            "books-location-ack accepts only --if-no-old-books",
+        )
+        return protocol.EXIT_USAGE
+    if conditional and _books_location(paths)["old_books"] is not None:
+        protocol.done(acked=False)
+        return protocol.EXIT_OK
+    atomic_write_json(paths.books_location_file, {"books_dir": str(paths.books_dir)})
+    if conditional:
+        protocol.done(acked=True)
+    else:
+        protocol.done()
+    return protocol.EXIT_OK
+
+
 def cmd_play_info(
     args: Sequence[str],
     *,
@@ -736,6 +801,7 @@ def _registry() -> dict[str, Command]:
         "login-import-cli": Command(cmd_login_import_cli, True),
         "logout": Command(cmd_logout, True),
         "local": Command(cmd_local, False),
+        "books-location-ack": Command(cmd_books_location_ack, False),
         "play-info": Command(cmd_play_info, False),
         "position-get": Command(cmd_position_get, False),
         "position-push": Command(cmd_position_push, False),

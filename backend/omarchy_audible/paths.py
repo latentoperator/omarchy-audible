@@ -5,8 +5,8 @@ Every path derives from ``XDG_CONFIG_HOME``, ``XDG_DATA_HOME`` and
 Nothing here touches a user's own ``~/.audible`` or other tools' directories.
 
 Fake mode resolves to separate roots (``omarchy-audible-fake``) so testing with
-``--fake`` never reads or writes the real login, catalog or books, and ignores
-``OMARCHY_AUDIBLE_BOOKS_DIR``.
+``--fake`` never reads or writes the real login, catalog or books. It accepts a
+books-folder override only when it resolves inside the fake data directory.
 """
 
 from __future__ import annotations
@@ -23,6 +23,82 @@ FAKE_DIR_NAME = f"{PLUGIN_DIR_NAME}-fake"
 FAKE_POSITIONS_FILE = "fake-account-positions.json"
 # This device's own successful pushes, ``{asin: {ms, at}}`` (P6, F1).
 PUSHED_FILE = "pushed.json"
+BOOKS_LOCATION_FILE = "books-location.json"
+
+
+def requested_books_dir(value: str | None, home: Path) -> Path:
+    """Parse the setting without shell expansion; empty values select default."""
+    raw = (value or "").strip()
+    if not raw:
+        return home / "Audiobooks" / "Audible"
+    if raw == "~":
+        return home
+    if raw.startswith("~/"):
+        return home / raw[2:].lstrip("/")
+    return Path(raw)
+
+
+def books_dir_problem(path: Path, paths: Paths, home: Path) -> str | None:
+    """Return why a requested books path is unsafe or unusable."""
+    try:
+        raw = str(path)
+        if "\0" in raw:
+            return "path contains a NUL character"
+        if not path.is_absolute():
+            return "path must be absolute (or start with ~/)"
+        resolved = path.resolve()
+        home_resolved = home.resolve()
+        if resolved == Path("/"):
+            return "path cannot be /"
+        if resolved == home_resolved:
+            return "path cannot be your home folder"
+        forbidden_roots = (
+            paths.config_dir,
+            paths.data_dir,
+            paths.runtime_dir,
+            paths.venv_dir,
+        )
+        for root in forbidden_roots:
+            target = root.resolve()
+            if resolved == target or target.is_relative_to(resolved):
+                return "path cannot contain plugin data or runtime files"
+        for root in (
+            paths.config_dir,
+            paths.runtime_dir,
+            paths.venv_dir,
+            home / ".audible",
+        ):
+            if resolved == root.resolve() or resolved.is_relative_to(root.resolve()):
+                return "path cannot be inside plugin configuration, runtime, venv, or ~/.audible"
+        system_roots = tuple(
+            Path(value)
+            for value in (
+                "/proc",
+                "/sys",
+                "/dev",
+                "/boot",
+                "/etc",
+                "/usr",
+                "/bin",
+                "/sbin",
+                "/lib",
+                "/lib64",
+            )
+        )
+        if any(
+            resolved == root or resolved.is_relative_to(root) for root in system_roots
+        ):
+            return "path cannot be inside a system directory"
+        if resolved.exists() and not resolved.is_dir():
+            return "path exists and is not a directory"
+        ancestor = resolved
+        while not ancestor.exists() and ancestor != ancestor.parent:
+            ancestor = ancestor.parent
+        if ancestor.exists() and not ancestor.is_dir():
+            return "nearest existing ancestor is not a directory"
+    except (OSError, RuntimeError, ValueError):
+        return "path cannot be resolved"
+    return None
 
 
 def _xdg_dir(env: Mapping[str, str], var: str, default: Path) -> Path:
@@ -62,12 +138,16 @@ def _ensure_private_owned_dir(path: Path) -> None:
 
 @dataclass(frozen=True)
 class Paths:
-    """Resolved on-disk locations for one invocation of the backend."""
+    """Filesystem locations for one invocation of the backend."""
 
     config_dir: Path
     data_dir: Path
     runtime_dir: Path
     books_dir: Path
+    default_books_dir: Path
+    home_dir: Path
+    fake_mode: bool = False
+    books_dir_problem: str | None = None
 
     @classmethod
     def from_env(
@@ -81,19 +161,67 @@ class Paths:
             # Fake mode owns a parallel tree so it can never clobber the real
             # plugin folders (ARCHITECTURE 3).
             data_dir = data_root / FAKE_DIR_NAME
-            return cls(
+            result = cls(
                 config_dir=config_root / FAKE_DIR_NAME,
                 data_dir=data_dir,
                 runtime_dir=_runtime_dir(env, home) / FAKE_DIR_NAME,
                 books_dir=data_dir / "books",
+                default_books_dir=data_dir / "books",
+                home_dir=home,
+                fake_mode=True,
+            )
+            override = env.get("OMARCHY_AUDIBLE_BOOKS_DIR")
+            if not (override or "").strip():
+                return result
+            requested = requested_books_dir(override, home)
+            real_default = result.home_dir / "Audiobooks" / "Audible"
+            if requested == real_default:
+                return result
+            problem = books_dir_problem(requested, result, home)
+            if problem is not None:
+                return cls(**{**result.__dict__, "books_dir_problem": problem})
+            try:
+                inside = (
+                    requested.resolve().is_relative_to(data_dir.resolve())
+                    and requested.resolve() != data_dir.resolve()
+                )
+            except (OSError, RuntimeError, ValueError):
+                inside = False
+            if not inside:
+                return cls(
+                    **{
+                        **result.__dict__,
+                        "books_dir_problem": "fake mode only allows paths inside its data directory",
+                    }
+                )
+            return cls(
+                **{
+                    **result.__dict__,
+                    "books_dir": requested,
+                }
             )
         books = env.get("OMARCHY_AUDIBLE_BOOKS_DIR")
-        return cls(
+        result = cls(
             config_dir=config_root / PLUGIN_DIR_NAME,
             data_dir=data_root / PLUGIN_DIR_NAME,
             runtime_dir=_runtime_dir(env, home) / PLUGIN_DIR_NAME,
-            books_dir=Path(books) if books else home / "Audiobooks" / "Audible",
+            books_dir=home / "Audiobooks" / "Audible",
+            default_books_dir=home / "Audiobooks" / "Audible",
+            home_dir=home,
         )
+        requested = requested_books_dir(books, home)
+        problem = books_dir_problem(requested, result, home)
+        return cls(
+            **{
+                **result.__dict__,
+                "books_dir": requested if problem is None else result.default_books_dir,
+                "books_dir_problem": problem,
+            }
+        )
+
+    @property
+    def books_location_file(self) -> Path:
+        return self.data_dir / BOOKS_LOCATION_FILE
 
     # --- plugin-owned files (ARCHITECTURE 3) -------------------------------
     @property

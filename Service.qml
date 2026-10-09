@@ -11,6 +11,7 @@ import "qml/lib/Mpv.js" as Mpv
 import "qml/lib/Onboarding.js" as Onboarding
 import "qml/lib/Panel.js" as Panel
 import "qml/lib/Playback.js" as Playback
+import "qml/lib/BooksLocation.js" as BooksLocation
 import "qml/lib/Player.js" as Player
 import "qml/lib/PlayRequest.js" as PlayRequest
 import "qml/lib/Positions.js" as Positions
@@ -45,7 +46,9 @@ Item {
   property int syncOnOpenHours: Settings.DEFAULTS.syncOnOpenHours
   property real defaultSpeed: Settings.DEFAULTS.defaultSpeed
   property string showTitleInBar: Settings.DEFAULTS.showTitleInBar
+  property string booksDirSetting: Settings.DEFAULTS.booksDir
   property bool settingsReceived: false
+  property var booksAckState: ({ "pendingDir": "", "failedDir": "" })
   // No backend command runs until the flag has been read: a command that
   // raced ahead of it would go out without OMARCHY_AUDIBLE_FAKE.
   property bool flagKnown: false
@@ -53,6 +56,7 @@ Item {
   function applySettings(raw, moduleName) {
     var step = Settings.applyStep({ "settingsReceived": settingsReceived }, moduleName, raw)
     if (!step.accepted) return
+    var booksStep = Settings.settingStep(booksDirSetting, step.settings.booksDir, settingsReceived)
     settingsReceived = step.state.settingsReceived
     var next = step.settings
     skipSeconds = next.skipSeconds
@@ -64,6 +68,8 @@ Item {
       library.sortKey = Settings.sortKey(defaultSort)
     }
     defaultSpeed = next.defaultSpeed
+    booksDirSetting = booksStep.value
+    if (booksStep.rerunStatus && flagKnown) run("status", [])
     if (store.loaded) applyDefaultSpeedSetting()
   }
 
@@ -220,6 +226,10 @@ Item {
     }
     runner.run(command, args, purpose)
     return true
+  }
+
+  function acknowledgeBooksLocation() {
+    return run("books-location-ack", [], "books-location-ack-user")
   }
 
   function markFlagKnown() {
@@ -608,6 +618,10 @@ Item {
     run("local", [])
   }
 
+  function downloadActive() {
+    return BooksLocation.hasActiveGet(runner.activeJob, runner.pendingJobs)
+  }
+
   function reloadSync() {
     catalogFile.reload()
     remoteFile.reload()
@@ -830,13 +844,25 @@ Item {
     id: runner
     gate: removals.jobAllowed
     launcher: root.pluginDir + "/bin/omarchy-audible"
-    environment: root.fake ? ({ "OMARCHY_AUDIBLE_FAKE": "1" }) : ({})
+    environment: {
+      var values = root.fake ? { "OMARCHY_AUDIBLE_FAKE": "1" } : {}
+      if (root.booksDirSetting !== Settings.DEFAULTS.booksDir)
+        values.OMARCHY_AUDIBLE_BOOKS_DIR = root.booksDirSetting
+      return values
+    }
 
     onEvent: function(record, job) {
+      var silentAckFailure = ""
       if (record.type === "status") {
         root.status = record
         root.statusAtMs = Date.now()
         root.refreshLocal()
+        var ackStep = BooksLocation.ackStep(root.booksAckState, record,
+          root.downloadActive(), root.settingsReceived)
+        root.booksAckState = ackStep.state
+        if (ackStep.log) silentAckFailure = String(record.books_dir || "")
+        if (ackStep.ack)
+          root.run("books-location-ack", ["--if-no-old-books"], "books-location-ack-silent")
       } else if (record.type === "local") {
         library.localBooks = record.books
       } else if (record.type === "play_info") {
@@ -850,6 +876,8 @@ Item {
       catchupFlow.handleEvent(record, job)
       sync.handleEvent(record, job)
       signinFlow.handleEvent(record, job)
+      if (silentAckFailure.length > 0)
+        root.logEvent("books-location-ack-silent", "ack did not record " + silentAckFailure)
       root.logEvent(job.command, Signin.logText(job.command, record.type,
         Signin.isOnboardingCommand(job.command) ? "" : EventLog.summarize(record, 160)))
     }
@@ -876,8 +904,9 @@ Item {
       } else if (job.command === "position-get") {
         remoteFile.reload()
       } else if (job.command === "get" || job.command === "remove") {
-        root.refreshLocal()
+        root.run("status", [])
       }
+      if (job.command === "books-location-ack" && outcome.ok) root.run("status", [])
     }
   }
 

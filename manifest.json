@@ -25,7 +25,8 @@
       "autoRemoveFinished": "Off",
       "showTitleInBar": "Off",
       "defaultSpeed": "1.0×",
-      "syncOnOpenHours": 6
+      "syncOnOpenHours": 6,
+      "booksDir": "~/Audiobooks/Audible"
     },
     "schema": [
       {
@@ -78,6 +79,13 @@
         "max": 48,
         "step": 1,
         "defaultValue": 6
+      },
+      {
+        "key": "booksDir",
+        "type": "path",
+        "label": "Books folder",
+        "defaultValue": "~/Audiobooks/Audible",
+        "description": "Folder for downloaded Audible books. Existing books are not moved."
       }
     ]
   }

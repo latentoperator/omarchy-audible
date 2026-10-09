@@ -59,6 +59,7 @@ KNOWN_COMMANDS = frozenset(
         "cancel",
         "position-get",
         "position-push",
+        "books-location-ack",
     }
 )
 

@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import Quickshell
 import qs.Commons
 import qs.Ui
 import "../components"
@@ -7,6 +8,7 @@ import "../lib/Drawer.js" as Drawer
 import "../lib/Format.js" as Format
 import "../lib/Glyphs.js" as Glyphs
 import "../lib/LibraryUi.js" as LibraryUi
+import "../lib/BooksLocation.js" as BooksLocation
 import "../lib/Mini.js" as Mini
 import "../lib/Settings.js" as Settings
 import "../lib/Onboarding.js" as Onboarding
@@ -192,6 +194,49 @@ ColumnLayout {
       iconText: Glyphs.GLYPH_DISMISS
       tooltipText: "Dismiss"
       onClicked: root.service.clipboardNotice = ""
+    }
+  }
+
+  RowLayout {
+    Layout.fillWidth: true
+    visible: BooksLocation.shouldShowOldBooks(root.service ? root.service.status : null,
+      root.service ? root.service.settingsReceived : false)
+    spacing: Style.spacing.md
+
+    Text {
+      id: oldBooksText
+      Layout.fillWidth: true
+      text: root.service && root.service.status
+        ? BooksLocation.oldBooksText(root.service.status.old_books, root.service.status.books_dir, Quickshell.env("HOME")) : ""
+      textFormat: Text.PlainText
+      wrapMode: Text.WordWrap
+      color: Color.muted
+      font.family: Style.font.family
+      font.pixelSize: Style.font.bodySmall
+    }
+
+    Button {
+      text: "Got it"
+      onClicked: root.service.acknowledgeBooksLocation()
+    }
+  }
+
+  RowLayout {
+    Layout.fillWidth: true
+    visible: BooksLocation.shouldShowProblem(root.service ? root.service.status : null,
+      root.service ? root.service.settingsReceived : false)
+    spacing: Style.spacing.md
+
+    Text {
+      id: problemText
+      Layout.fillWidth: true
+      text: root.service && root.service.status
+        ? BooksLocation.problemText(root.service.status.books_dir_problem, root.service.status.books_dir, Quickshell.env("HOME")) : ""
+      textFormat: Text.PlainText
+      wrapMode: Text.WordWrap
+      color: Color.muted
+      font.family: Style.font.family
+      font.pixelSize: Style.font.bodySmall
     }
   }
 
