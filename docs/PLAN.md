@@ -268,7 +268,7 @@ Placed by Dante. Order: B14 lands on `b11` before it merges, then the rest in th
 ## M5 — Polish and release
 
 - [x] **R1 — Settings schema** (tier A) — manifest `schema` for all keys in SCOPE §4.6; each setting is wired and takes effect without restart. **R1a #100 + R1b #101** (`cc0cfa2`); real-mode hand checks passed 2026-10-09 (MANUAL-TEST `## R1`).
-- [ ] **R2 — Error and edge-case sweep** (tier B) — walk SCOPE §6 line by line; add a test or a manual-test entry for each.
+- [x] **R2 — Error and edge-case sweep** (tier B, PR #104) — walk SCOPE §6 line by line; add a test or a manual-test entry for each.
 - [ ] **R3 — MPRIS (optional)** (tier B) — detect `mpv-mpris`; if installed, pass `--script=`; confirm media keys and the stock media widget. Document the optional package. Never required.
 - [ ] **R4 — Idle-cost audit** (tier B) — verify no timers/polling when nothing plays, and measure memory (target < 100 MB excluding mpv). Fix offenders.
 - [ ] **R5 — Clean-install test** (tier B) — on a fresh Omarchy install (VM or a spare user account): `omarchy plugin add <repo-url> --enable --yes`, then J1 → J7 using only the UI. Record time to first audio (target ≤ 5 min).
