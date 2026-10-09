@@ -20,9 +20,38 @@
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
-      "showTitleInBar": "Off"
+      "skipSeconds": 15,
+      "defaultSort": "Recently listened",
+      "autoRemoveFinished": "Off",
+      "showTitleInBar": "Off",
+      "defaultSpeed": "1.0×",
+      "syncOnOpenHours": 6
     },
     "schema": [
+      {
+        "key": "skipSeconds",
+        "type": "integer",
+        "label": "Skip interval (seconds)",
+        "min": 5,
+        "max": 120,
+        "step": 5,
+        "defaultValue": 15
+      },
+      {
+        "key": "defaultSort",
+        "type": "enum",
+        "label": "Default library sort",
+        "options": ["Recently listened", "Recently added", "Title", "Author"],
+        "defaultValue": "Recently listened"
+      },
+      {
+        "key": "autoRemoveFinished",
+        "type": "enum",
+        "label": "Remove finished books automatically",
+        "options": ["On", "Off"],
+        "defaultValue": "Off",
+        "description": "When on, completed books are removed from this device."
+      },
       {
         "key": "showTitleInBar",
         "type": "enum",
@@ -33,6 +62,22 @@
         ],
         "defaultValue": "Off",
         "description": "When on, the title of the loaded book appears beside the bar icon."
+      },
+      {
+        "key": "defaultSpeed",
+        "type": "enum",
+        "label": "Default playback speed",
+        "options": ["0.75×", "1.0×", "1.25×", "1.5×", "1.75×", "2.0×", "2.5×", "3.0×"],
+        "defaultValue": "1.0×"
+      },
+      {
+        "key": "syncOnOpenHours",
+        "type": "integer",
+        "label": "Sync library after (hours)",
+        "min": 1,
+        "max": 48,
+        "step": 1,
+        "defaultValue": 6
       }
     ]
   }

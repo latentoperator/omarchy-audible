@@ -370,11 +370,12 @@ function startVolume(saved, fallback) {
 
 // The speed a new mpv starts with: the saved one if it is a number in range
 // (MIN_SPEED–MAX_SPEED), else 1.
-function startSpeed(saved) {
+function startSpeed(saved, fallback) {
   if (typeof saved === "number" && isFinite(saved) && saved >= MIN_SPEED && saved <= MAX_SPEED) {
     return saved;
   }
-  return 1;
+  return typeof fallback === "number" && isFinite(fallback) && fallback >= MIN_SPEED && fallback <= MAX_SPEED
+    ? fallback : 1;
 }
 
 function isNull(value) {

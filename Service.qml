@@ -15,6 +15,7 @@ import "qml/lib/Player.js" as Player
 import "qml/lib/PlayRequest.js" as PlayRequest
 import "qml/lib/Positions.js" as Positions
 import "qml/lib/Signin.js" as Signin
+import "qml/lib/Settings.js" as Settings
 import "qml/lib/Unload.js" as Unload
 
 // Headless singleton. Owns the backend, mpv and shared state in later tasks.
@@ -39,9 +40,39 @@ Item {
   readonly property string devFlagPath: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchy-audible-dev-fake"
   readonly property bool fake: devFlag.loaded
   property bool autoRemoveFinished: false
+  property int skipSeconds: Settings.DEFAULTS.skipSeconds
+  property string defaultSort: Settings.DEFAULTS.defaultSort
+  property int syncOnOpenHours: Settings.DEFAULTS.syncOnOpenHours
+  property real defaultSpeed: Settings.DEFAULTS.defaultSpeed
+  property string showTitleInBar: Settings.DEFAULTS.showTitleInBar
+  property bool settingsReceived: false
   // No backend command runs until the flag has been read: a command that
   // raced ahead of it would go out without OMARCHY_AUDIBLE_FAKE.
   property bool flagKnown: false
+
+  function applySettings(raw, moduleName) {
+    var step = Settings.applyStep({ "settingsReceived": settingsReceived }, moduleName, raw)
+    if (!step.accepted) return
+    settingsReceived = step.state.settingsReceived
+    var next = step.settings
+    skipSeconds = next.skipSeconds
+    autoRemoveFinished = next.autoRemoveFinished === "On"
+    syncOnOpenHours = next.syncOnOpenHours
+    showTitleInBar = next.showTitleInBar
+    if (defaultSort !== next.defaultSort) {
+      defaultSort = next.defaultSort
+      library.sortKey = Settings.sortKey(defaultSort)
+    }
+    defaultSpeed = next.defaultSpeed
+    if (store.loaded) applyDefaultSpeedSetting()
+  }
+
+  function applyDefaultSpeedSetting() {
+    if (!Settings.shouldApplySpeed(settingsReceived, store.loaded)) return
+    var choice = Settings.speedChoice(store.doc.speed, defaultSpeed, store.doc.default_speed_setting)
+    store.applyDefaultSpeed(defaultSpeed, choice.apply, choice.speed)
+    if (choice.apply && player.connected) player.setSpeed(choice.speed)
+  }
 
   // The latest `status` event. All paths come from here; never recompute them.
   property var status: null
@@ -542,7 +573,7 @@ Item {
     var now = Date.now()
     if (syncing || Drawer.autoSyncBlocked(lastSyncAttemptAtMs, now)) return
     var age = Drawer.catalogAgeS(status ? status.catalog_age_s : null, statusAtMs, lastSyncAtMs, now)
-    if (LibraryUi.syncDue(age, Drawer.SYNC_HOURS)) startSync("auto")
+    if (LibraryUi.syncDue(age, syncOnOpenHours)) startSync("auto")
   }
 
   function refreshLibrary() {
@@ -621,7 +652,7 @@ Item {
     // The saved volume and speed (F21). Without a saved volume, low in fake
     // mode: the fake book is a sine wave.
     initialVolume: Mpv.startVolume(store.doc.volume, root.fake ? 15 : 100)
-    initialSpeed: Mpv.startSpeed(store.doc.speed)
+    initialSpeed: Mpv.startSpeed(store.doc.speed, root.defaultSpeed)
     unitName: root.fake ? "omarchy-audible-fake-mpv" : "omarchy-audible-mpv"
     // Reattach once the paths are known.
     onSocketPathChanged: if (socketPath.length > 0) {
@@ -635,6 +666,11 @@ Item {
     stateDoc: store.doc
     coversDir: root.dataDir.length > 0 ? root.dataDir + "/covers" : ""
     jobs: Playback.jobStates(runner.pendingJobs, runner.activeJob, runner.progress, root.failures)
+  }
+
+  Connections {
+    target: store
+    function onLoadedChanged() { if (store.loaded) root.applyDefaultSpeedSetting() }
   }
 
   CatchupFlow {

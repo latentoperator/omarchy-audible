@@ -92,6 +92,32 @@ Every method returns a short string: `ok` on success, or an error such as `error
 
 The target also has read-only status methods, such as `playerStatus`, and test methods. The test methods only work in the plugin's development fake mode; otherwise they return `error: dev only`.
 
+## Settings
+
+Settings are plain JSON keys on this plugin's entry in `~/.config/omarchy/shell.json`, under `bar.layout.<section>`. For example, inside the relevant section's widget array:
+
+```json
+{
+  "id": "latentoperator.audible",
+  "skipSeconds": 30,
+  "defaultSort": "Title",
+  "defaultSpeed": "1.5×"
+}
+```
+
+Save the file and Omarchy applies the values live; no shell restart is needed. There is no settings UI for `barWidget.schema` in Omarchy 4.0.4. The manifest schema documents the key types, ranges, choices and defaults.
+
+| Key | Type and accepted values | Default | Meaning |
+|---|---|---|---|
+| `skipSeconds` | Integer or digit string, 5–120 | `15` | Seconds for back/forward skips. Any integer in range is accepted. |
+| `defaultSort` | Sort label, case-insensitive: Recently listened, Recently added, Title, Author | `Recently listened` | Initial drawer sort; the user's drawer choice lasts for the session. |
+| `autoRemoveFinished` | `On`/`Off` in any case, or JSON `true`/`false` | `Off` | Remove a finished local book. |
+| `showTitleInBar` | `On`/`Off` in any case, or JSON `true`/`false` | `Off` | Show the playing book's title beside the bar icon. |
+| `defaultSpeed` | Number or string matching a preset; optional trailing `×`, `x` or `X` | `1.0×` | Starting speed. A changed value applies and saves; an unchanged value preserves the speed chosen with the pill. |
+| `syncOnOpenHours` | Integer or digit string, 1–48 | `6` | Minimum interval between automatic catalog syncs. Any integer in range is accepted. |
+
+Speed is snapped only when it matches a preset (`0.75`, `1.0`, `1.25`, `1.5`, `1.75`, `2.0`, `2.5`, `3.0`); invalid or out-of-range values use the default. Invalid integers, sort labels and On/Off values also use their defaults.
+
 **The plugin does not add any keybinding.** To add your own, put this in your Hyprland config — that file is yours, this project never edits it:
 
 ```ini

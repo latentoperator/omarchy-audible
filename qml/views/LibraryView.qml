@@ -8,6 +8,7 @@ import "../lib/Format.js" as Format
 import "../lib/Glyphs.js" as Glyphs
 import "../lib/LibraryUi.js" as LibraryUi
 import "../lib/Mini.js" as Mini
+import "../lib/Settings.js" as Settings
 import "../lib/Onboarding.js" as Onboarding
 import "../lib/Panel.js" as Panel
 import "../lib/Signin.js" as Signin
@@ -401,8 +402,8 @@ ColumnLayout {
 
       PanelActionButton {
         iconText: Glyphs.GLYPH_BACK
-        tooltipText: "Back " + Mini.SKIP_SECONDS + " s"
-        onClicked: if (root.service) root.service.player.skip(Mini.skipSeconds(Mini.ACTION_BACK))
+        tooltipText: "Back " + (root.service ? root.service.skipSeconds : Settings.DEFAULTS.skipSeconds) + " s"
+        onClicked: if (root.service) root.service.player.skip(Mini.skipSeconds(Mini.ACTION_BACK, root.service.skipSeconds))
       }
 
       PanelActionButton {
@@ -413,8 +414,8 @@ ColumnLayout {
 
       PanelActionButton {
         iconText: Glyphs.GLYPH_FORWARD
-        tooltipText: "Forward " + Mini.SKIP_SECONDS + " s"
-        onClicked: if (root.service) root.service.player.skip(Mini.skipSeconds(Mini.ACTION_FORWARD))
+        tooltipText: "Forward " + (root.service ? root.service.skipSeconds : Settings.DEFAULTS.skipSeconds) + " s"
+        onClicked: if (root.service) root.service.player.skip(Mini.skipSeconds(Mini.ACTION_FORWARD, root.service.skipSeconds))
       }
     }
   }

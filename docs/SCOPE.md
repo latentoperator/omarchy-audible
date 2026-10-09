@@ -71,7 +71,7 @@ The user is an Omarchy user with an Audible account who works at the computer an
 - **FR-U7 States:** every view has designed empty, loading, offline, and error states (see §6).
 
 ### 4.6 Settings
-Exposed through the plugin manifest's `schema`, so they appear in Omarchy's settings UI.
+The keys live on the widget's `shell.json` entry and are typed by the plugin manifest's `schema`.
 
 | Key | Default | Notes |
 |-----|---------|-------|

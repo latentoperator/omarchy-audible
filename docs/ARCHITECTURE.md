@@ -52,6 +52,7 @@ omarchy-audible/                     (repo root == plugin root)
     SigninFlow.qml                   onboarding and sign-in: setup, Connect, Reconnect, Disconnect, the clipboard
     StateStore.qml                   state.json I/O; applies pure Store.js transitions
     lib/Store.js                     state.json adoption, operation replay and save decisions
+    lib/Settings.js                  validation/defaults for manifest-backed widget settings
     lib/PlayerMachine.js             PlayerController's attach, launch, reconnect, quit and relaunch decisions
   bin/omarchy-audible                stdlib-only Python launcher (bootstraps venv, dispatches)
   backend/omarchy_audible/           Python package (runs inside the venv)
@@ -102,12 +103,13 @@ Books are keyed by **ASIN directory**, not by title. That makes removal a single
   "books": { "<asin>": { "ms": 0, "updated_at": null, "last_played_at": null,
                          "played_since_download": false, "finished": false } },
   "push_queue": [ { "asin": "<asin>", "ms": 0, "at": null } ],
-  "volume": null, "speed": null }
+  "volume": null, "speed": null, "default_speed_setting": null }
 ```
 
 - `ms` is the local position; `updated_at` is when it was written. The newest-wins merge (§4.6) chooses between this entry and `remote.json`.
 - `last_played_at` is the "recently listened" key (§4.6); `played_since_download` gates position write-back; `finished` is the local finished flag.
 - `push_queue` holds pending position write-backs, `at` being the local listening time (§4.6).
+- `default_speed_setting` is optional. `StateStore` records the last default-speed setting it applied; a changed setting replaces the saved speed, while an unchanged setting preserves a speed selected with the pill.
 - Unknown keys are kept across a parse/serialize round trip. A missing file, garbage, or a `schema` other than 1 recovers to an empty v1; `parseState` reports that with a `recovered` flag (which is not part of the file) so the service can start over.
 
 The audible-cli profile is created programmatically in a plugin-owned config dir by setting `AUDIBLE_CONFIG_DIR` for every backend subprocess, so it never touches or conflicts with a user's own `~/.audible`.
@@ -306,6 +308,8 @@ The bar widget owns a `qs.Ui` `KeyboardPanel` anchored under the book icon (✅ 
 - Mini has a library button (→ Library) and a maximize button (→ Full). Full has the same library button (U8) and a collapse button (→ Mini).
 - Stop in Mini or Full ends playback through `Service.quitPlayer`; an open Mini or Full panel returns to Library after a true unload, while a switch or reconnect that temporarily clears the path preserves the current view. A closed panel stays closed. The bar glyph follows `player.loaded` and returns to the book.
 - Onboarding view replaces Library when `status.authenticated` is false or setup is incomplete. The step and the Connect phase come from `qml/SigninFlow.qml` through the service's `onboardingStep` and `loginPhase` (P9).
+
+Manifest settings are declared under `barWidget.schema` and their defaults under `barWidget.defaults`. Values are plain JSON keys on the plugin's `bar.layout.<section>` entry in `~/.config/omarchy/shell.json`. Each live widget passes its injected `settings` object to `Service.applySettings`; `qml/lib/Settings.js` validates values and supplies defaults, and Service owns the effective setting properties read by the views and library. The widget forwards settings only after the shell injects its `moduleName`, so the base-class default `{}` never reaches Service. The shell updates the widget's `settings` property in place when the bar layout entry changes, so saving shell.json applies settings without restarting the shell. Omarchy 4.0.4 has no settings UI that renders `barWidget.schema`. With no widget instance, Service keeps the library defaults and does not record or apply a default-speed marker. `autoRemoveFinished` IPC remains a fake-mode development override; a later settings apply, widget creation or rebuild, or store load can set it from shell.json again (last write wins).
 
 Keyboard: search field focused on open; ↑/↓ move; Enter play; Esc close; Space play/pause when the search field is empty; ←/→ skip in Mini/Full; Backspace in Full collapses to Mini. In the Mini chapter popup, ↑/↓ move, Enter jumps to the chapter and Esc closes only the popup. Player and store state live in service-owned child objects (`PlayerController.qml` and `StateStore.qml`, whose decisions are `PlayerMachine.step` and `Store.step`); views continue to use the service-facing names.
 

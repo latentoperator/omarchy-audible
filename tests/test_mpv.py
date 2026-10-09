@@ -403,3 +403,8 @@ def test_start_volume(mpv, saved, fallback, expected):
 )
 def test_start_speed(mpv, saved, expected):
     assert mpv.call("startSpeed", saved) == expected
+
+
+def test_start_speed_uses_default_when_no_saved_speed(mpv):
+    assert mpv.call("startSpeed", None, 1.5) == 1.5
+    assert mpv.call("startSpeed", 1.25, 1.5) == 1.25

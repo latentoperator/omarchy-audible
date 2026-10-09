@@ -106,6 +106,20 @@ def test_state_and_key_constants(library: qjs.JsModule) -> None:
     assert library.evaluate("FILTER_IN_PROGRESS") == "in-progress"
 
 
+@pytest.mark.parametrize(
+    "marker,expected",
+    [(1.5, 1.5), ("garbage", None), (None, None)],
+)
+def test_default_speed_marker_state_round_trip(library, marker, expected) -> None:
+    source = {"schema": 1, "books": {}, "push_queue": [], "volume": None, "speed": 1.25}
+    if marker is not None:
+        source["default_speed_setting"] = marker
+    parsed = library.call("parseState", json.dumps(source))
+    serialized = json.loads(library.call("serializeState", parsed))
+    assert serialized.get("default_speed_setting") == expected
+    assert serialized["speed"] == 1.25
+
+
 def test_fixture_catalog_has_the_expected_shapes(catalog: dict) -> None:
     assert catalog["schema"] == 1
     assert catalog["marketplace"] == "us"
