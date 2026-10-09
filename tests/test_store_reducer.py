@@ -131,6 +131,47 @@ def test_pending_ops_replay_in_order_before_loaded_and_save(store):
     ]
 
 
+@pytest.mark.parametrize(
+    "loaded,speed,doc_speed,expected_effects,dirty",
+    [
+        (False, 1.5, 1.5, [], False),
+        (True, 1.5, 1.5, [], False),
+        (True, 1.5, 1.0, [{"type": "save_now"}], True),
+        (True, "1.5", 1.0, [], False),
+    ],
+)
+def test_set_default_speed_setting_vectors(
+    store, loaded, speed, doc_speed, expected_effects, dirty
+):
+    state = base()
+    state["loaded"] = loaded
+    state["doc"]["default_speed_setting"] = doc_speed if loaded else None
+    state["doc"]["speed"] = 1.0
+    state, effects = vector(store, state, type="set_default_speed_setting", speed=speed)
+    assert effects == expected_effects
+    assert state["dirty"] is dirty
+    if loaded and speed == 1.5 and doc_speed != 1.5:
+        assert state["doc"]["default_speed_setting"] == 1.5
+
+
+def test_changed_default_speed_is_one_atomic_reducer_write(store):
+    state = base()
+    state.update(loaded=True, dirty=False)
+    state["doc"].update(speed=1.25, default_speed_setting=1.0)
+    state, effects = vector(
+        store,
+        state,
+        type="set_default_speed",
+        speed=1.5,
+        applySpeed=True,
+        savedSpeed=1.5,
+    )
+    assert state["doc"]["speed"] == 1.5
+    assert state["doc"]["default_speed_setting"] == 1.5
+    assert state["dirty"] is True
+    assert effects == [{"type": "save_now"}]
+
+
 def test_corrupt_file_waits_for_backup_then_replays_before_first_write(store):
     state = base()
     state, effects = vector(store, state, type="record", asin="A", ms=1000, at=AT1)

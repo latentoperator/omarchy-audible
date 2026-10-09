@@ -45,13 +45,13 @@ Item {
   property int syncOnOpenHours: Settings.DEFAULTS.syncOnOpenHours
   property real defaultSpeed: Settings.DEFAULTS.defaultSpeed
   property string showTitleInBar: Settings.DEFAULTS.showTitleInBar
-  property var appliedRawSettings: ({})
+  property bool settingsReceived: false
   // No backend command runs until the flag has been read: a command that
   // raced ahead of it would go out without OMARCHY_AUDIBLE_FAKE.
   property bool flagKnown: false
 
   function applySettings(raw) {
-    appliedRawSettings = raw && typeof raw === "object" ? raw : ({})
+    settingsReceived = true
     var next = Settings.normalize(raw)
     skipSeconds = next.skipSeconds
     autoRemoveFinished = next.autoRemoveFinished === "On"
@@ -62,14 +62,14 @@ Item {
       library.sortKey = Settings.sortKey(defaultSort)
     }
     defaultSpeed = next.defaultSpeed
-    if (store.loaded) {
-      var choice = Settings.speedChoice(store.doc.speed, defaultSpeed, store.doc.default_speed_setting)
-      store.setDefaultSpeedSetting(defaultSpeed)
-      if (choice.apply) {
-        store.setPlayerSettings(store.doc.volume, choice.speed)
-        if (player.loaded) player.setSpeed(choice.speed)
-      }
-    }
+    if (store.loaded) applyDefaultSpeedSetting()
+  }
+
+  function applyDefaultSpeedSetting() {
+    if (!settingsReceived || !store.loaded) return
+    var choice = Settings.speedChoice(store.doc.speed, defaultSpeed, store.doc.default_speed_setting)
+    store.applyDefaultSpeed(defaultSpeed, choice.apply, choice.speed)
+    if (choice.apply && player.connected) player.setSpeed(choice.speed)
   }
 
   // The latest `status` event. All paths come from here; never recompute them.
@@ -668,7 +668,7 @@ Item {
 
   Connections {
     target: store
-    function onLoadedChanged() { if (store.loaded) root.applySettings(root.appliedRawSettings) }
+    function onLoadedChanged() { if (store.loaded) root.applyDefaultSpeedSetting() }
   }
 
   CatchupFlow {

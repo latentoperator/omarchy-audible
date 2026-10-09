@@ -20,8 +20,8 @@ function normalize(raw) {
   return {
     "skipSeconds": _s.integer(source.skipSeconds, 5, 120, DEFAULTS.skipSeconds),
     "defaultSort": _s.choice(source.defaultSort, SORTS, DEFAULTS.defaultSort),
-    "autoRemoveFinished": _s.choice(source.autoRemoveFinished, ["On", "Off"], DEFAULTS.autoRemoveFinished),
-    "showTitleInBar": _s.choice(source.showTitleInBar, ["On", "Off"], DEFAULTS.showTitleInBar),
+    "autoRemoveFinished": _s.toggle(source.autoRemoveFinished, DEFAULTS.autoRemoveFinished),
+    "showTitleInBar": _s.toggle(source.showTitleInBar, DEFAULTS.showTitleInBar),
     "defaultSpeed": _s.speed(source.defaultSpeed),
     "syncOnOpenHours": _s.integer(source.syncOnOpenHours, 1, 48, DEFAULTS.syncOnOpenHours)
   };
@@ -54,11 +54,21 @@ _s.integer = function(value, min, max, fallback) {
   return value;
 };
 _s.choice = function(value, choices, fallback) {
-  return typeof value === "string" && choices.indexOf(value) !== -1 ? value : fallback;
+  if (typeof value !== "string") return fallback;
+  var normalized = value.toLowerCase();
+  for (var i = 0; i < choices.length; i++) {
+    if (choices[i].toLowerCase() === normalized) return choices[i];
+  }
+  return fallback;
+};
+_s.toggle = function(value, fallback) {
+  if (value === true) return "On";
+  if (value === false) return "Off";
+  return _s.choice(value, ["On", "Off"], fallback);
 };
 _s.validSpeed = function(value) {
   if (typeof value === "string") {
-    value = value.trim().replace(/×$/, "");
+    value = value.trim().replace(/[×xX]$/, "");
     if (value.length === 0) return null;
     value = Number(value);
   }

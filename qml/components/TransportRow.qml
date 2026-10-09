@@ -4,6 +4,7 @@ import qs.Commons
 import qs.Ui
 import "../lib/Glyphs.js" as Glyphs
 import "../lib/Mini.js" as Mini
+import "../lib/Settings.js" as Settings
 import "../lib/Player.js" as Player
 
 // ⏮ ⏪N ⏯ ⏩N ⏭ ■ (FR-U3, FR-P2). ⏯ goes through the service, so a resume
@@ -28,9 +29,9 @@ RowLayout {
   Button {
     enabled: root.loaded
     iconText: Glyphs.GLYPH_BACK
-    text: root.service ? String(root.service.skipSeconds) : "15"
-    tooltipText: "Back " + (root.service ? root.service.skipSeconds : 15) + " s (←)"
-    onClicked: root.player.skip(Mini.skipSeconds(Mini.ACTION_BACK, root.service ? root.service.skipSeconds : 15))
+    text: String(root.service ? root.service.skipSeconds : Settings.DEFAULTS.skipSeconds)
+    tooltipText: "Back " + (root.service ? root.service.skipSeconds : Settings.DEFAULTS.skipSeconds) + " s (←)"
+    onClicked: root.player.skip(Mini.skipSeconds(Mini.ACTION_BACK, root.service ? root.service.skipSeconds : Settings.DEFAULTS.skipSeconds))
   }
 
   Button {
@@ -43,9 +44,9 @@ RowLayout {
   Button {
     enabled: root.loaded
     iconText: Glyphs.GLYPH_FORWARD
-    text: root.service ? String(root.service.skipSeconds) : "15"
-    tooltipText: "Forward " + (root.service ? root.service.skipSeconds : 15) + " s (→)"
-    onClicked: root.player.skip(Mini.skipSeconds(Mini.ACTION_FORWARD, root.service ? root.service.skipSeconds : 15))
+    text: String(root.service ? root.service.skipSeconds : Settings.DEFAULTS.skipSeconds)
+    tooltipText: "Forward " + (root.service ? root.service.skipSeconds : Settings.DEFAULTS.skipSeconds) + " s (→)"
+    onClicked: root.player.skip(Mini.skipSeconds(Mini.ACTION_FORWARD, root.service ? root.service.skipSeconds : Settings.DEFAULTS.skipSeconds))
   }
 
   Button {

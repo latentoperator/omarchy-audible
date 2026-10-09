@@ -22,6 +22,7 @@ BarWidget {
     player ? player.loaded : false, service && service.loadedRow ? service.loadedRow.title : "")
 
   property bool opened: false
+  property bool settingsInjected: false
   property bool popoutSwitchClosing: false
   property bool enterPressed: false
 
@@ -88,14 +89,14 @@ BarWidget {
   implicitHeight: barTitle.length > 0 ? titled.implicitHeight : button.implicitHeight
 
   onServiceChanged: if (service) {
-    service.applySettings(settings)
+    if (settingsInjected) service.applySettings(settings)
     service.registerSurface(root)
   }
-  onSettingsChanged: if (service) service.applySettings(settings)
-  Component.onCompleted: if (service) {
-    service.applySettings(settings)
-    service.registerSurface(root)
+  onSettingsChanged: {
+    settingsInjected = true
+    if (service) service.applySettings(settings)
   }
+  Component.onCompleted: if (service) service.registerSurface(root)
   Component.onDestruction: if (service) service.unregisterSurface(root)
 
   BarIconButton {

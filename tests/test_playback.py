@@ -207,3 +207,14 @@ def test_with_player_settings_unchanged_is_the_same_object(playback):
         "(function(){ var s = {volume: 70, speed: 1.25};"
         " return withPlayerSettings(s, 70, 1.25) === s; })()"
     )
+
+
+def test_with_default_speed_setting_records_marker_and_optional_speed(playback):
+    state = {"schema": 1, "volume": 70, "speed": 1.25}
+    preserved = playback.call("withDefaultSpeed", state, 1.5, False, 1.5)
+    assert preserved["speed"] == 1.25
+    assert preserved["default_speed_setting"] == 1.5
+    changed = playback.call("withDefaultSpeed", state, 1.5, True, 1.5)
+    assert changed["speed"] == 1.5
+    assert changed["default_speed_setting"] == 1.5
+    assert changed["volume"] == 70
