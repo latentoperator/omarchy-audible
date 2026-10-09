@@ -113,6 +113,12 @@ def test_speed_accepts_numeric_preset_and_garbage_object_falls_back(settings) ->
         (1.25, 1.0, None, {"apply": False, "speed": 1.25}),
         (1.25, 1.5, "garbage", {"apply": True, "speed": 1.5}),
         (1.25, 1.5, 7, {"apply": True, "speed": 1.5}),
+        # Fine-step pill speeds (any 0.05 step) are kept, not reset (r3 blocker).
+        (1.35, 1.0, None, {"apply": False, "speed": 1.35}),
+        (1.1, 1.0, 1.0, {"apply": False, "speed": 1.1}),
+        (1.35, 1.5, 1.0, {"apply": True, "speed": 1.5}),
+        (7, 1.0, None, {"apply": True, "speed": 1}),
+        ("bad", 1.0, None, {"apply": True, "speed": 1}),
     ],
 )
 def test_default_speed_choice(settings, saved, setting, last, expected) -> None:

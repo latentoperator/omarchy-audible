@@ -1,4 +1,5 @@
 .pragma library
+.import "Mpv.js" as Mpv
 
 // The plugin's manifest-backed settings. Keep these fallbacks in sync with
 // manifest.json; normalize untrusted inline values before exposing them to UI
@@ -59,7 +60,11 @@ function sortKey(label) {
 // Saved speed is user-controlled by the pill. A setting marker stored with
 // state.json distinguishes a changed default from an unchanged startup.
 function speedChoice(savedSpeed, settingSpeed, lastAppliedSetting) {
-  var saved = _s.validSpeed(savedSpeed);
+  // The saved speed is whatever the pill last set: any 0.05 step in mpv's
+  // range (Full's fine buttons), not only a preset. Validate it the way
+  // Mpv.startSpeed does, or an upgrade would reset a fine-step speed.
+  var saved = typeof savedSpeed === "number" && isFinite(savedSpeed)
+    && savedSpeed >= Mpv.MIN_SPEED && savedSpeed <= Mpv.MAX_SPEED ? savedSpeed : null;
   var setting = _s.validSpeed(settingSpeed);
   if (setting === null) setting = DEFAULTS.defaultSpeed;
   var changed = lastAppliedSetting !== null && lastAppliedSetting !== undefined
