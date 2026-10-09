@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import pathlib
+
 import pytest
 
 import qjs
+
+REPO = pathlib.Path(__file__).resolve().parent.parent
 
 
 @pytest.fixture(scope="module")
@@ -148,20 +152,36 @@ def test_search_key(drawer, key, text, action):
 
 
 @pytest.mark.parametrize(
-    "selected,count,index",
+    "selected,count,text,index",
     [
-        (-1, 5, 0),
-        (None, 5, 0),
-        (2, 5, 2),
-        (9, 5, 4),
-        (2.7, 5, 2),
-        (0, 0, -1),
-        (-1, 0, -1),
-        (3, None, -1),
+        # Nothing selected: the first match only when something is typed.
+        (-1, 5, "dun", 0),
+        (None, 5, "dun", 0),
+        (-1, 5, "", -1),
+        (None, 5, "", -1),
+        (-1, 5, "   ", -1),
+        (-1, 5, None, -1),
+        # A selection is picked whatever the search says.
+        (2, 5, "", 2),
+        (2, 5, "dun", 2),
+        (0, 5, "", 0),
+        (9, 5, "", 4),
+        (2.7, 5, "", 2),
+        (0, 0, "dun", -1),
+        (-1, 0, "dun", -1),
+        (3, None, "dun", -1),
     ],
 )
-def test_pick_index(drawer, selected, count, index):
-    assert drawer.call("pickIndex", selected, count) == index
+def test_pick_index(drawer, selected, count, text, index):
+    assert drawer.call("pickIndex", selected, count, text) == index
+
+
+def test_library_enter_passes_the_search_text():
+    view = (REPO / "qml/views/LibraryView.qml").read_text()
+    assert (
+        "Drawer.pickIndex(root.selected, root.library ? root.library.count : 0, search.text)"
+        in view
+    )
 
 
 def test_row_progress(drawer):

@@ -126,12 +126,17 @@ function clampSelection(selected, count) {
   return Math.min(Math.floor(i), n - 1);
 }
 
-// The row Enter picks: the selection, else the first row, else none (-1).
-function pickIndex(selected, count) {
+// The row Enter picks: the selection, else the first match of a typed search,
+// else none (-1). With nothing selected and nothing typed, Enter picks nothing,
+// so a stray Enter (one carried over from sign-in, say) cannot start a
+// download of whichever book happens to be first (R5 follow-up).
+function pickIndex(selected, count, text) {
   var size = _p.number(count);
   if (size === null || size < 1) return -1;
   var index = _p.number(selected);
-  if (index === null || index < 0) return 0;
+  if (index === null || index < 0) {
+    return typeof text === "string" && text.trim().length > 0 ? 0 : -1;
+  }
   return Math.min(Math.floor(index), size - 1);
 }
 

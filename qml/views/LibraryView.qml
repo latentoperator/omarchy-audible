@@ -90,7 +90,7 @@ ColumnLayout {
         }
         else if (action === Drawer.KEY_MOVE_UP) root.move(-1)
         else if (action === Drawer.KEY_MOVE_DOWN) root.move(1)
-        else if (action === Drawer.KEY_PICK) root.pickAt(Drawer.pickIndex(root.selected, root.library ? root.library.count : 0))
+        else if (action === Drawer.KEY_PICK) root.pickAt(Drawer.pickIndex(root.selected, root.library ? root.library.count : 0, search.text))
         else if (action === Drawer.KEY_TOGGLE) { if (root.service && root.service.player.loaded) root.service.playPause() }
         else return
         event.accepted = true

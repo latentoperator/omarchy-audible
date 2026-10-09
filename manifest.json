@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "latentoperator.audible",
   "name": "Omaudible",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "author": "latentoperator",
   "description": "Your Audible library in the Omarchy bar: browse, download, and listen without a browser tab.",
   "kinds": [
