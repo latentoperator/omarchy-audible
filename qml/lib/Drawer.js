@@ -81,6 +81,13 @@ function syncFailure(code) {
   return { "offline": false, "errorCode": code };
 }
 
+// True for unexpected failures that need the connection-problem diagnostic.
+// Known offline/auth/job outcomes have their own UI and do not run doctor.
+function connectionProblem(code) {
+  if (typeof code !== "string" || code.length === 0) return false;
+  return ["network", "auth_failed", "busy", "cancelled"].indexOf(code) === -1;
+}
+
 // What a key pressed in the search field does (ARCHITECTURE 6): Esc closes,
 // ↑/↓ move, Enter picks, Space plays/pauses only while the field is empty;
 // everything else is typed.
@@ -148,7 +155,7 @@ function removableAsins(rows) {
   var out = [];
   if (!Array.isArray(rows)) return out;
   for (var i = 0; i < rows.length; i++) {
-    if (canRemove(rows[i])) out.push(rows[i].asin);
+    if (canRemove(rows[i]) && rows[i].inLibrary !== false) out.push(rows[i].asin);
   }
   return out;
 }
@@ -229,6 +236,7 @@ function offlineAge(age) {
 }
 
 function bannerText(banner, age) {
+  if (banner === "connection") return "Audible connection problem";
   if (banner === "offline") {
     var label = "Offline — showing your saved library";
     var elapsed = offlineAge(age);

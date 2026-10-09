@@ -80,6 +80,38 @@ def test_diagnostic_redacts_secret_options_and_limits_doctor_details(lib):
     assert "/private/auth.json" not in text and "/private/venv" not in text
 
 
+@pytest.mark.parametrize(
+    "value,secret",
+    [
+        ('{"key": "cafefeed"}', "cafefeed"),
+        ("{'iv': 'aabbccdd'}", "aabbccdd"),
+        ('{"audible_key":"deadbeef"}', "deadbeef"),
+        ("{lavf_options: {audible_key: feedface}}", "feedface"),
+        ("voucher=0123456789", "0123456789"),
+        ("aeskey=0123456789", "0123456789"),
+    ],
+)
+def test_diagnostic_scrubs_key_value_forms(lib, value, secret):
+    diagnostic = qjs.load("Diagnostic")
+    result = diagnostic.call("build", "0.0.1", "sync", "internal", value, "", [])
+    assert secret not in result
+
+
+@pytest.mark.parametrize(
+    "value", ["could not read the library", "The Key: A Novel", "IV: Part Four"]
+)
+def test_event_log_keeps_ordinary_text(lib, value):
+    assert lib.call("redactOptions", value) == value
+
+
+def test_diagnostic_keeps_ordinary_library_error_text():
+    diagnostic = qjs.load("Diagnostic")
+    text = diagnostic.call(
+        "build", "0.0.1", "sync", "internal", "could not read the library", "", []
+    )
+    assert "Message: could not read the library" in text
+
+
 def test_service_runs_doctor_and_copies_diagnostic_through_stdin():
     from pathlib import Path
 
@@ -88,6 +120,9 @@ def test_service_runs_doctor_and_copies_diagnostic_through_stdin():
     signin = (root / "qml" / "SigninFlow.qml").read_text(encoding="utf-8")
     ipc = (root / "qml" / "ServiceIpc.qml").read_text(encoding="utf-8")
     assert 'root.run("doctor", [], "sync-doctor")' in service
+    assert "Drawer.connectionProblem(root.lastSyncCode)" in service
+    assert "if (!outcome.ok && Drawer.connectionProblem(root.lastSyncCode))" in service
+    assert 'authFailed ? "auth_failed" : syncFailure.errorCode' in service
     assert (
         "function copyDiagnostic() { signinFlow.copyText(diagnosticText) }" in service
     )

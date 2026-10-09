@@ -4,7 +4,7 @@
 
 A book icon in the [Omarchy](https://omarchy.org) bar. Click it to browse your Audible library in a themed drawer, pick a book, and a mini player takes over. Dismiss it and the book keeps playing. Only the books you're listening to live on your laptop. Removing one never touches your Audible account.
 
-When offline, the drawer keeps the saved catalog and downloaded books available, shows when that catalog was last synced, and marks cloud books unavailable. If Audible's library API stops working, the Library shows an Audible connection problem with a copyable, redacted diagnostic. A downloaded book removed from the Audible library stays playable and is marked as no longer in the library.
+When offline, the drawer keeps the saved catalog and downloaded books available, shows when that catalog was last synced, and marks cloud books unavailable. Unexpected Audible status or library-response changes during sync show an Audible connection problem with a copyable, redacted diagnostic. Real mode detects expired or revoked credentials when Audible returns an authentication error (such as HTTP 401) during sync or the metadata read for `get`; `status` checks whether the auth file exists and does not verify that credentials still work. A downloaded book removed from the Audible library stays playable and is marked as no longer in the library.
 
 ## Planned features
 

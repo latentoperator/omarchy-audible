@@ -108,6 +108,17 @@ def test_local_falls_back_to_the_file_mtime_without_meta(
 # --- B11: locked books count as local (ARCHITECTURE 3, D7) -------------------
 
 
+def test_local_scan_ignores_non_asin_top_level_directories(
+    run_cli, validate_stream, fake_paths
+):
+    stray = fake_paths.books_dir / "My Rips"
+    stray.mkdir()
+    (stray / "book.m4b").write_bytes(b"invented audio")
+    parsed = validate_stream(run_cli("local", fake=True), expect_last="done")
+    local = next(event for event in parsed if event["type"] == "local")
+    assert local["books"] == []
+
+
 def test_local_lists_old_and_locked_books(run_cli, validate_stream, fake_paths):
     _make_book(fake_paths, "B00OLDM4B", payload=b"a" * 100)
     _make_locked_book(

@@ -278,6 +278,43 @@ def test_local_book_missing_catalog_uses_asin_and_no_progress_if_unknown(
     assert row["percent"] == 0
 
 
+@pytest.mark.parametrize("catalog_value", [{}, {"books": "x"}, {"books": []}, None])
+def test_malformed_or_empty_catalog_does_not_mark_local_books_as_orphans(
+    library, catalog_value
+):
+    rows = build(
+        library,
+        catalog_value,
+        local=[{"asin": "B0ORPHAN03", "size": 1, "downloaded_at": None}],
+    )
+    assert rows == []
+
+
+def test_catalog_asin_search_requires_a_complete_asin(library, catalog):
+    rows = build(library, catalog)
+    assert asins(library.call("searchRows", rows, A1.lower())) == [A1]
+    assert asins(library.call("searchRows", rows, "b0")) == []
+
+
+def test_catalog_row_with_position_but_zero_percent_is_in_progress(library, catalog):
+    rows = build(
+        library,
+        [
+            {
+                "asin": A1,
+                "title": "Invented book",
+                "runtime_min": None,
+                "percent_complete": 0,
+            }
+        ],
+        state={"books": {A1: {"ms": 1, "updated_at": "2026-01-01T00:00:00Z"}}},
+    )
+    row = rows_by_asin(rows)[A1]
+    assert row["percent"] == 0
+    assert row["positionMs"] == 1
+    assert A1 in asins(library.call("filterRows", rows, "in-progress"))
+
+
 def test_build_rows_never_throws_on_bad_input(library: qjs.JsModule) -> None:
     assert library.call("buildRows", None, None, None, None, None) == []
     assert library.call("buildRows", "garbage", None, None, None, None) == []

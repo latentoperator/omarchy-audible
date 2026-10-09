@@ -27,7 +27,7 @@ from typing import Any, Protocol
 
 from . import fsutil, protocol
 from .auth import DEFAULT_MARKETPLACE
-from .errors import PipelineError
+from .errors import PipelineError, classify_audible_error
 from .library import iso_now
 from .log import log
 from .paths import Paths
@@ -271,6 +271,12 @@ class RealLibrary:
         while True:
             payload = self._page(page)
             items = payload.get("items") if isinstance(payload, dict) else None
+            if page == 1 and not isinstance(items, list):
+                raise PipelineError(
+                    protocol.ErrorCode.INTERNAL,
+                    "unexpected library response",
+                    hint="the Audible API may have changed; copy the diagnostic",
+                )
             batch = items if isinstance(items, list) else []
             if batch or page == 1:
                 total = (
@@ -382,10 +388,15 @@ def _read_library(library: LibraryPort, emit: Emitter) -> list[dict[str, Any]]:
         raise
     except Exception as exc:  # any library failure is a read failure
         log(f"library read failed: {type(exc).__name__}")
+        code = classify_audible_error(exc)
         raise PipelineError(
-            protocol.ErrorCode.NETWORK,
+            code,
             "could not read the library",
-            hint="check the network and retry",
+            hint=(
+                "check the network and retry"
+                if code == protocol.ErrorCode.NETWORK
+                else "copy the diagnostic and reconnect if requested"
+            ),
         ) from exc
     return items
 
@@ -428,7 +439,7 @@ def run_sync(
         downloaded = fetch_covers(paths, covers, fetch=cover_fetch, full=full)
 
         asins = [book["asin"] for book in built["books"]]
-        remote = fetch_positions(asins, positions_port)
+        remote = fetch_positions(asins, positions_port, classify_errors=True)
         write_remote(paths.remote_file, remote)
         fsutil.atomic_write_json(paths.catalog_file, built)
 

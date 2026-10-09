@@ -89,6 +89,34 @@ def test_sync_failure(drawer, code, result):
     assert drawer.call("syncFailure", code) == result
 
 
+def test_connection_banner_has_the_expected_copy(drawer):
+    assert drawer.call("bannerText", "connection", None) == "Audible connection problem"
+
+
+@pytest.mark.parametrize(
+    "code,result",
+    [
+        ("", False),
+        (None, False),
+        (3, False),
+        ("network", False),
+        ("auth_failed", False),
+        ("busy", False),
+        ("cancelled", False),
+        ("internal", True),
+        ("no_venv", True),
+        ("disk_space", True),
+        ("setup_failed", True),
+    ],
+)
+def test_connection_problem_classification(drawer, code, result):
+    assert drawer.call("connectionProblem", code) is result
+
+
+def test_connection_problem_is_false_for_undefined(drawer):
+    assert drawer.evaluate("connectionProblem(undefined)") is False
+
+
 ESC, RET, ENT, UP, DOWN, SPACE = (
     0x01000000,
     0x01000004,
@@ -175,9 +203,10 @@ def test_can_remove(drawer, row, ok):
 
 def test_removable_asins(drawer):
     rows = [
-        {"asin": "A", "local": True},
+        {"asin": "A", "local": True, "inLibrary": True},
         {"asin": "B", "local": False},
-        {"asin": "C", "local": True},
+        {"asin": "C", "local": True, "inLibrary": True},
+        {"asin": "D", "local": True, "inLibrary": False},
         None,
     ]
     assert drawer.call("removableAsins", rows) == ["A", "C"]

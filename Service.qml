@@ -164,7 +164,9 @@ Item {
   readonly property var listState: LibraryUi.listState({
     "catalogLoaded": library.catalogLoaded, "syncing": syncing,
     "total": library.allRows.length, "shown": library.count,
-    "offline": syncFailure.offline, "errorCode": authFailed ? "auth_failed" : syncFailure.errorCode
+    "offline": syncFailure.offline,
+    "connectionProblem": Drawer.connectionProblem(authFailed ? "auth_failed" : lastSyncCode),
+    "errorCode": authFailed ? "auth_failed" : syncFailure.errorCode
   })
   // A downloaded book plays when its `get` finishes; a finished book far
   // from its end asks first (`askAsin`); a book picked from the drawer
@@ -921,8 +923,9 @@ Item {
         if (outcome.ok) {
           root.lastSyncAtMs = Date.now()
           root.refreshCatalogAge()
+          root.doctorChecks = []
         }
-        if (!outcome.ok && ["network", "auth_failed", "busy", "cancelled"].indexOf(root.lastSyncCode) === -1) {
+        if (!outcome.ok && Drawer.connectionProblem(root.lastSyncCode)) {
           root.doctorChecks = []
           root.run("doctor", [], "sync-doctor")
         }

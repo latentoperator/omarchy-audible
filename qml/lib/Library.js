@@ -465,9 +465,9 @@ _p.firstAuthor = function (row) {
     : "";
 };
 
-_p.searchText = function (row) {
+_p.searchText = function (row, includeAsin) {
   var parts = [];
-  _p.appendText(parts, row.asin);
+  if (includeAsin === true) _p.appendText(parts, row.asin);
   _p.appendText(parts, row.title);
   _p.appendText(parts, row.subtitle);
   _p.appendText(parts, row.authors);
@@ -603,7 +603,7 @@ function buildRows(catalog, remote, state, local, jobs) {
   var catalogAsins = {};
   for (index = 0; index < rows.length; index++) catalogAsins[rows[index].asin] = true;
   var localAsins = Object.keys(localMap).sort();
-  for (index = 0; index < localAsins.length; index++) {
+  for (index = 0; books.length > 0 && index < localAsins.length; index++) {
     var localAsin = localAsins[index];
     if (catalogAsins[localAsin]) continue;
     var localEntry = localMap[localAsin];
@@ -670,9 +670,10 @@ function searchRows(rows, text) {
   if (!query) {
     return items.slice();
   }
+  var asinQuery = /^[a-z0-9]{10}$/i.test(query);
   var tokens = query.split(/\s+/);
   return items.filter(function (row) {
-    var haystack = _p.searchText(row);
+    var haystack = _p.searchText(row, asinQuery);
     for (var index = 0; index < tokens.length; index++) {
       if (haystack.indexOf(tokens[index]) === -1) {
         return false;

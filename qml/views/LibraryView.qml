@@ -152,6 +152,7 @@ ColumnLayout {
   RowLayout {
     Layout.fillWidth: true
     visible: banner.text.length > 0
+      && (root.list.banner !== LibraryUi.BANNER_CONNECTION || (root.library && root.library.catalogLoaded))
     spacing: Style.spacing.md
 
     Text {
@@ -170,6 +171,12 @@ ColumnLayout {
       visible: root.list.banner === LibraryUi.BANNER_RECONNECT
       text: "Reconnect"
       onClicked: root.service.reconnect()
+    }
+
+    Button {
+      visible: root.list.banner === LibraryUi.BANNER_CONNECTION && root.library && root.library.catalogLoaded
+      text: "Copy diagnostic"
+      onClicked: root.service.copyDiagnostic()
     }
   }
 
@@ -279,8 +286,8 @@ ColumnLayout {
       width: parent.width
       horizontalAlignment: Text.AlignHCenter
       wrapMode: Text.WordWrap
-      visible: !(root.list.state === LibraryUi.STATE_ERROR && root.service && root.service.lastSyncCode.length > 0
-        && ["network", "auth_failed", "busy", "cancelled"].indexOf(root.service.lastSyncCode) === -1)
+      visible: !(root.list.state === LibraryUi.STATE_ERROR && root.service
+        && Drawer.connectionProblem(root.service.lastSyncCode) && !root.library.catalogLoaded)
       text: Drawer.stateText(root.list.state)
       textFormat: Text.PlainText
       color: Color.muted
@@ -291,8 +298,8 @@ ColumnLayout {
     ColumnLayout {
       anchors.centerIn: parent
       width: parent.width
-      visible: root.list.state === LibraryUi.STATE_ERROR && root.service && root.service.lastSyncCode.length > 0
-        && ["network", "auth_failed", "busy", "cancelled"].indexOf(root.service.lastSyncCode) === -1
+      visible: root.list.state === LibraryUi.STATE_ERROR && root.service
+        && Drawer.connectionProblem(root.service.lastSyncCode) && !root.library.catalogLoaded
       spacing: Style.spacing.sm
 
       Text {

@@ -8,6 +8,8 @@ is raised from the ``get`` SIGTERM handler so cleanup runs on the way out
 
 from __future__ import annotations
 
+from .protocol import ErrorCode
+
 
 class PipelineError(Exception):
     """A download/removal failure with a stable protocol error code."""
@@ -21,3 +23,33 @@ class PipelineError(Exception):
 
 class Cancelled(Exception):
     """Raised when a running ``get`` receives SIGTERM (ARCHITECTURE 4.8)."""
+
+
+_AUTH_ERROR_NAMES = {"Unauthorized", "NoRefreshToken", "AuthFlowError"}
+_NETWORK_ERROR_NAMES = {
+    "NetworkError",
+    "NotResponding",
+    "RatelimitError",
+    "ServerError",
+    "TransportError",
+    "TimeoutException",
+    "ConnectError",
+    "OSError",
+    "ConnectionError",
+    "TimeoutError",
+    "gaierror",
+}
+
+
+def classify_audible_error(exc: BaseException) -> str:
+    """Map an Audible read exception to a stable protocol code by its MRO names.
+
+    Class-name matching keeps the classifier independent of the optional
+    ``audible`` and ``httpx`` packages and lets port tests use lookalike types.
+    """
+    names = {cls.__name__ for cls in type(exc).__mro__}
+    if names & _AUTH_ERROR_NAMES:
+        return ErrorCode.AUTH_FAILED
+    if names & _NETWORK_ERROR_NAMES:
+        return ErrorCode.NETWORK
+    return ErrorCode.INTERNAL

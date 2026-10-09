@@ -80,6 +80,7 @@ Rectangle {
 
       RowLayout {
         Layout.fillWidth: true
+        visible: root.row && root.row.inLibrary === false
         spacing: Style.spacing.md
 
         SoftText {

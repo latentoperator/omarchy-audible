@@ -39,7 +39,7 @@ from .catalog import open_client, run_sync
 from .download import FAKE_FAIL_MODES, parse_fake_chapters, run_get
 from .errors import Cancelled, PipelineError
 from .fsutil import atomic_write_json
-from .library import play_info_payload, remove_book, scan_local, validate_asin
+from .library import _ASIN_RE, play_info_payload, remove_book, scan_local, validate_asin
 from .paths import Paths
 from .positions import (
     FakePositions,
@@ -301,7 +301,7 @@ def cmd_sync(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> 
             else []
         )
         if hidden is not None:
-            if not hidden:
+            if not _ASIN_RE.fullmatch(hidden):
                 protocol.error(
                     protocol.ErrorCode.INVALID_ARGS,
                     "--fake-hide requires a fake-mode ASIN",

@@ -58,7 +58,7 @@ from typing import Any, BinaryIO
 
 from . import fakestate, fsutil, protocol
 from .chapters import Chapter, build_ffmetadata, parse_chapters
-from .errors import Cancelled, PipelineError
+from .errors import Cancelled, PipelineError, classify_audible_error
 from .library import (
     AUDIO_FILENAMES,
     CHAPTERS_FILENAME,
@@ -544,9 +544,13 @@ def _real_content_metadata(asin: str, paths: Paths) -> dict[str, Any]:
         # message could echo credentials back (F4).
         log(f"content metadata request failed: {type(exc).__name__}")
         raise PipelineError(
-            protocol.ErrorCode.NETWORK,
+            classify_audible_error(exc),
             "could not read the book's metadata",
-            hint="check the network and retry",
+            hint=(
+                "check the network and retry"
+                if classify_audible_error(exc) == protocol.ErrorCode.NETWORK
+                else "copy the diagnostic and reconnect if requested"
+            ),
         ) from exc
 
 
