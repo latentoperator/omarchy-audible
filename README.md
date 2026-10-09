@@ -44,7 +44,7 @@ omarchy plugin update latentoperator.audible
 |---|---|
 | ![Mini player](docs/screenshots/mini.png) | Playing a book opens the **mini player**. Space plays or pauses, ← and → skip back and forward, and **Stop** saves your place and ends playback. Press Esc or click away to hide it; the book keeps playing, and the bar icon brings it back. |
 | ![Full player](docs/screenshots/full.png) | The **Full player** button opens the full view: chapter list, speed (presets, or fine steps of 0.05×), sleep timer (15 to 60 minutes, or end of chapter), and **Remove from this device**. Backspace returns to the mini player. |
-| ![Library drawer](docs/screenshots/library.png) | The **library drawer**. Type to search, ↑ and ↓ to move, Enter to pick a book, Esc to close. Space plays or pauses while the search box is empty. The footer shows how much space downloaded books use, with **Remove all downloads** and **Disconnect**. |
+| ![Library drawer](docs/screenshots/library.png) | The **library drawer**. Type to search, ↑ and ↓ to move, Enter to pick the highlighted book (or the first match once you have typed something), Esc to close. Space plays or pauses while the search box is empty. The footer shows how much space downloaded books use, with **Remove all downloads** and **Disconnect**. |
 
 A middle click on the bar icon plays or pauses the loaded book.
 
@@ -82,7 +82,15 @@ The target also has read-only status methods, such as `playerStatus`, and test m
 
 ## Media keys (optional)
 
-Install `mpv-mpris` with `omarchy pkg add mpv-mpris`, then start a book. New players expose the book to Omarchy's stock media widget and the keyboard play/pause keys; the widget can play, pause and seek. A player started before installing the package needs a Stop and a new play to load the MPRIS script. Next and Previous do not change audiobook chapters. Resuming with a media key or widget after a long pause skips the plugin's account catch-up read; later position pushes still follow the stale-position protection rules. Stop from the media widget saves your place and stops playback; after a shell restart it saves and stops but leaves the idle player running until the next book. A seek made through MPRIS while paused is not currently saved as a user move if playback is stopped before resuming.
+Install `mpv-mpris` (`omarchy pkg add mpv-mpris`) and the book you're playing shows up like any other media player: your keyboard's play/pause key works, and so does Omarchy's **Media** bar widget if you add it to your bar. In this Omarchy version that widget has play/pause, previous and next but no seek or Stop. Headsets, `playerctl` and phone remotes such as KDE Connect can also seek and stop.
+
+Known limits:
+
+- A book that was already playing when you installed `mpv-mpris` needs a **Stop** and a new play before the keys reach it.
+- Next and previous don't change chapters; use the player's chapter buttons.
+- Resuming with a media key skips the check for a newer spot from your phone that ⏯ in the player makes. Your phone's newer position is still never overwritten.
+- A seek made through a media remote while paused isn't saved if you then stop without playing.
+- After a shell restart, a media Stop saves your place and stops the book, but the idle player stays open in the background until you play another book.
 
 ## Settings
 

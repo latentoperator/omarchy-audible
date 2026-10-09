@@ -2,7 +2,7 @@
 
 All notable changes to Omaudible. Versions follow `manifest.json`.
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-10-09)
 
 The first public release.
 
@@ -18,5 +18,5 @@ The first public release.
 - Offline use: the saved library and downloaded books stay available. A downloaded book that leaves your Audible library stays playable.
 - An IPC target, `latentoperator.audible`, with `toggle`, `openLibrary`, `playPause`, `skip`, `nextChapter`, `prevChapter` and `stop` for your own key bindings.
 - Settings in `shell.json`: skip interval, default sort, default speed, auto-remove finished books, title in the bar, sync interval, and the books folder.
-- Optional media keys and Omarchy media widget support through `mpv-mpris`.
+- Optional media keys and Omarchy Media widget play/pause through `mpv-mpris`.
 - A copyable, redacted diagnostic for unexpected Audible responses.
