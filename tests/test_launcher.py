@@ -222,9 +222,17 @@ def test_launcher_keeps_bytecode_out_of_the_plugin_folder(monkeypatch, env):
         captured.update(child_env)
 
     monkeypatch.setattr(launcher.os, "execve", _fake_execve)
+    monkeypatch.delenv("PYTHONPYCACHEPREFIX", raising=False)
     monkeypatch.setenv("XDG_CACHE_HOME", "/x/cache")
     launcher.main(["status", "--fake"])
     assert captured["PYTHONPYCACHEPREFIX"] == "/x/cache/omarchy-audible/pycache"
+
+    # A relative XDG_CACHE_HOME is ignored (XDG spec).
+    captured.clear()
+    monkeypatch.setenv("XDG_CACHE_HOME", "rel/cache")
+    monkeypatch.setenv("HOME", "/x/home")
+    launcher.main(["status", "--fake"])
+    assert captured["PYTHONPYCACHEPREFIX"] == "/x/home/.cache/omarchy-audible/pycache"
 
     captured.clear()
     monkeypatch.delenv("XDG_CACHE_HOME")
@@ -237,10 +245,20 @@ def test_launcher_keeps_bytecode_out_of_the_plugin_folder(monkeypatch, env):
     launcher.main(["status", "--fake"])
     assert captured["PYTHONPYCACHEPREFIX"] == "/mine"
 
+    # An empty or relative inherited prefix would put bytecode back next to
+    # the source (empty) or under the spawner's cwd (relative): replaced.
+    for value in ("", "rel"):
+        captured.clear()
+        monkeypatch.setenv("PYTHONPYCACHEPREFIX", value)
+        launcher.main(["status", "--fake"])
+        assert (
+            captured["PYTHONPYCACHEPREFIX"] == "/x/home/.cache/omarchy-audible/pycache"
+        )
+
 
 def test_a_backend_run_writes_no_bytecode_into_the_repo(env, tmp_path):
-    """End to end: a real run (and the wrapper's import path) leaves no
-    __pycache__ under the plugin folder."""
+    """End to end: a backend run leaves no __pycache__ under the plugin
+    folder. (The download wrapper is checked in test_argv_privacy.)"""
     repo = tmp_path / "plugin"
     shutil.copytree(
         LAUNCHER.parent.parent,

@@ -584,6 +584,14 @@ def test_the_wrapper_hands_the_asin_to_audible_cli(tmp_path):
     assert Path(seen["cwd"]) == workdir
 
 
+def test_the_wrapper_inherits_the_bytecode_cache_location(paths, monkeypatch):
+    """The launcher's PYTHONPYCACHEPREFIX reaches the audible-cli wrapper, so
+    it never writes __pycache__ into the plugin folder either (0.1.2)."""
+    monkeypatch.setenv("PYTHONPYCACHEPREFIX", "/x/cache/omarchy-audible/pycache")
+    env = dl._wrapper_env(dl._audible_env(paths), ASIN)
+    assert env["PYTHONPYCACHEPREFIX"] == "/x/cache/omarchy-audible/pycache"
+
+
 def test_the_wrapper_refuses_a_missing_or_odd_asin():
     assert download_args(["--aaxc"], {}) is None
     assert download_args(["--aaxc"], {ASIN_ENV: "../x"}) is None
