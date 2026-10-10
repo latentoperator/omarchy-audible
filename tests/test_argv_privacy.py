@@ -729,6 +729,44 @@ def test_a_shell_launched_get_runs_its_tools_without_naming_the_book(
     assert (fake_paths.books_dir / ASIN / "book.aaxc").is_file()
 
 
+@pytest.mark.parametrize("value", [f" {ASIN} ", f"{ASIN}\t", f"\n{ASIN}"])
+def test_cancel_reads_a_padded_variable_like_the_cli_does(
+    env, ffmpeg_bin, fake_paths, value
+):
+    """The CLI accepts ``OMARCHY_AUDIBLE_ASIN=' B0… '``; cancel must find that
+    get too (Codex review of 0fa83c1)."""
+    _write_catalog(fake_paths)
+    child_env = {**env, "OMARCHY_AUDIBLE_FAKE": "1", ASIN_ENV: value}
+    proc = subprocess.Popen(
+        [sys.executable, str(LAUNCHER), "get"],
+        env=child_env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        partial = fake_paths.books_dir / ASIN / ".partial"
+        deadline = time.time() + 20
+        while time.time() < deadline and not partial.exists():
+            time.sleep(0.01)
+        assert partial.exists(), "the download never started"
+        cancelled = subprocess.run(
+            [sys.executable, str(LAUNCHER), "cancel"],
+            env={**child_env, ASIN_ENV: ASIN},
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        assert cancelled.returncode == 0, cancelled.stdout + cancelled.stderr
+        out, _err = proc.communicate(timeout=30)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+    assert json.loads(out.strip().splitlines()[-1])["code"] == "cancelled"
+
+
 def test_cancel_does_not_stop_another_books_get(env, ffmpeg_bin, fake_paths):
     """A get for one book must not be cancelled by a cancel naming another."""
     child_env = {**env, "OMARCHY_AUDIBLE_FAKE": "1", ASIN_ENV: OTHER}

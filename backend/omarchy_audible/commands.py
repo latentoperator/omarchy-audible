@@ -562,8 +562,13 @@ def _get_is_running(paths: Paths, pid: int, asin: str) -> bool:
         environ = Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
     except OSError:
         return False
-    wanted = f"{ASIN_ENV}={asin}".encode()
-    return wanted in environ
+    # Read the variable the way cli.env_asin_args does: whitespace-separated.
+    prefix = f"{ASIN_ENV}=".encode()
+    for entry in environ:
+        if entry.startswith(prefix):
+            value = entry[len(prefix) :].decode("utf-8", "replace")
+            return value.split() == [asin]
+    return False
 
 
 def cmd_cancel(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> int:

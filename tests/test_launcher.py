@@ -6,6 +6,7 @@ import ast
 import importlib.machinery
 import importlib.util
 import json
+import shutil
 import signal
 import subprocess
 import sys
@@ -208,6 +209,62 @@ def test_launcher_dispatches_into_a_ready_venv(monkeypatch, env):
     assert launcher.main(["sync"]) == 1  # unreachable after a real execve
     assert captured[0] == str(venv_dir / "bin" / "python")
     assert captured[2:4] == ["-m", "omarchy_audible"]
+
+
+def test_launcher_keeps_bytecode_out_of_the_plugin_folder(monkeypatch, env):
+    """.pyc files next to the source land in the shell's watched plugins
+    folder, and each one makes the shell reload the plugin (a crash on
+    Quickshell 0.3.1). They go to ~/.cache instead."""
+    launcher = _load_launcher()
+    captured: dict[str, str] = {}
+
+    def _fake_execve(path, argv, child_env):
+        captured.update(child_env)
+
+    monkeypatch.setattr(launcher.os, "execve", _fake_execve)
+    monkeypatch.setenv("XDG_CACHE_HOME", "/x/cache")
+    launcher.main(["status", "--fake"])
+    assert captured["PYTHONPYCACHEPREFIX"] == "/x/cache/omarchy-audible/pycache"
+
+    captured.clear()
+    monkeypatch.delenv("XDG_CACHE_HOME")
+    monkeypatch.setenv("HOME", "/x/home")
+    launcher.main(["status", "--fake"])
+    assert captured["PYTHONPYCACHEPREFIX"] == "/x/home/.cache/omarchy-audible/pycache"
+
+    captured.clear()
+    monkeypatch.setenv("PYTHONPYCACHEPREFIX", "/mine")
+    launcher.main(["status", "--fake"])
+    assert captured["PYTHONPYCACHEPREFIX"] == "/mine"
+
+
+def test_a_backend_run_writes_no_bytecode_into_the_repo(env, tmp_path):
+    """End to end: a real run (and the wrapper's import path) leaves no
+    __pycache__ under the plugin folder."""
+    repo = tmp_path / "plugin"
+    shutil.copytree(
+        LAUNCHER.parent.parent,
+        repo,
+        ignore=shutil.ignore_patterns(
+            "__pycache__", ".venv", ".git", ".worktrees", ".pytest_cache", "*.pyc"
+        ),
+        symlinks=True,
+    )
+    cache = tmp_path / "cache"
+    run_env = {**env, "XDG_CACHE_HOME": str(cache)}
+    run_env.pop("PYTHONDONTWRITEBYTECODE", None)
+    run_env.pop("PYTHONPYCACHEPREFIX", None)
+    result = subprocess.run(
+        [sys.executable, str(repo / "bin" / "omarchy-audible"), "status", "--fake"],
+        env=run_env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not list(repo.rglob("__pycache__")), list(repo.rglob("__pycache__"))
+    assert list(cache.rglob("*.pyc")), "bytecode should still be cached"
 
 
 def test_launcher_marker_name_matches_the_backend():

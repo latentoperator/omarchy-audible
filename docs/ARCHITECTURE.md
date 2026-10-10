@@ -123,6 +123,8 @@ The audible-cli profile is created programmatically in a plugin-owned config dir
 `bin/omarchy-audible` uses **only the Python standard library** so it runs on a fresh machine. It:
 1. Handles `status`, `doctor`, and `setup` itself (these must work before any dependency exists).
 2. For everything else, re-execs `venv/bin/python -m omarchy_audible …`.
+
+   It sets `PYTHONPYCACHEPREFIX` to `~/.cache/omarchy-audible/pycache` (unless already set), so no `__pycache__` is ever written into the plugin folder. The shell watches `~/.config/omarchy/plugins` with `inotifywait -r`; every `.pyc` written there makes it reload the plugin, and on Quickshell 0.3.1 those reloads could crash the shell.
 3. `setup` moves an existing ready venv (one with a marker, even for older pins) aside to `venv.previous` and restores it if the rebuild fails, so an update run offline never leaves no venv (F43); a venv without a marker is a killed run and is deleted. It then creates the venv with `python -m venv`, then `pip install` of the pinned `audible-cli` and `audible[cryptography]` (without the extra, `audible` warns on stderr about legacy crypto) **and of this repo's `backend/` package**, so that `venv/bin/python -m omarchy_audible` resolves. Progress is streamed as events.
 
 The shell's plugin installer never runs plugin code, so the first-run Setup button in the drawer triggers `setup`. System packages the backend needs but cannot install: `mpv`, `ffmpeg`, `python`. `status` reports what is missing and the exact `pacman`/`omarchy-pkg-add` command to fix it.

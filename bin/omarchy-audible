@@ -102,8 +102,22 @@ def _emit_error(code: str, message: str, hint: str | None = None) -> None:
     sys.stdout.flush()
 
 
+def _pycache_prefix(env: dict[str, str]) -> str:
+    cache_home = env.get("XDG_CACHE_HOME")
+    if cache_home:
+        base = Path(cache_home)
+    else:
+        base = Path(env.get("HOME") or str(Path.home())) / ".cache"
+    return str(base / "omarchy-audible" / "pycache")
+
+
 def _run_backend(argv: list[str], env: dict[str, str], fake: bool, python: str) -> int:
     child_env = dict(env)
+    # Python's bytecode cache goes under ~/.cache, never next to the source.
+    # The plugin folder is watched by the shell (inotifywait on
+    # ~/.config/omarchy/plugins), and every .pyc written there makes it reload
+    # the plugin; on Quickshell 0.3.1 that reload can crash the shell.
+    child_env.setdefault("PYTHONPYCACHEPREFIX", _pycache_prefix(env))
     path_parts = [str(BACKEND_DIR)]
     existing = child_env.get("PYTHONPATH")
     if existing:
