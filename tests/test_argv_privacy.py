@@ -584,6 +584,14 @@ def test_the_wrapper_hands_the_asin_to_audible_cli(tmp_path):
     assert Path(seen["cwd"]) == workdir
 
 
+def test_the_wrapper_inherits_the_bytecode_cache_location(paths, monkeypatch):
+    """The launcher's PYTHONPYCACHEPREFIX reaches the audible-cli wrapper, so
+    it never writes __pycache__ into the plugin folder either (0.1.2)."""
+    monkeypatch.setenv("PYTHONPYCACHEPREFIX", "/x/cache/omarchy-audible/pycache")
+    env = dl._wrapper_env(dl._audible_env(paths), ASIN)
+    assert env["PYTHONPYCACHEPREFIX"] == "/x/cache/omarchy-audible/pycache"
+
+
 def test_the_wrapper_refuses_a_missing_or_odd_asin():
     assert download_args(["--aaxc"], {}) is None
     assert download_args(["--aaxc"], {ASIN_ENV: "../x"}) is None
@@ -727,6 +735,44 @@ def test_a_shell_launched_get_runs_its_tools_without_naming_the_book(
         assert Path(cwd) == partial
         assert not _named(argv, ASIN, TITLE, str(fake_paths.books_dir)), argv
     assert (fake_paths.books_dir / ASIN / "book.aaxc").is_file()
+
+
+@pytest.mark.parametrize("value", [f" {ASIN} ", f"{ASIN}\t", f"\n{ASIN}"])
+def test_cancel_reads_a_padded_variable_like_the_cli_does(
+    env, ffmpeg_bin, fake_paths, value
+):
+    """The CLI accepts ``OMARCHY_AUDIBLE_ASIN=' B0… '``; cancel must find that
+    get too (Codex review of 0fa83c1)."""
+    _write_catalog(fake_paths)
+    child_env = {**env, "OMARCHY_AUDIBLE_FAKE": "1", ASIN_ENV: value}
+    proc = subprocess.Popen(
+        [sys.executable, str(LAUNCHER), "get"],
+        env=child_env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        partial = fake_paths.books_dir / ASIN / ".partial"
+        deadline = time.time() + 20
+        while time.time() < deadline and not partial.exists():
+            time.sleep(0.01)
+        assert partial.exists(), "the download never started"
+        cancelled = subprocess.run(
+            [sys.executable, str(LAUNCHER), "cancel"],
+            env={**child_env, ASIN_ENV: ASIN},
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        assert cancelled.returncode == 0, cancelled.stdout + cancelled.stderr
+        out, _err = proc.communicate(timeout=30)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+    assert json.loads(out.strip().splitlines()[-1])["code"] == "cancelled"
 
 
 def test_cancel_does_not_stop_another_books_get(env, ffmpeg_bin, fake_paths):

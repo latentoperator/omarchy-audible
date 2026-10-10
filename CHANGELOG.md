@@ -2,6 +2,13 @@
 
 All notable changes to Omaudible. Versions follow `manifest.json`.
 
+## 0.1.2 (2026-10-09)
+
+### Fixed
+
+- The shell no longer reloads the plugin (and on Quickshell 0.3.1 sometimes crashed) the first time the backend runs after an install or update. Python's bytecode cache now goes to `$XDG_CACHE_HOME/omarchy-audible/pycache` (by default `~/.cache/…`) instead of next to the plugin's code, where the shell watches every file. Old `__pycache__` folders in the plugin folder are now ignored; if you remove them, do it in one go or with the shell stopped, since deleting files there also makes the shell reload.
+- `cancel` finds a download whose `OMARCHY_AUDIBLE_ASIN` has extra spaces, as the rest of the backend already accepts.
+
 ## 0.1.1 (2026-10-09)
 
 ### Added
