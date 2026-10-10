@@ -266,7 +266,7 @@ def test_aax_fallback_progress_has_no_aaxc_total(monkeypatch, tmp_path):
         if fmt == "aax":
             (partial / f"{asin}.aax").write_bytes(b"x")
 
-    monkeypatch.setattr(dl, "_audible_cli", lambda paths: "audible")
+    monkeypatch.setattr(dl, "_wrapper_python", lambda: "audible")
     monkeypatch.setattr(dl, "_audible_env", lambda paths: {})
     monkeypatch.setattr(dl, "_audible_download", fake_download)
     monkeypatch.setattr(
@@ -295,7 +295,7 @@ def test_aax_fallback_only_happens_on_no_voucher(monkeypatch, tmp_path):
         attempts.append(fmt)
         raise PipelineError(dl.protocol.ErrorCode.NETWORK, "simulated network failure")
 
-    monkeypatch.setattr(dl, "_audible_cli", lambda paths: "audible")
+    monkeypatch.setattr(dl, "_wrapper_python", lambda: "audible")
     monkeypatch.setattr(dl, "_audible_env", lambda paths: {})
     monkeypatch.setattr(dl, "_audible_download", fake_download)
     partial = tmp_path / ".partial"
@@ -560,7 +560,7 @@ def test_real_get_never_puts_key_material_in_a_subprocess_argv(paths, monkeypatc
         return subprocess.CompletedProcess(argv, 0, stdout="60.0\n", stderr="")
 
     monkeypatch.setattr(dl.subprocess, "run", fake_run)
-    monkeypatch.setattr(dl, "_audible_cli", lambda paths: "audible")
+    monkeypatch.setattr(dl, "_wrapper_python", lambda: "audible")
     monkeypatch.setattr(dl, "_audible_env", lambda paths: {})
     monkeypatch.setattr(dl, "_real_content_metadata", lambda asin, paths: metadata)
 

@@ -2,7 +2,7 @@
 
 All notable changes to Omaudible. Versions follow `manifest.json`.
 
-## 0.1.1 (unreleased)
+## 0.1.1 (2026-10-09)
 
 ### Added
 
@@ -11,7 +11,8 @@ All notable changes to Omaudible. Versions follow `manifest.json`.
 
 ### Security
 
-- No process the plugin starts has a book's title or ASIN on its command line, which other users on the same machine can read. The play-failure notification now just says playback couldn't start and points to the drawer, where the reason (with the title) stays. Backend commands and the audible-cli download take the ASIN from their environment, and ffmpeg/ffprobe run inside the book's folder with relative file names. Reported in the marketplace review.
+- No process the plugin starts has a book's title or ASIN on its command line, which other users on the same machine can read. The play-failure notification now just says playback couldn't start and points to the drawer, where the reason (with the title) stays. Backend commands and the audible-cli download take the ASIN from their environment, and ffmpeg/ffprobe run inside the book's staging folder with relative file names. Reported in the marketplace review.
+- The download uses the audible-cli that setup installs in the plugin's environment; a system-wide `audible` is no longer used.
 
 ### Fixed
 

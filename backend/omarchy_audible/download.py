@@ -361,7 +361,7 @@ def probe_duration_ms(path: Path) -> int | None:
             "format=duration",
             "-of",
             "csv=p=0",
-            path.name,
+            f"./{path.name}",
         ],
         cwd=path.parent,
         capture_output=True,
@@ -491,7 +491,7 @@ def _fake_generate_raw(raw_path: Path, children: ChildTracker, audio_ms: int) ->
         "-i",
         f"sine=frequency=300:duration={audio_ms / 1000}",
         "-i",
-        chapter_file.name,
+        f"./{chapter_file.name}",
         "-map",
         "0:a",
         "-map_metadata",
@@ -504,7 +504,7 @@ def _fake_generate_raw(raw_path: Path, children: ChildTracker, audio_ms: int) ->
         "64k",
         "-f",
         "ipod",
-        raw_path.name,
+        f"./{raw_path.name}",
     ]
     _run(
         argv,
@@ -521,10 +521,11 @@ def _fake_generate_raw(raw_path: Path, children: ChildTracker, audio_ms: int) ->
 AUDIBLE_WRAPPER = "omarchy_audible.audible_download"
 
 
-def _audible_cli(paths: Paths) -> str:
+def _wrapper_python() -> str:
     """The Python that runs the wrapper: this one, the plugin venv's.
 
-    It must be able to import audible-cli, which ``setup`` installs there.
+    It must be able to import audible-cli, which ``setup`` installs there; a
+    system-wide ``audible`` is not used.
     """
     if sys.executable and importlib.util.find_spec("audible_cli") is not None:
         return sys.executable
@@ -675,6 +676,8 @@ def _audible_download(
     # directory, so this argv names neither the book nor its folder.
     argv = [
         python,
+        # -P: the working directory (.partial/) is not on the import path.
+        "-P",
         "-m",
         AUDIBLE_WRAPPER,
         f"--{fmt}",
@@ -760,7 +763,7 @@ def _real_fetch(
     children: ChildTracker,
     total: int,
 ) -> RawDownload:
-    cli = _audible_cli(paths)
+    cli = _wrapper_python()
     env = _audible_env(paths)
     try:
         _audible_download(cli, env, partial, asin, "aaxc", emit, children, total)

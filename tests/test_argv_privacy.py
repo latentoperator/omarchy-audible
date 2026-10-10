@@ -17,7 +17,8 @@ Keys never go through argv: they reach mpv over its socket (``test_mpv.py``,
 
 These tests fail if any of that regresses: the real ``JobRunner``/
 ``BackendCall`` wiring under a recording ``Process``, every launch site in the
-QML, every argv the download pipeline spawns, and the live backend's own
+QML, every argv the download pipeline spawns (in process, and logged by
+``ffmpeg``/``ffprobe`` shims under a real ``get``), and the live backend's own
 ``/proc`` command line.
 """
 
@@ -132,6 +133,25 @@ def test_cli_form_still_works_by_hand():
     assert cli.env_asin_args("get", [], {ASIN_ENV: f"{ASIN} {OTHER}"}) is None
     # Commands that take no ASIN ignore the variable.
     assert cli.env_asin_args("status", [], {ASIN_ENV: ASIN}) == []
+
+
+@pytest.mark.parametrize(
+    "command,args",
+    [
+        ("remove", [OTHER]),
+        ("get", [OTHER, "--fake-fail", "network"]),
+        ("cancel", [OTHER]),
+        ("play-info", [OTHER]),
+        ("position-push", [OTHER, "1234"]),
+        ("position-get", [OTHER]),
+        ("sync", ["--fake-hide", OTHER]),
+        ("sync", [f"--fake-hide={OTHER}"]),
+    ],
+)
+def test_a_leftover_variable_never_picks_the_book_for_a_typed_command(command, args):
+    """``remove <typed>`` with the variable set must not act on the variable's
+    book: both is refused."""
+    assert cli.env_asin_args(command, args, {ASIN_ENV: ASIN}) is None
 
 
 def test_cli_refuses_two_asins_for_one(run_cli, events):
@@ -389,6 +409,13 @@ _LAUNCH = re.compile(
     r"|^\s*command: [^\n]*",
     re.MULTILINE,
 )
+# Anything else that could start a process (Process.exec([...]) or ({...}),
+# startDetached, a bare `command = ...` in a handler); none exists, so any
+# hit fails. RegExp.exec(text) and a local `var command` are not launches.
+_OTHER_LAUNCH = re.compile(
+    r"\bexecDetached\b|\.exec\(\s*[\[{]|\bstartDetached\("
+    r"|(?<![.\w])(?<!var )(?<!let )(?<!const )command\s*=[^=]"
+)
 
 
 def test_every_launch_site_is_reviewed():
@@ -400,6 +427,21 @@ def test_every_launch_site_is_reviewed():
         for match in _LAUNCH.finditer(text):
             found.add((str(path.relative_to(REPO)), match.group(0).strip()))
     assert found == LAUNCH_SITES
+
+
+def test_no_other_way_to_start_a_process():
+    sources = [REPO / "Service.qml", REPO / "BarWidget.qml"]
+    sources += sorted((REPO / "qml").rglob("*.qml"))
+    sources += sorted((REPO / "qml/lib").glob("*.js"))
+    stray = []
+    for path in sources:
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if line.lstrip().startswith("//"):
+                continue
+            hits = _OTHER_LAUNCH.findall(line)
+            if hits and "Quickshell.execDetached(" not in line:
+                stray.append(f"{path.relative_to(REPO)}:{number}: {line.strip()}")
+    assert stray == []
 
 
 def test_mpv_is_launched_with_no_book():
@@ -497,7 +539,7 @@ def test_real_get_runs_audible_cli_without_the_asin_in_argv(paths, monkeypatch):
 
     monkeypatch.setattr(dl.subprocess, "Popen", popen)
     monkeypatch.setattr(dl.subprocess, "run", run)
-    monkeypatch.setattr(dl, "_audible_cli", lambda paths: "/venv/bin/python")
+    monkeypatch.setattr(dl, "_wrapper_python", lambda: "/venv/bin/python")
     monkeypatch.setattr(dl, "_audible_env", lambda paths: {"AUDIBLE_CONFIG_DIR": "c"})
     monkeypatch.setattr(dl, "_real_content_metadata", lambda asin, paths: metadata)
 
@@ -505,7 +547,7 @@ def test_real_get_runs_audible_cli_without_the_asin_in_argv(paths, monkeypatch):
 
     assert final.name == "book.aaxc"
     download, probe = calls
-    assert download["argv"][:3] == ["/venv/bin/python", "-m", dl.AUDIBLE_WRAPPER]
+    assert download["argv"][:4] == ["/venv/bin/python", "-P", "-m", dl.AUDIBLE_WRAPPER]
     assert download["env"][ASIN_ENV] == ASIN
     assert download["env"]["AUDIBLE_CONFIG_DIR"] == "c"
     assert Path(probe["argv"][0]).name == "ffprobe"
@@ -530,7 +572,7 @@ def test_the_wrapper_hands_the_asin_to_audible_cli(tmp_path):
     workdir = tmp_path / "partial"
     workdir.mkdir()
     env = dl._wrapper_env({**os.environ, "PYTHONPATH": str(stand_in)}, ASIN)
-    argv = [sys.executable, "-m", dl.AUDIBLE_WRAPPER, "--aaxc", "-o", "."]
+    argv = [sys.executable, "-P", "-m", dl.AUDIBLE_WRAPPER, "--aaxc", "-o", "."]
     result = subprocess.run(
         argv, env=env, cwd=workdir, capture_output=True, text=True, check=False
     )
@@ -586,10 +628,12 @@ def _cmdline(pid: int) -> list[str] | None:
 
 
 @pytest.mark.skipif(not Path("/proc/self/cmdline").exists(), reason="needs /proc")
-def test_a_shell_launched_get_and_its_children_never_name_the_book(
+def test_a_shell_launched_get_is_cancelled_by_its_environment(
     env, ffmpeg_bin, fake_paths
 ):
-    """F41 with the new launch shape: cancel finds the get by its environment."""
+    """F41 with the new launch shape: the ``get`` process's own command line
+    names no book, and ``cancel`` finds it by its environment. (Its tools are
+    checked by the shim test below.)"""
     _write_catalog(fake_paths)
     child_env = {**env, "OMARCHY_AUDIBLE_FAKE": "1", ASIN_ENV: ASIN}
     proc = subprocess.Popen(
@@ -637,6 +681,52 @@ def test_a_shell_launched_get_and_its_children_never_name_the_book(
     last = json.loads(out.strip().splitlines()[-1])
     assert last["code"] == "cancelled"
     assert joblock.read_job_json(fake_paths.job_json) is None
+
+
+def _shim_tools(tmp_path: Path, env: dict[str, str]) -> tuple[dict[str, str], Path]:
+    """``ffmpeg``/``ffprobe`` shims that log their cwd and argv, then exec the
+    real tool; first on PATH."""
+    shims, log = tmp_path / "shims", tmp_path / "tools.log"
+    shims.mkdir()
+    for name in ("ffmpeg", "ffprobe"):
+        real = shutil.which(name, path=env["PATH"])
+        assert real, name
+        shim = shims / name
+        shim.write_text(
+            "#!/bin/sh\n"
+            f'printf "%s\\0" "$PWD" "$0" "$@" >> "{log}"\n'
+            f'printf "\\n" >> "{log}"\n'
+            f'exec "{real}" "$@"\n',
+            encoding="utf-8",
+        )
+        shim.chmod(0o755)
+    return {**env, "PATH": f"{shims}{os.pathsep}{env['PATH']}"}, log
+
+
+def test_a_shell_launched_get_runs_its_tools_without_naming_the_book(
+    env, ffmpeg_bin, fake_paths, tmp_path
+):
+    """Every ffmpeg/ffprobe a real ``get`` process starts, logged by a shim:
+    no ASIN, title or books path in argv, run from the staging directory."""
+    _write_catalog(fake_paths)
+    shimmed, log = _shim_tools(tmp_path, env)
+    result = subprocess.run(
+        [sys.executable, str(LAUNCHER), "get"],
+        env={**shimmed, "OMARCHY_AUDIBLE_FAKE": "1", ASIN_ENV: ASIN},
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout.strip().splitlines()[-1])["type"] == "done"
+    runs = [line.split("\0")[:-1] for line in log.read_text().splitlines() if line]
+    assert sorted(Path(run[1]).name for run in runs) == ["ffmpeg", "ffprobe"]
+    partial = fake_paths.books_dir / ASIN / ".partial"
+    for cwd, _tool, *argv in runs:
+        assert Path(cwd) == partial
+        assert not _named(argv, ASIN, TITLE, str(fake_paths.books_dir)), argv
+    assert (fake_paths.books_dir / ASIN / "book.aaxc").is_file()
 
 
 def test_cancel_does_not_stop_another_books_get(env, ffmpeg_bin, fake_paths):

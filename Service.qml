@@ -157,7 +157,7 @@ Item {
   property string lastSyncHint: ""
   property var doctorChecks: []
   property real catalogAgeSeconds: 0
-  readonly property string diagnosticText: Diagnostic.build(manifest ? manifest.version : "0.1.0",
+  readonly property string diagnosticText: Diagnostic.build(manifest ? manifest.version : "0.1.1",
     "sync", lastSyncCode, lastSyncMessage, lastSyncHint, doctorChecks)
   readonly property bool syncing: Drawer.syncing(runner.pendingJobs, runner.activeJob)
   readonly property var syncFailure: Drawer.syncFailure(lastSyncCode)
