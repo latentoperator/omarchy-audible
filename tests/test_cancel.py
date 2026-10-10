@@ -81,3 +81,47 @@ def test_cancel_rejects_a_traversing_asin(run_cli, events):
     result = run_cli("cancel", "../nope", fake=True)
     assert result.returncode != 0
     assert events(result)[-1]["code"] == "bad_asin"
+
+
+def _stray_record(fake_paths, pid):
+    """A job.json left by a `get` that died without cleaning up (F41)."""
+    fake_paths.job_json.parent.mkdir(parents=True, exist_ok=True)
+    joblock.write_job_json(fake_paths.job_json, pid, "get", ASIN)
+
+
+def test_cancel_with_a_stale_record_and_no_lock_signals_nothing(
+    run_cli, events, fake_paths
+):
+    # F41: the pid in a stale record now belongs to an unrelated process.
+    bystander = subprocess.Popen(["sleep", "30"])
+    try:
+        _stray_record(fake_paths, bystander.pid)
+        result = run_cli("cancel", ASIN, fake=True)
+        assert result.returncode != 0
+        assert events(result)[-1]["code"] == "not_running"
+        time.sleep(0.2)
+        assert bystander.poll() is None, "cancel killed an unrelated process"
+        # The record is left: a new `get` may have just written it.
+        assert joblock.read_job_json(fake_paths.job_json) is not None
+    finally:
+        bystander.kill()
+        bystander.wait()
+
+
+def test_cancel_with_the_lock_held_by_another_process_signals_nothing(
+    run_cli, events, fake_paths
+):
+    # The lock is held, but the recorded pid is not that book's `get`.
+    bystander = subprocess.Popen(["sleep", "30"])
+    fd = joblock.try_acquire(fake_paths.job_lock)
+    assert fd is not None
+    try:
+        _stray_record(fake_paths, bystander.pid)
+        result = run_cli("cancel", ASIN, fake=True)
+        assert events(result)[-1]["code"] == "not_running"
+        time.sleep(0.2)
+        assert bystander.poll() is None, "cancel killed an unrelated process"
+    finally:
+        joblock.release(fd)
+        bystander.kill()
+        bystander.wait()

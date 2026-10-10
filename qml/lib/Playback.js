@@ -75,7 +75,8 @@ function recordPosition(state, asin, ms, nowIso) {
 }
 
 // The failure map after a job ends: a failed `get` is remembered by ASIN with
-// its message, a successful one clears it. Other commands change nothing.
+// its message, a successful or cancelled one clears it. Other commands change
+// nothing.
 function updateFailures(failures, job, outcome) {
   var next = {};
   var current = isObject(failures) ? failures : {};
@@ -85,7 +86,9 @@ function updateFailures(failures, job, outcome) {
   if (!isObject(job) || job.command !== "get" || typeof job.asin !== "string" || job.asin.length === 0) {
     return next;
   }
-  if (isObject(outcome) && outcome.ok === true) {
+  if (isObject(outcome) && (outcome.ok === true || outcome.code === "cancelled")) {
+    // A download the user cancelled is not a failure: the row goes back to
+    // its download icon (UX1).
     delete next[job.asin];
   } else {
     var message = isObject(outcome) && typeof outcome.message === "string" ? outcome.message : "download failed";

@@ -348,6 +348,7 @@ ColumnLayout {
         coverPresent: root.library ? root.library.hasCover(modelData.asin) : false
         coverVersion: root.library ? root.library.coverVersion(modelData.asin) : 0
         removable: Drawer.canRemove(modelData)
+        cancellable: LibraryUi.canCancel(modelData)
         removing: root.service ? Drawer.removing(modelData.asin, root.service.removeAfterUnload,
           root.service.runner.pendingJobs, root.service.runner.activeJob) : false
         iconGlyph: LibraryUi.rowIcon(modelData, root.offline).glyph
@@ -357,6 +358,7 @@ ColumnLayout {
         asking: root.service ? root.service.askAsin === modelData.asin : false
         onPicked: root.pickAt(index)
         onRemoveRequested: root.service.removeBook(modelData.asin)
+        onCancelDownloadRequested: root.service.cancelDownload(modelData.asin)
         // The question makes the row taller; keep all of it in view. Only for
         // a question just opened on this row: a row recreated while the user
         // scrolls back to an open question must not move the list. Qt also

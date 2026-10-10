@@ -208,7 +208,7 @@ def test_real_redownload_that_fails_keeps_the_old_book(paths, monkeypatch):
         if fmt == "aax":
             raise PipelineError(dl.protocol.ErrorCode.NETWORK, "simulated aax failure")
 
-    monkeypatch.setattr(dl, "_audible_cli", lambda paths: "audible")
+    monkeypatch.setattr(dl, "_wrapper_python", lambda: "audible")
     monkeypatch.setattr(dl, "_audible_env", lambda paths: {})
     monkeypatch.setattr(dl, "_audible_download", fake_download)
     monkeypatch.setattr(dl, "_real_content_metadata", lambda asin, paths: {})

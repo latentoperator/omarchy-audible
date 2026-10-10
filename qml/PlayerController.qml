@@ -83,6 +83,8 @@ Item {
   // `targetMs` is where it lands (Mpv.moveTargetMs), or -1 when unknown.
   signal userMoved(int targetMs)
   signal externalUnload()
+  // A load mpv could not open (F40): the path that failed, never the key.
+  signal loadFailed(string path)
 
   onLoadedChanged: {
     if (!loaded && connected && wanted && !quitting && loadArrived) externalUnload()
@@ -206,6 +208,17 @@ Item {
       // for an old `.m4b`, and a quick switch to another book can't leave a
       // key behind, since that book's own file-loaded clears it too.
       send(Mpv.clearKeyCommand())
+    } else if (message.kind === "event" && message.event === "end-file" && message.reason === "error"
+        && !loadArrived && loadPath.length > 0) {
+      // F40: the file we sent never opened. Only a load still on its way
+      // counts; an error once playing is mpv's own Stop path. Matched to the
+      // last load sent, not by playlist entry: a failure of book A arriving
+      // after a quick pick of B would be blamed on B (two picks inside mpv's
+      // open time; accepted).
+      var failedPath = loadPath
+      loadArrived = true
+      apply({ "type": "load_failed" })
+      loadFailed(failedPath)
     } else if (message.kind === "reply" && message.error) {
       apply({ "type": "reply_error", "error": message.error })
     }

@@ -39,6 +39,7 @@ local listening time the stale check cannot fire.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -75,6 +76,10 @@ def _clean(entry: Any) -> dict[str, Any] | None:
     }
 
 
+# A decimal point or comma with no digit after it (F45).
+_BARE_FRACTION = re.compile(r"[.,](?!\d)")
+
+
 def parse_updated_at(value: Any) -> datetime | None:
     """Parse a position timestamp into an aware UTC datetime.
 
@@ -89,6 +94,10 @@ def parse_updated_at(value: Any) -> datetime | None:
         return None
     if " " in text:
         text = text.replace(" ", "T", 1)
+    if _BARE_FRACTION.search(text):
+        # F45: "12:00:00.Z" is garbage, but Python 3.11-3.13's fromisoformat
+        # accepts the "." with no digits that 3.14 and the QML port reject.
+        return None
     if text[-1] in "Zz":
         text = text[:-1] + "+00:00"
     try:

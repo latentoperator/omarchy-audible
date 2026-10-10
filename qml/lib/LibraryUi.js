@@ -349,6 +349,14 @@ function storage(localBooks) {
   return { "count": count, "bytes": bytes };
 }
 
+// Whether a row's download can be cancelled from the drawer (UX1): it is
+// queued or downloading. Converting is the staged commit, which a cancel
+// would only race, so it is left to finish.
+function canCancel(row) {
+  var state = _p.rowState(row);
+  return state === BADGE_QUEUED || state === BADGE_DOWNLOADING;
+}
+
 // What the row's icon shows for `primaryAction(row, offline)`, as
 // `{glyph, tooltip}`; both "" when picking it does nothing.
 function rowIcon(row, offline) {

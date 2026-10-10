@@ -9,10 +9,14 @@ no-results list cases.
 
 from __future__ import annotations
 
+import pathlib
+
 import pytest
 
 import qjs
 from omarchy_audible.catalog import build_catalog, fixture_items
+
+REPO = pathlib.Path(__file__).resolve().parent.parent
 
 EXPECTED_API = {
     "ACTION_DOWNLOAD",
@@ -27,6 +31,7 @@ EXPECTED_API = {
     "BADGE_OFFLINE",
     "BADGE_QUEUED",
     "BANNER_OFFLINE",
+    "canCancel",
     "BANNER_RECONNECT",
     "BANNER_CONNECTION",
     "BANNER_SYNCING",
@@ -785,3 +790,38 @@ def test_pick_of_an_asked_book_that_cannot_play_goes_on_as_usual(
         row = row_in_state(library, catalog, state)
         assert ui.call("pickAnswersAsk", row, row["asin"]) is False
     assert ui.call("pickAnswersAsk", None, "B0FAKE0001") is False
+
+
+# --- UX1: cancel a download from the drawer ----------------------------------
+@pytest.mark.parametrize(
+    "state,expected",
+    [
+        ("queued", True),
+        ("downloading", True),
+        ("converting", False),
+        ("local", False),
+        ("error", False),
+        ("cloud", False),
+        (None, False),
+    ],
+)
+def test_can_cancel_only_a_queued_or_running_download(ui, state, expected):
+    row = {"asin": "B0A"} if state is None else {"asin": "B0A", "state": state}
+    assert ui.call("canCancel", row) is expected
+
+
+def test_can_cancel_rejects_a_missing_row(ui):
+    assert ui.call("canCancel", None) is False
+
+
+def test_the_row_offers_cancel_and_the_view_wires_it():
+    row = (REPO / "qml/components/BookRow.qml").read_text(encoding="utf-8")
+    view = (REPO / "qml/views/LibraryView.qml").read_text(encoding="utf-8")
+    service = (REPO / "Service.qml").read_text(encoding="utf-8")
+    assert 'tooltipText: "Cancel download"' in row
+    assert "visible: root.cancellable" in row
+    assert "cancellable: LibraryUi.canCancel(modelData)" in view
+    assert (
+        "onCancelDownloadRequested: root.service.cancelDownload(modelData.asin)" in view
+    )
+    assert "return runner.cancel(asin)" in service

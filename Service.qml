@@ -157,7 +157,7 @@ Item {
   property string lastSyncHint: ""
   property var doctorChecks: []
   property real catalogAgeSeconds: 0
-  readonly property string diagnosticText: Diagnostic.build(manifest ? manifest.version : "0.1.0",
+  readonly property string diagnosticText: Diagnostic.build(manifest ? manifest.version : "0.1.1",
     "sync", lastSyncCode, lastSyncMessage, lastSyncHint, doctorChecks)
   readonly property bool syncing: Drawer.syncing(runner.pendingJobs, runner.activeJob)
   readonly property var syncFailure: Drawer.syncFailure(lastSyncCode)
@@ -351,11 +351,14 @@ Item {
   // after a long pause first catches up with the account (CatchupFlow).
   function playPause() { return catchupFlow.press() }
 
+  // The notification is generic: notify-send's argv is readable by every
+  // local user, and the reason can name the book. The reason stays in the
+  // drawer (playFailure) and the event log.
   function notifyPlayFailed(message) {
     var text = String(message || "").length > 0 ? String(message) : "the player did not start"
     logEvent("player", "failed: " + text)
     Quickshell.execDetached(["notify-send", "--app-name=Omaudible",
-      "Couldn't start playback", text])
+      "Omaudible couldn't start playback", "Open the drawer for details."])
   }
 
   // A fake-mode mpv must not outlive a switch to real mode (G3 finding 1).
@@ -514,6 +517,15 @@ Item {
   function cancelConfirm() {
     confirmAsin = ""
     return "ok"
+  }
+
+  // Cancel a queued or running download (UX1). A queued one is dropped; a
+  // running one is sent `cancel`, and its `get` cleans up and ends
+  // `cancelled`, which Playback.updateFailures does not count as a failure.
+  function cancelDownload(asin) {
+    if (!LibraryUi.canCancel(library.rowFor(asin))) return "error: not downloading"
+    logEvent("get", "cancel requested")
+    return runner.cancel(asin)
   }
 
   // `hidePanel`: the user picked the book in the open drawer, so the panel
@@ -748,6 +760,13 @@ Item {
           player.quitting, player.loadArrived, root.snapAsin)) return
       root.savePosition(root.snapAsin, root.snapMs, true)
       root.quitPlayer()
+    }
+
+    // F40: the book file would not open. Say so like any failed play and
+    // leave Mini, which has nothing to show.
+    function onLoadFailed(path) {
+      root.failPlay(Playback.asinFromPath(path), "", "the player could not open the book file; try removing it and downloading it again")
+      if (Panel.libraryAfterUnload(player.loaded, player.wanted)) root.showView(root.view)
     }
 
     function onPathChanged() {

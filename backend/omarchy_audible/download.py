@@ -38,18 +38,26 @@ Pipeline, in order:
 No ``ffmpeg`` or ``ffprobe`` argv here ever contains a key, iv or activation
 bytes: the key is written to ``key.json`` and only read again by ``play-info``.
 
+No argv here names the book either: ``/proc/<pid>/cmdline`` is readable by
+every local user. audible-cli runs through :mod:`.audible_download`, which
+reads the ASIN from ``OMARCHY_AUDIBLE_ASIN``; every child runs inside
+``.partial/`` with relative file names, so the ``<booksDir>/<asin>/`` path is
+never an argument (ARCHITECTURE 4.3).
+
 The ``audible`` library is imported lazily, inside real-mode code paths only,
 so the test suite runs without it installed.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import math
 import os
 import shutil
 import signal
 import subprocess
+import sys
 import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
@@ -57,6 +65,7 @@ from pathlib import Path
 from typing import Any, BinaryIO
 
 from . import fakestate, fsutil, protocol
+from .audible_download import ASIN_ENV
 from .chapters import Chapter, build_ffmetadata, parse_chapters
 from .errors import Cancelled, PipelineError, classify_audible_error
 from .library import (
@@ -200,12 +209,14 @@ class ChildTracker:
         env: dict[str, str] | None = None,
         quiet: bool = False,
         stderr: int | BinaryIO | None = None,
+        cwd: Path | None = None,
     ) -> subprocess.Popen[bytes]:
         if stderr is None:
             stderr = subprocess.DEVNULL if quiet else subprocess.PIPE
         proc = subprocess.Popen(
             argv,
             env=env,
+            cwd=cwd,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=stderr,
@@ -315,9 +326,14 @@ def _tool(name: str) -> str:
 
 
 def _run(
-    argv: list[str], children: ChildTracker, code: str, hint: str | None = None
+    argv: list[str],
+    children: ChildTracker,
+    code: str,
+    hint: str | None = None,
+    *,
+    cwd: Path,
 ) -> None:
-    proc = children.spawn(argv)
+    proc = children.spawn(argv, cwd=cwd)
     try:
         _out, err = proc.communicate()
     except Cancelled:
@@ -333,6 +349,8 @@ def probe_duration_ms(path: Path) -> int | None:
     """The audio duration in ms, or ``None`` when ffprobe cannot read it.
 
     No key argument is ever passed: S7 showed the header opens without one.
+    It runs in the file's directory with the bare file name, so the book's
+    directory never appears in its argv.
     """
     result = subprocess.run(
         [
@@ -343,8 +361,9 @@ def probe_duration_ms(path: Path) -> int | None:
             "format=duration",
             "-of",
             "csv=p=0",
-            str(path),
+            f"./{path.name}",
         ],
+        cwd=path.parent,
         capture_output=True,
         text=True,
         check=False,
@@ -412,7 +431,9 @@ def _fake_fetch(
     chapter_count: int,
 ) -> RawDownload:
     container = "aax" if fake_fail == "novoucher" else "aaxc"
-    raw = partial / f"{asin}-fake.{container}"
+    # Not named after the ASIN: ffmpeg writes it, and its argv must not name
+    # the book.
+    raw = partial / f"fake-raw.{container}"
 
     step = max(1, FAKE_CONTENT_SIZE // _FAKE_TICKS)
     written = 0
@@ -470,7 +491,7 @@ def _fake_generate_raw(raw_path: Path, children: ChildTracker, audio_ms: int) ->
         "-i",
         f"sine=frequency=300:duration={audio_ms / 1000}",
         "-i",
-        str(chapter_file),
+        f"./{chapter_file.name}",
         "-map",
         "0:a",
         "-map_metadata",
@@ -483,24 +504,31 @@ def _fake_generate_raw(raw_path: Path, children: ChildTracker, audio_ms: int) ->
         "64k",
         "-f",
         "ipod",
-        str(raw_path),
+        f"./{raw_path.name}",
     ]
     _run(
         argv,
         children,
         protocol.ErrorCode.CONVERT,
         hint="ffmpeg is required in fake mode",
+        cwd=raw_path.parent,
     )
 
 
 # --- real mode ---------------------------------------------------------------
-def _audible_cli(paths: Paths) -> str:
-    candidate = Path(paths.venv_python).with_name("audible")
-    if candidate.is_file():
-        return str(candidate)
-    found = shutil.which("audible")
-    if found:
-        return found
+# Started as ``<python> -m AUDIBLE_WRAPPER <options>``: it runs audible-cli with
+# the ASIN from ``OMARCHY_AUDIBLE_ASIN``, so no argv names the book.
+AUDIBLE_WRAPPER = "omarchy_audible.audible_download"
+
+
+def _wrapper_python() -> str:
+    """The Python that runs the wrapper: this one, the plugin venv's.
+
+    It must be able to import audible-cli, which ``setup`` installs there; a
+    system-wide ``audible`` is not used.
+    """
+    if sys.executable and importlib.util.find_spec("audible_cli") is not None:
+        return sys.executable
     raise PipelineError(
         protocol.ErrorCode.NO_VENV,
         "audible-cli is not installed",
@@ -622,8 +650,20 @@ def _last_stderr_line(path: Path) -> str:
     return lines[-1] if lines else ""
 
 
+def _wrapper_env(env: dict[str, str], asin: str) -> dict[str, str]:
+    """``env`` plus the ASIN, with this package first on ``PYTHONPATH``.
+
+    The wrapper must come from the same source as the running backend, not a
+    copy ``setup`` installed into the venv before an update.
+    """
+    package_root = str(Path(__file__).resolve().parent.parent)
+    existing = env.get("PYTHONPATH")
+    path = package_root if not existing else os.pathsep.join([package_root, existing])
+    return {**env, ASIN_ENV: asin, "PYTHONPATH": path}
+
+
 def _audible_download(
-    cli: str,
+    python: str,
     env: dict[str, str],
     partial: Path,
     asin: str,
@@ -632,11 +672,14 @@ def _audible_download(
     children: ChildTracker,
     total: int,
 ) -> None:
+    # The ASIN goes in the environment and the output directory is the working
+    # directory, so this argv names neither the book nor its folder.
     argv = [
-        cli,
-        "download",
-        "-a",
-        asin,
+        python,
+        # -P: the working directory (.partial/) is not on the import path.
+        "-P",
+        "-m",
+        AUDIBLE_WRAPPER,
         f"--{fmt}",
         "--chapter",
         "--chapter-type",
@@ -648,14 +691,16 @@ def _audible_download(
         "-f",
         "asin_only",
         "-o",
-        str(partial),
+        ".",
     ]
     # audible-cli's stderr is the only record of *why* a download failed, so it
     # is staged as ``.partial/audible.stderr``; only its scrubbed last line is
     # logged. It disappears with ``.partial/`` (F9).
     stderr_path = partial / AUDIBLE_STDERR
     with open(stderr_path, "wb") as handle:
-        proc = children.spawn(argv, env=env, stderr=handle)
+        proc = children.spawn(
+            argv, env=_wrapper_env(env, asin), stderr=handle, cwd=partial
+        )
         while proc.poll() is None:
             emit("progress", stage="download", bytes=dir_size(partial), total=total)
             time.sleep(_REAL_POLL_SECONDS)
@@ -718,7 +763,7 @@ def _real_fetch(
     children: ChildTracker,
     total: int,
 ) -> RawDownload:
-    cli = _audible_cli(paths)
+    cli = _wrapper_python()
     env = _audible_env(paths)
     try:
         _audible_download(cli, env, partial, asin, "aaxc", emit, children, total)

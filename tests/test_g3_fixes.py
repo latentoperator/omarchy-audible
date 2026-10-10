@@ -69,7 +69,15 @@ def test_failed_play_notifies():
     assert "function onConnectionChanged()" in service
     body = function_body(service, "notifyPlayFailed")
     assert '"notify-send"' in body
-    assert "Couldn't start playback" in body
+    # Generic text only: notify-send's argv is world-readable through /proc,
+    # and the reason can name the book (marketplace review, 0.1.1). The reason
+    # stays in the drawer.
+    call = body[body.index("Quickshell.execDetached(") :]
+    call = call[: call.index("])") + 2]
+    assert call == (
+        'Quickshell.execDetached(["notify-send", "--app-name=Omaudible",\n'
+        '      "Omaudible couldn\'t start playback", "Open the drawer for details."])'
+    )
 
 
 def test_mini_shows_the_player_error():

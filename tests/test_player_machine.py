@@ -1211,3 +1211,13 @@ def test_the_controller_sends_the_machine_no_load():
             "error",
         }, event
     assert source.count("}, load))") == 1
+
+
+def test_load_failed_drops_the_wish_and_clears_the_key(machine):
+    held = {"wanted": True, "loadPending": True, "connection": "connected"}
+    out = machine.call("step", held, {"type": "load_failed"})
+    assert out["state"]["wanted"] is False
+    assert out["state"]["loadPending"] is False
+    assert out["state"]["connection"] == "connected"
+    assert out["state"]["lastError"] == "the player could not open the book"
+    assert out["effects"] == [{"type": "drop_load"}, {"type": "clear_key"}]

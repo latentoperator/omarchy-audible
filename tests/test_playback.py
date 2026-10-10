@@ -236,3 +236,12 @@ def test_with_default_speed_setting_records_marker_and_optional_speed(playback):
     assert changed["speed"] == 1.5
     assert changed["default_speed_setting"] == 1.5
     assert changed["volume"] == 70
+
+
+def test_a_cancelled_download_is_not_remembered_as_a_failure(playback):
+    # UX1: Cancel puts the row back to its download icon, not "Failed".
+    job = {"command": "get", "asin": "B0A"}
+    failed = {"B0A": "no space"}
+    cancelled = {"ok": False, "code": "cancelled", "message": "cancelled"}
+    assert playback.call("updateFailures", failed, job, cancelled) == {}
+    assert playback.call("updateFailures", {}, job, cancelled) == {}

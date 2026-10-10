@@ -13,12 +13,68 @@ import sys
 from collections.abc import Mapping, Sequence
 
 from . import protocol
+from .audible_download import ASIN_ENV as _ASIN_ENV
 from .commands import REGISTRY, job_asin
 from .joblock import JobBusy, job_lock
 from .log import log
 from .paths import Paths
 
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
+
+# The shell passes a job's ASINs here, not in argv: /proc/<pid>/cmdline is
+# readable by every local user, the environment only by the same user
+# (ARCHITECTURE 4.2). ``qml/lib/Launch.js`` keeps the same command lists.
+ASIN_ENV = _ASIN_ENV
+SINGLE_ASIN_COMMANDS = frozenset(
+    {"get", "remove", "cancel", "play-info", "position-push", "sync"}
+)
+ASIN_COMMANDS = SINGLE_ASIN_COMMANDS | {"position-get"}
+
+
+def env_asin_args(
+    command: str, args: Sequence[str], env: Mapping[str, str]
+) -> list[str] | None:
+    """``args`` with the ASINs from ``OMARCHY_AUDIBLE_ASIN`` put back.
+
+    They go in front, where the command-line form has them (``get <asin>``),
+    except for fake mode's ``sync``, which gets ``--fake-hide <asin>``
+    appended. Without the variable ``args`` is returned unchanged, so the
+    command-line form keeps working by hand. ``None`` when a single-ASIN
+    command is given more than one, or when ``args`` names a book too: a
+    variable left in a terminal must never decide which book a typed
+    ``remove <asin>`` deletes.
+    """
+    asins = str(env.get(ASIN_ENV, "")).split()
+    if not asins or command not in ASIN_COMMANDS:
+        return list(args)
+    if command in SINGLE_ASIN_COMMANDS and len(asins) != 1:
+        return None
+    if command == "sync":
+        if any(t == "--fake-hide" or t.startswith("--fake-hide=") for t in args):
+            return None
+        return [*args, "--fake-hide", asins[0]]
+    if len(_positionals(args)) != _OTHER_POSITIONALS.get(command, 0):
+        return None
+    return [*asins, *args]
+
+
+# Flags whose next token is their value, and how many positional arguments a
+# command takes after its ASIN.
+_VALUE_FLAGS = frozenset({"--fake-fail", "--fake-chapters", "--at"})
+_OTHER_POSITIONALS = {"position-push": 1}
+
+
+def _positionals(args: Sequence[str]) -> list[str]:
+    found: list[str] = []
+    skip = False
+    for token in args:
+        if skip:
+            skip = False
+        elif token in _VALUE_FLAGS:
+            skip = True
+        elif not token.startswith("-"):
+            found.append(token)
+    return found
 
 
 def env_is_fake(env: Mapping[str, str]) -> bool:
@@ -63,6 +119,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             hint="try: omarchy-audible doctor",
         )
         return protocol.EXIT_USAGE
+    merged = env_asin_args(command, args, env)
+    if merged is None:
+        protocol.error(
+            protocol.ErrorCode.INVALID_ARGS,
+            f"{command}: give one ASIN, in {ASIN_ENV} or on the command line, not both",
+        )
+        return protocol.EXIT_USAGE
+    args = merged
 
     try:
         if spec.is_job:

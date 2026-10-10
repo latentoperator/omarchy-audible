@@ -32,6 +32,8 @@
 //   scope_probe_result {code} `command -v systemd-run` exited
 //   attach {ready, connected} reattach at startup (`ready`: a socket path)
 //   probe_result {code, connected}  `test -S <socket>` exited
+//   load_failed               mpv's end-file(error) for a load sent since the
+//                             last file-loaded (F40)
 //   play {ready, connected}   play a book; its load goes with the event to
 //                             the controller, not to this file
 //   quit                      stop playback and end mpv
@@ -155,6 +157,15 @@ function step(state, event) {
     if (current.wanted && current.loadPending && event.connected !== true) _machine.launch(current, effects);
   } else if (type === "reply_error") {
     if (typeof event.error === "string") current.lastError = "mpv: " + event.error;
+  } else if (type === "load_failed") {
+    // F40: mpv could not open the file it was sent (missing, corrupt, wrong
+    // key). It stays up and idle; nothing is wanted any more, and the key
+    // the failed load carried comes out of mpv's options.
+    current.wanted = false;
+    current.loadPending = false;
+    current.lastError = "the player could not open the book";
+    effects.push({ "type": "drop_load" });
+    effects.push({ "type": "clear_key" });
   }
   return _machine.result(current, effects);
 }

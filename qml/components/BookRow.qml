@@ -10,8 +10,10 @@ import "../lib/Glyphs.js" as Glyphs
 // state badge, a failure line for a failed download, plus Remove from
 // laptop for a book on this laptop. The action icon says what a click does
 // (▶ play, ⤓ download, ↻ retry), and a cloud book asks before downloading
-// (`confirming`). Bind the row and the flags; `picked`, `removeRequested`,
-// `confirmRequested` and `cancelRequested` go back to the view.
+// (`confirming`); a queued or running download shows ✕ to cancel it (UX1).
+// Bind the row and the flags; `picked`, `removeRequested`,
+// `confirmRequested`, `cancelRequested` and `cancelDownloadRequested` go back
+// to the view.
 Rectangle {
   id: root
 
@@ -23,6 +25,8 @@ Rectangle {
   property bool coverPresent: false
   property real coverVersion: 0
   property bool removable: false
+  // The row's download is queued or running and can be cancelled (UX1).
+  property bool cancellable: false
   property bool removing: false
   property string iconGlyph: ""
   property string iconTooltip: ""
@@ -35,6 +39,7 @@ Rectangle {
   signal removeRequested()
   signal confirmRequested()
   signal cancelRequested()
+  signal cancelDownloadRequested()
   signal resumeRequested()
   signal startOverRequested()
 
@@ -225,6 +230,13 @@ Rectangle {
       iconText: root.iconGlyph
       tooltipText: root.iconTooltip
       onClicked: root.picked()
+    }
+
+    PanelActionButton {
+      visible: root.cancellable
+      iconText: Glyphs.GLYPH_DISMISS
+      tooltipText: "Cancel download"
+      onClicked: root.cancelDownloadRequested()
     }
 
     PanelActionButton {
