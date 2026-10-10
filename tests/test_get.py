@@ -469,11 +469,11 @@ class _RecordingTracker(dl.ChildTracker):
         self.argvs: list[list[str]] = []
         self._spawn = spawn
 
-    def spawn(self, argv, *, env=None, quiet=False, stderr=None):  # type: ignore[override]
+    def spawn(self, argv, *, env=None, quiet=False, stderr=None, cwd=None):  # type: ignore[override]
         self.argvs.append(list(argv))
         if not self._spawn:
             raise AssertionError(f"unexpected subprocess: {argv}")
-        return super().spawn(argv, env=env, quiet=quiet, stderr=stderr)
+        return super().spawn(argv, env=env, quiet=quiet, stderr=stderr, cwd=cwd)
 
 
 def _assert_no_key_material(argvs: list[list[str]], secrets: tuple[str, ...]) -> None:
@@ -524,9 +524,9 @@ class _AudibleTracker(dl.ChildTracker):
         self._key = key
         self._iv = iv
 
-    def spawn(self, argv, *, env=None, quiet=False, stderr=None):  # type: ignore[override]
+    def spawn(self, argv, *, env=None, quiet=False, stderr=None, cwd=None):  # type: ignore[override]
         self.argvs.append(list(argv))
-        output = Path(argv[argv.index("-o") + 1])
+        output = Path(cwd) / argv[argv.index("-o") + 1]
         (output / f"{self._asin}.aaxc").write_bytes(b"aaxc-bytes")
         (output / f"{self._asin}.voucher").write_text(
             json.dumps(

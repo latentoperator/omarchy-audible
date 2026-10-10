@@ -9,6 +9,10 @@ All notable changes to Omaudible. Versions follow `manifest.json`.
 - **Cancel download**: a ✕ on a queued or downloading row stops it; the row goes back to its download icon. (0.1.0's notes listed cancel, but only the command line had it.)
 - Tests run on Python 3.11 to 3.14 in GitHub Actions for every pull request.
 
+### Security
+
+- No process the plugin starts has a book's title or ASIN on its command line, which other users on the same machine can read. The play-failure notification now just says playback couldn't start and points to the drawer, where the reason (with the title) stays. Backend commands and the audible-cli download take the ASIN from their environment, and ffmpeg/ffprobe run inside the book's folder with relative file names. Reported in the marketplace review.
+
 ### Fixed
 
 - A book file mpv can't open (missing or damaged) now says so with a notification and returns to the Library, instead of leaving an empty mini player.

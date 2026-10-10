@@ -351,11 +351,14 @@ Item {
   // after a long pause first catches up with the account (CatchupFlow).
   function playPause() { return catchupFlow.press() }
 
+  // The notification is generic: notify-send's argv is readable by every
+  // local user, and the reason can name the book. The reason stays in the
+  // drawer (playFailure) and the event log.
   function notifyPlayFailed(message) {
     var text = String(message || "").length > 0 ? String(message) : "the player did not start"
     logEvent("player", "failed: " + text)
     Quickshell.execDetached(["notify-send", "--app-name=Omaudible",
-      "Couldn't start playback", text])
+      "Omaudible couldn't start playback", "Open the drawer for details."])
   }
 
   // A fake-mode mpv must not outlive a switch to real mode (G3 finding 1).

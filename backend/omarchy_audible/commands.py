@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Self
 
 from . import catalog, fakestate, joblock, protocol
+from .audible_download import ASIN_ENV
 from .auth import (
     AudiblePort,
     account_from_auth_file,
@@ -538,8 +539,11 @@ def cmd_get(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> i
 def _get_is_running(paths: Paths, pid: int, asin: str) -> bool:
     """True when the job lock is held and ``pid`` is the ``get`` for ``asin`` (F41).
 
-    The lock proves some job is running; the pid's command line proves it is
-    this download, not a reused pid or a different job.
+    The lock proves some job is running; the pid's command line proves it is a
+    backend ``get``, and the ASIN proves it is this book's. The shell passes the
+    ASIN in ``OMARCHY_AUDIBLE_ASIN``, never argv, so it is read from the pid's
+    environment (readable only by the same user); a ``get <asin>`` typed by
+    hand has it in argv instead, and that counts too.
     """
     fd = joblock.try_acquire(paths.job_lock)
     if fd is not None:
@@ -550,7 +554,16 @@ def _get_is_running(paths: Paths, pid: int, asin: str) -> bool:
     except OSError:
         return False
     tokens = [token.decode("utf-8", "replace") for token in argv if token]
-    return "omarchy_audible" in tokens and "get" in tokens and asin in tokens
+    if "omarchy_audible" not in tokens or "get" not in tokens:
+        return False
+    if asin in tokens:
+        return True
+    try:
+        environ = Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
+    except OSError:
+        return False
+    wanted = f"{ASIN_ENV}={asin}".encode()
+    return wanted in environ
 
 
 def cmd_cancel(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> int:

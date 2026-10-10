@@ -13,12 +13,43 @@ import sys
 from collections.abc import Mapping, Sequence
 
 from . import protocol
+from .audible_download import ASIN_ENV as _ASIN_ENV
 from .commands import REGISTRY, job_asin
 from .joblock import JobBusy, job_lock
 from .log import log
 from .paths import Paths
 
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
+
+# The shell passes a job's ASINs here, not in argv: /proc/<pid>/cmdline is
+# readable by every local user, the environment only by the same user
+# (ARCHITECTURE 4.2). ``qml/lib/Launch.js`` keeps the same command lists.
+ASIN_ENV = _ASIN_ENV
+SINGLE_ASIN_COMMANDS = frozenset(
+    {"get", "remove", "cancel", "play-info", "position-push", "sync"}
+)
+ASIN_COMMANDS = SINGLE_ASIN_COMMANDS | {"position-get"}
+
+
+def env_asin_args(
+    command: str, args: Sequence[str], env: Mapping[str, str]
+) -> list[str] | None:
+    """``args`` with the ASINs from ``OMARCHY_AUDIBLE_ASIN`` put back.
+
+    They go in front, where the command-line form has them (``get <asin>``),
+    except for fake mode's ``sync``, whose ASIN is the ``--fake-hide`` value.
+    Without the variable ``args`` is returned unchanged, so the command-line
+    form keeps working by hand. ``None`` when a single-ASIN command is given
+    more than one.
+    """
+    asins = str(env.get(ASIN_ENV, "")).split()
+    if not asins or command not in ASIN_COMMANDS:
+        return list(args)
+    if command in SINGLE_ASIN_COMMANDS and len(asins) != 1:
+        return None
+    if command == "sync":
+        return [*args, "--fake-hide", asins[0]]
+    return [*asins, *args]
 
 
 def env_is_fake(env: Mapping[str, str]) -> bool:
@@ -63,6 +94,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             hint="try: omarchy-audible doctor",
         )
         return protocol.EXIT_USAGE
+    merged = env_asin_args(command, args, env)
+    if merged is None:
+        protocol.error(
+            protocol.ErrorCode.INVALID_ARGS,
+            f"{command} takes one ASIN in {ASIN_ENV}",
+        )
+        return protocol.EXIT_USAGE
+    args = merged
 
     try:
         if spec.is_job:

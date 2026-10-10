@@ -1,6 +1,7 @@
 import QtQuick
 
 import "lib/JobQueue.js" as JobQueue
+import "lib/Launch.js" as Launch
 import "lib/Signin.js" as Signin
 
 // Spawns backend commands (ARCHITECTURE 4.8). Job commands go through the
@@ -120,12 +121,15 @@ Item {
     root.spawn(job, true)
   }
 
+  // A job keeps its ASINs in `args` for the queue and the views; the process
+  // gets them in its environment, never argv (Launch.js).
   function spawn(job, isJob) {
-    var argv = [root.launcher, job.command].concat(job.args)
+    var launch = Launch.split(job.command, job.args)
+    var argv = [root.launcher, job.command].concat(launch.args)
     var hasInput = !!(job.inputId && root.inputs[job.inputId] !== undefined)
     var call = callComponent.createObject(root, {
       "command": argv,
-      "environment": root.environment,
+      "environment": Launch.environment(root.environment, launch.asins),
       "job": job,
       "hasInput": hasInput,
       "input": hasInput ? root.inputs[job.inputId] : ""
