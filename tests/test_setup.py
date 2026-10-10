@@ -252,3 +252,18 @@ def test_a_successful_rebuild_replaces_the_old_venv(paths: Paths):
     assert not (paths.venv_dir / "sentinel").exists()
     assert bootstrap.is_ready(paths.venv_dir, _digest())
     assert not paths.venv_dir.with_name(paths.venv_dir.name + ".previous").exists()
+
+
+def test_a_rebuild_killed_outright_is_recovered_on_the_next_run(paths: Paths):
+    # F43 review note: SIGKILL mid-rebuild leaves only venv.previous; the next
+    # setup must put it back, not delete it, even if that setup then fails.
+    bootstrap.run_setup(paths, run=RecordingRunner())
+    (paths.venv_dir / "sentinel").write_text("old venv", encoding="utf-8")
+    previous = paths.venv_dir.with_name(paths.venv_dir.name + ".previous")
+    paths.venv_dir.rename(previous)  # as if killed right after moving it aside
+
+    with pytest.raises(PipelineError):
+        bootstrap.run_setup(paths, run=RecordingRunner(fail_on="pip"))
+
+    assert (paths.venv_dir / "sentinel").read_text(encoding="utf-8") == "old venv"
+    assert not previous.exists()

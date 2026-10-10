@@ -211,7 +211,10 @@ Item {
     } else if (message.kind === "event" && message.event === "end-file" && message.reason === "error"
         && !loadArrived && loadPath.length > 0) {
       // F40: the file we sent never opened. Only a load still on its way
-      // counts; an error once playing is mpv's own Stop path.
+      // counts; an error once playing is mpv's own Stop path. Matched to the
+      // last load sent, not by playlist entry: a failure of book A arriving
+      // after a quick pick of B would be blamed on B (two picks inside mpv's
+      // open time; accepted).
       var failedPath = loadPath
       loadArrived = true
       apply({ "type": "load_failed" })

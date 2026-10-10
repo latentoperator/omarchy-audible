@@ -101,7 +101,8 @@ def test_cancel_with_a_stale_record_and_no_lock_signals_nothing(
         assert events(result)[-1]["code"] == "not_running"
         time.sleep(0.2)
         assert bystander.poll() is None, "cancel killed an unrelated process"
-        assert joblock.read_job_json(fake_paths.job_json) is None
+        # The record is left: a new `get` may have just written it.
+        assert joblock.read_job_json(fake_paths.job_json) is not None
     finally:
         bystander.kill()
         bystander.wait()

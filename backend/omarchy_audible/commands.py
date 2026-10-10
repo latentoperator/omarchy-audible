@@ -588,8 +588,9 @@ def cmd_cancel(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -
     if not _get_is_running(paths, pid, asin):
         # F41: a record left by a `get` that died without cleaning up (SIGKILL,
         # OOM) names a pid that may now belong to anything. Only signal a pid
-        # while the job lock is held and the pid is that `get`.
-        joblock.remove_job_json(paths.job_json)
+        # while the job lock is held and the pid is that `get`. The record is
+        # left alone: a new `get` may have just replaced it, and a stale one is
+        # harmless now that the pid is checked.
         protocol.error(
             protocol.ErrorCode.NOT_RUNNING,
             f"no download is running for {asin}",

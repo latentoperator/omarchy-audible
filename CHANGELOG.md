@@ -11,7 +11,7 @@ All notable changes to Omaudible. Versions follow `manifest.json`.
 
 ### Fixed
 
-- A book file mpv can't open (missing, damaged or wrong key) now says so with a notification and returns to the Library, instead of leaving an empty mini player.
+- A book file mpv can't open (missing or damaged) now says so with a notification and returns to the Library, instead of leaving an empty mini player.
 - `cancel` checks that the download it names is really running before it stops anything, so a leftover record from a crashed download can no longer stop an unrelated program.
 - Setup keeps your working Python environment if rebuilding it fails (for example offline after an update), instead of deleting it first.
 - `position-push` refuses an `--at` time it can't read, which used to skip the check that protects a newer position from your phone.

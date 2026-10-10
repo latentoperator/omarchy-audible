@@ -229,6 +229,11 @@ def run_setup(
     # rather than the new one built elsewhere because a venv's scripts carry
     # its absolute path. A venv with no marker is a killed run: start clean.
     previous = venv_dir.with_name(venv_dir.name + ".previous")
+    if not venv_ready(venv_dir) and venv_ready(previous):
+        # A rebuild killed outright (SIGKILL, a shell restart) never reached
+        # the restore below: the aside copy is the working venv.
+        _remove_tree(venv_dir)
+        previous.rename(venv_dir)
     _remove_tree(previous)
     if read_marker(venv_dir) is not None and venv_ready(venv_dir):
         venv_dir.rename(previous)
