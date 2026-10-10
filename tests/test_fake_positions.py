@@ -335,3 +335,13 @@ def test_push_position_against_the_fake_store_honours_staleness(tmp_path: Path):
         )
     assert info.value.code == protocol.ErrorCode.STALE
     assert port.fetch_batch([ASIN])[ASIN] == {"ms": 5000, "updated_at": NEWER}
+
+
+@pytest.mark.parametrize(
+    "stamp", ["not-a-timestamp", "2026-13-45T99:00:00Z", "2026-10-04T12:00:00.Z"]
+)
+def test_push_with_an_unparseable_at_is_refused(run_cli, events, stamp):
+    # F42: an --at that does not parse would switch the stale check off.
+    result = run_cli("position-push", ASIN, "1000", "--at", stamp, fake=True)
+    assert result.returncode != 0
+    assert events(result)[-1]["code"] == "invalid_args"

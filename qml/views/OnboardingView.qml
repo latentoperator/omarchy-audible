@@ -130,7 +130,7 @@ ColumnLayout {
 
       Text {
         Layout.fillWidth: true
-        text: "Sign in with Amazon in your browser. Captcha, two-step and passkeys all happen there."
+        text: "Sign in with Amazon in your browser. Captcha, two-step and passkeys all happen there. Amazon then shows a “page not found” page: that's expected. Copy its address and come back here to paste it."
         textFormat: Text.PlainText
         wrapMode: Text.WordWrap
         color: Color.muted

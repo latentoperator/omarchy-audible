@@ -48,6 +48,7 @@ from .positions import (
     load_pushed,
     load_remote,
     mark_own_echoes,
+    parse_updated_at,
     push_position,
     write_remote,
 )
@@ -534,6 +535,24 @@ def cmd_get(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> i
         return protocol.EXIT_OK
 
 
+def _get_is_running(paths: Paths, pid: int, asin: str) -> bool:
+    """True when the job lock is held and ``pid`` is the ``get`` for ``asin`` (F41).
+
+    The lock proves some job is running; the pid's command line proves it is
+    this download, not a reused pid or a different job.
+    """
+    fd = joblock.try_acquire(paths.job_lock)
+    if fd is not None:
+        joblock.release(fd)
+        return False
+    try:
+        argv = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
+    except OSError:
+        return False
+    tokens = [token.decode("utf-8", "replace") for token in argv if token]
+    return "omarchy_audible" in tokens and "get" in tokens and asin in tokens
+
+
 def cmd_cancel(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> int:
     """Signal the running ``get`` for ``asin`` (ARCHITECTURE 4.8)."""
     asin = args[0] if args else None
@@ -559,6 +578,18 @@ def cmd_cancel(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -
         or record.get("asin") != asin
         or not isinstance(pid, int)
     ):
+        protocol.error(
+            protocol.ErrorCode.NOT_RUNNING,
+            f"no download is running for {asin}",
+            hint="nothing to cancel",
+        )
+        return protocol.EXIT_ERROR
+
+    if not _get_is_running(paths, pid, asin):
+        # F41: a record left by a `get` that died without cleaning up (SIGKILL,
+        # OOM) names a pid that may now belong to anything. Only signal a pid
+        # while the job lock is held and the pid is that `get`.
+        joblock.remove_job_json(paths.job_json)
         protocol.error(
             protocol.ErrorCode.NOT_RUNNING,
             f"no download is running for {asin}",
@@ -761,6 +792,15 @@ def cmd_position_push(
             protocol.ErrorCode.INVALID_ARGS,
             "position-push needs --at <iso-8601>: the local listening time",
             hint="pass the listening time, e.g. --at 2026-01-01T00:00:00Z",
+        )
+        return protocol.EXIT_USAGE
+    if parse_updated_at(local_updated_at) is None:
+        # F42: an --at that does not parse would sort as the oldest stamp and
+        # switch the stale check off; refuse it like a missing one.
+        protocol.error(
+            protocol.ErrorCode.INVALID_ARGS,
+            f"invalid --at: {local_updated_at!r}",
+            hint="pass the listening time as ISO 8601, e.g. 2026-01-01T00:00:00Z",
         )
         return protocol.EXIT_USAGE
     try:

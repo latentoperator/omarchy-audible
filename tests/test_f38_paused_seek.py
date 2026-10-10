@@ -148,7 +148,15 @@ def test_a_move_during_a_load_is_not_the_showing_books():
     assert player.count('loadPath = ""') == 1
     assert player.count("mpvState = Mpv.emptyState()") == 1
     assert player.count("loadPath = ") == 2
-    assert player.count("loadArrived = true") == 2
+    # file-loaded, reset_state, and a load mpv could not open (F40): each
+    # means no load is on its way any more.
+    assert player.count("loadArrived = true") == 3
+    failed = player[
+        player.index('message.event === "end-file"') : player.index(
+            'message.kind === "reply"'
+        )
+    ]
+    assert "loadArrived = true" in failed
     assert player.count("loadArrived = false") == 1
 
 

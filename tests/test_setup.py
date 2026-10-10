@@ -223,3 +223,32 @@ def test_setup_cli_fake_streams_progress_and_is_idempotent(
     )
     # The no-op must not have rebuilt the venv.
     assert sentinel.read_text(encoding="utf-8") == "keep me"
+
+
+def test_a_failed_rebuild_keeps_the_working_venv(paths: Paths):
+    # F43: new pins plus no network must not cost the user the venv they had.
+    bootstrap.run_setup(paths, run=RecordingRunner())
+    old_digest = _digest()
+    bootstrap._write_marker(paths.venv_dir, "0" * 64)  # as if built from older pins
+    (paths.venv_dir / "sentinel").write_text("old venv", encoding="utf-8")
+
+    with pytest.raises(PipelineError):
+        bootstrap.run_setup(paths, run=RecordingRunner(fail_on="pip"))
+
+    assert (paths.venv_dir / "sentinel").read_text(encoding="utf-8") == "old venv"
+    assert bootstrap.venv_ready(paths.venv_dir)
+    assert not paths.venv_dir.with_name(paths.venv_dir.name + ".previous").exists()
+    # The old pins are still known as old, so the next status offers setup again.
+    assert not bootstrap.is_ready(paths.venv_dir, old_digest)
+
+
+def test_a_successful_rebuild_replaces_the_old_venv(paths: Paths):
+    bootstrap.run_setup(paths, run=RecordingRunner())
+    bootstrap._write_marker(paths.venv_dir, "0" * 64)
+    (paths.venv_dir / "sentinel").write_text("old venv", encoding="utf-8")
+
+    bootstrap.run_setup(paths, run=RecordingRunner())
+
+    assert not (paths.venv_dir / "sentinel").exists()
+    assert bootstrap.is_ready(paths.venv_dir, _digest())
+    assert not paths.venv_dir.with_name(paths.venv_dir.name + ".previous").exists()

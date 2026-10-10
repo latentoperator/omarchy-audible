@@ -102,6 +102,7 @@ Item {
     function confirmDownload(): string { if (!service.fake) return Ipc.DEV_ONLY; return service.confirmDownload() }
     function cancelConfirm(): string { if (!service.fake) return Ipc.DEV_ONLY; return service.cancelConfirm() }
     function removeBook(asin: string): string { if (!service.fake) return Ipc.DEV_ONLY; return service.removeBook(asin) }
+    function cancelDownload(asin: string): string { if (!service.fake) return Ipc.DEV_ONLY; return service.cancelDownload(asin) }
     function libraryState(): string {
       return JSON.stringify({ "list": service.listState, "ask": service.askAsin, "confirm": service.confirmAsin, "reopen": service.reopenAsin,
         "syncing": service.syncing, "lastSyncCode": service.lastSyncCode, "count": library.count,

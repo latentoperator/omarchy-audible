@@ -122,6 +122,7 @@ Item {
   id: top
   property var published: []
   property int externalUnloads: 0
+  property var loadFailures: []
   property var lastResult: null
   property var loader: null
   property var retryTimer: null
@@ -141,6 +142,7 @@ Item {
     target: player
     function onConnectionChanged() { top.published = top.published.concat([player.connection]) }
     function onExternalUnload() { top.externalUnloads += 1; player.quit() }
+    function onLoadFailed(path) { top.loadFailures = top.loadFailures.concat([path]) }
   }
 
   // The controller's children, told apart by what they are before any step.
@@ -216,6 +218,7 @@ Item {
     var snapshot = {
       "result": result === undefined ? null : result,
       "externalUnloads": top.externalUnloads,
+      "loadFailures": top.loadFailures,
       "connection": player.connection, "lastError": player.lastError,
       "connected": player.connected, "wanted": player.wanted,
       "attaching": player.attaching, "launching": player.launching,

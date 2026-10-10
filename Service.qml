@@ -516,6 +516,15 @@ Item {
     return "ok"
   }
 
+  // Cancel a queued or running download (UX1). A queued one is dropped; a
+  // running one is sent `cancel`, and its `get` cleans up and ends
+  // `cancelled`, which Playback.updateFailures does not count as a failure.
+  function cancelDownload(asin) {
+    if (!LibraryUi.canCancel(library.rowFor(asin))) return "error: not downloading"
+    logEvent("get", "cancel requested")
+    return runner.cancel(asin)
+  }
+
   // `hidePanel`: the user picked the book in the open drawer, so the panel
   // hides and reopens on Mini when playback starts. After a download the
   // panel is only switched to Mini if it is still open.
@@ -748,6 +757,13 @@ Item {
           player.quitting, player.loadArrived, root.snapAsin)) return
       root.savePosition(root.snapAsin, root.snapMs, true)
       root.quitPlayer()
+    }
+
+    // F40: the book file would not open. Say so like any failed play and
+    // leave Mini, which has nothing to show.
+    function onLoadFailed(path) {
+      root.failPlay(Playback.asinFromPath(path), "", "the player could not open the book file; try removing it and downloading it again")
+      if (Panel.libraryAfterUnload(player.loaded, player.wanted)) root.showView(root.view)
     }
 
     function onPathChanged() {

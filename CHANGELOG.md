@@ -2,6 +2,22 @@
 
 All notable changes to Omaudible. Versions follow `manifest.json`.
 
+## 0.1.1 (unreleased)
+
+### Added
+
+- **Cancel download**: a ✕ on a queued or downloading row stops it; the row goes back to its download icon. (0.1.0's notes listed cancel, but only the command line had it.)
+- Tests run on Python 3.11 to 3.14 in GitHub Actions for every pull request.
+
+### Fixed
+
+- A book file mpv can't open (missing, damaged or wrong key) now says so with a notification and returns to the Library, instead of leaving an empty mini player.
+- `cancel` checks that the download it names is really running before it stops anything, so a leftover record from a crashed download can no longer stop an unrelated program.
+- Setup keeps your working Python environment if rebuilding it fails (for example offline after an update), instead of deleting it first.
+- `position-push` refuses an `--at` time it can't read, which used to skip the check that protects a newer position from your phone.
+- Timestamps like `12:00:00.Z` are read the same way on every supported Python version.
+- The sign-in step explains Amazon's "page not found" page before the browser opens, not only after.
+
 ## 0.1.0 (2026-10-09)
 
 The first public release.
@@ -11,7 +27,7 @@ The first public release.
 - A book icon in the Omarchy bar that opens a library drawer: search, four sorts, filters for downloaded and in-progress books, and a storage line with **Remove all downloads**.
 - Sign-in from the drawer through Amazon's own page in your browser, or reuse of an existing audible-cli login; eleven Audible stores. **Disconnect** deregisters a device the plugin registered.
 - First-run setup from the drawer: a missing-tools check with a copyable install command, then a private Python environment with pinned `audible-cli` 0.6.0 and `audible` 0.12.0.
-- Downloads on demand with progress and cancel. Books are kept exactly as Audible sends them (`aaxc`, falling back to `aax`) and unlocked in memory only while playing; no decrypted copy is written.
+- Downloads on demand with progress. Books are kept exactly as Audible sends them (`aaxc`, falling back to `aax`) and unlocked in memory only while playing; no decrypted copy is written.
 - A mini player (cover, chapter, skips, speed, scrub, Stop) and a full view (chapter list, fine speed, sleep timer, remove from this device). Keyboard control in both.
 - Position sync with Audible in both directions: a newer position from another device is picked up on play, and listening is pushed back about once a minute and on pause or stop; the most recent listening wins.
 - Playback that survives closing the panel and restarting the shell.

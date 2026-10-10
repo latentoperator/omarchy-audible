@@ -818,3 +818,40 @@ def test_a_closed_harness_leaves_no_qml_thread(tmp_path):
     assert qml_threads()
     harness.close()
     assert qml_threads() == []
+
+
+# F40: a load mpv cannot open is a failed play, not a silent idle player.
+END_FILE_ERROR = {
+    "event": "end-file",
+    "reason": "error",
+    "file_error": "unrecognized file format",
+}
+
+
+def test_a_load_mpv_cannot_open_fails_the_play_and_clears_the_key(harness):
+    run(harness, PLAYING)
+    assert harness.last["loadArrived"] is False and harness.last["wanted"] is True
+    changes = harness.step("line", END_FILE_ERROR)
+    assert changes["loadFailures"] == [BOOK]
+    assert changes["wanted"] is False
+    assert changes["loadArrived"] is True
+    assert changes["lastError"] == "the player could not open the book"
+    assert changes["writes"] == [CLEAR_KEY]
+    # mpv stays up and idle; nothing reconnects or relaunches.
+    assert harness.last["connection"] == "connected"
+    assert "detached" not in changes
+    assert harness.warnings == []
+
+
+def test_an_error_end_file_after_the_load_arrived_is_not_a_load_failure(harness):
+    _loaded(harness)
+    changes = harness.step("line", END_FILE_ERROR)
+    assert "loadFailures" not in changes
+    assert harness.last["wanted"] is True
+
+
+def test_an_eof_end_file_before_file_loaded_is_not_a_load_failure(harness):
+    run(harness, PLAYING)
+    changes = harness.step("line", {"event": "end-file", "reason": "stop"})
+    assert "loadFailures" not in changes
+    assert harness.last["loadArrived"] is False

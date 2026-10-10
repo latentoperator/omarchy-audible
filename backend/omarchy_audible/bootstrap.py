@@ -223,8 +223,16 @@ def run_setup(
 
     total = len(PROGRESS_STAGES)
     step_env = _clean_env()
+    # F43: a working venv (one with a marker, even for older pins) is moved
+    # aside, not deleted, and comes back if the rebuild fails, so an update
+    # run offline cannot leave the plugin with no venv at all. It is moved
+    # rather than the new one built elsewhere because a venv's scripts carry
+    # its absolute path. A venv with no marker is a killed run: start clean.
+    previous = venv_dir.with_name(venv_dir.name + ".previous")
+    _remove_tree(previous)
+    if read_marker(venv_dir) is not None and venv_ready(venv_dir):
+        venv_dir.rename(previous)
     try:
-        # A run killed midway leaves a venv without the marker: start clean.
         _remove_tree(venv_dir)
 
         emit("progress", stage="venv", n=1, of=total)
@@ -277,8 +285,11 @@ def run_setup(
             runner([str(venv_python), "-c", IMPORT_CHECK], step_env),
             "the virtualenv cannot import its dependencies",
         )
-    except PipelineError:
+    except BaseException:
         _remove_tree(venv_dir)
+        if previous.is_dir():
+            previous.rename(venv_dir)
         raise
 
     _write_marker(venv_dir, digest)
+    _remove_tree(previous)

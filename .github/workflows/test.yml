@@ -1,0 +1,34 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Qt runtime libraries for the QML harness
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libegl1 libgl1 libxkbcommon0 libfontconfig1 ffmpeg
+      - name: Tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: uv run --frozen --extra dev python -m pytest -q -rs
+      - name: Lint
+        if: matrix.python == '3.14'
+        run: |
+          uv run --frozen --extra dev ruff check .
+          uv run --frozen --extra dev ruff format --check .
+          make check-symlinks
