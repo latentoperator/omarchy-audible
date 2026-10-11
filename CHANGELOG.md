@@ -2,6 +2,12 @@
 
 All notable changes to Omaudible. Versions follow `manifest.json`.
 
+## 0.1.3 (unreleased)
+
+### Changed
+
+- The marketplace description, bar-widget description and README intro now say "audiobooks", so people searching the marketplace for audiobooks can find the plugin. No code changes.
+
 ## 0.1.2 (2026-10-09)
 
 ### Fixed

@@ -1,7 +1,7 @@
 [project]
 name = "omarchy-audible"
-version = "0.1.2"
-description = "Your Audible library in the Omarchy bar."
+version = "0.1.3"
+description = "Your Audible audiobooks in the Omarchy bar."
 requires-python = ">=3.11"
 license = "AGPL-3.0-only"
 license-files = ["LICENSE"]
