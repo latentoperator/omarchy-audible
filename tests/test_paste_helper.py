@@ -23,7 +23,7 @@ REPO = Path(__file__).resolve().parents[1]
 HELPER = REPO / "bin" / "omarchy-audible-paste"
 
 # The fake wl-paste: what it does comes from FAKE_CLIPBOARD; it records its
-# own argv and how many bytes it managed to write.
+# own argv.
 FAKE = """#!{python}
 import os, sys, time
 mode = os.environ["FAKE_CLIPBOARD"]
@@ -31,14 +31,9 @@ record = os.environ["FAKE_RECORD"]
 with open(record, "w") as handle:
     handle.write(" ".join(sys.argv[1:]))
 out = sys.stdout.buffer
-written = 0
 def send(data):
-    global written
     out.write(data)
     out.flush()
-    written += len(data)
-    with open(record + ".bytes", "w") as handle:
-        handle.write(str(written))
 try:
     if mode == "text":
         send("Dune \\u2014 Frank Herbert \\U0001f4da".encode("utf-8"))
@@ -92,13 +87,8 @@ def clipboard(tmp_path):
             check=False,
         )
         elapsed = time.monotonic() - started
-        sent = (
-            int(Path(f"{record}.bytes").read_text())
-            if Path(f"{record}.bytes").exists()
-            else 0
-        )
         argv = record.read_text() if record.exists() else None
-        return result, elapsed, sent, argv
+        return result, elapsed, None, argv
 
     return run
 
