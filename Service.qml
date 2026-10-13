@@ -272,11 +272,9 @@ Item {
   function reconnect() { signinFlow.reconnect() }
   function copyText(text) { signinFlow.copyText(text) }
   function copyDiagnostic() { signinFlow.copyText(diagnosticText) }
-  function readClipboard(target) { signinFlow.readClipboard(target) }
 
-  // Re-sent from SigninFlow for the onboarding views: clipboard chunks for
-  // the view that asked, and "clear your paste field".
-  signal clipboardRead(var target, string text)
+  // Re-sent from SigninFlow for the onboarding views: "clear your paste
+  // field".
   signal clearPaste()
 
   // The book file for an ASIN, under the books dir from the `status` event.
@@ -730,7 +728,6 @@ Item {
     id: signinFlow
     service: root
     runner: runner
-    onClipboardRead: function(target, text) { root.clipboardRead(target, text) }
     onClearPaste: root.clearPaste()
   }
 

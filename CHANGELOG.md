@@ -2,7 +2,11 @@
 
 All notable changes to Omaudible. Versions follow `manifest.json`.
 
-## 0.1.3 (unreleased)
+## 0.1.3 (2026-10-13)
+
+### Security
+
+- The Library search and sign-in fields no longer let the shell read the clipboard by itself. Qt reads the whole clipboard, with no size limit or deadline, whenever an editable field exists and the clipboard changes, so a program that offered an endless clipboard could freeze the Omarchy shell or use up its memory (marketplace review of 0.1.2). The fields are now read-only to Qt; typing works as before, and pasting (Ctrl+V, Shift+Insert or **Paste from clipboard**) goes through a new helper, `bin/omarchy-audible-paste`, that reads at most 1 KiB for search or 16 KiB for sign-in and gives up after 2 seconds. A paste that is too large or too slow pastes nothing. Middle-click paste and the right-click Paste item no longer paste into these fields.
 
 ### Changed
 

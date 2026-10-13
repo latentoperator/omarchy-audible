@@ -1,0 +1,124 @@
+#!/usr/bin/env python3
+"""Bounded clipboard read for the plugin's text fields.
+
+Qt's own clipboard read runs inside the shared shell and has no size limit or
+deadline: a clipboard owner that keeps streaming could stall the shell or use
+up its memory. The plugin's fields are read-only to Qt (so Qt never reads the
+clipboard by itself), and an explicit paste runs this helper instead, outside
+the shell. It runs ``wl-paste``, keeps at most ``--max-bytes`` bytes, and stops
+at ``--timeout`` seconds in total, however slowly the data arrives.
+
+Only a complete, valid UTF-8 text is written to stdout, in one go, and only
+after ``wl-paste`` has finished, as one line of JSON, ``{"text": "..."}``, with
+every non-ASCII character escaped. Anything else writes nothing and exits
+non-zero:
+
+* 2: ``wl-paste`` is missing or could not start
+* 3: the clipboard is larger than ``--max-bytes``
+* 4: the deadline passed
+* 5: the clipboard is empty, not text, or not valid UTF-8
+
+Standard library only, never imports the backend, and writes nothing to disk.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import selectors
+import signal
+import subprocess
+import sys
+import time
+
+DEFAULT_MAX_BYTES = 16384
+DEFAULT_TIMEOUT = 2.0
+# Hard ceilings, so a bad argument cannot lift the bounds.
+CEILING_MAX_BYTES = 65536
+CEILING_TIMEOUT = 5.0
+
+EXIT_NO_TOOL = 2
+EXIT_TOO_LARGE = 3
+EXIT_TIMEOUT = 4
+EXIT_NOT_TEXT = 5
+
+COMMAND = ["wl-paste", "--no-newline", "--type", "text"]
+
+
+def _stop(process: subprocess.Popen[bytes]) -> None:
+    if process.poll() is None:
+        process.kill()
+    try:
+        process.wait(timeout=1.0)
+    except subprocess.TimeoutExpired:  # pragma: no cover - kill always lands
+        pass
+
+
+def read_clipboard(max_bytes: int, timeout: float) -> tuple[int, bytes]:
+    """Return ``(exit code, data)``; data is empty unless the code is 0."""
+    deadline = time.monotonic() + timeout
+    try:
+        process = subprocess.Popen(
+            COMMAND,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
+        )
+    except OSError:
+        return EXIT_NO_TOOL, b""
+    assert process.stdout is not None
+    os.set_blocking(process.stdout.fileno(), False)
+    data = bytearray()
+    with selectors.DefaultSelector() as selector:
+        selector.register(process.stdout, selectors.EVENT_READ)
+        try:
+            while True:
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    return EXIT_TIMEOUT, b""
+                if not selector.select(left):
+                    continue
+                # One byte past the limit is enough to know it is too large.
+                chunk = os.read(process.stdout.fileno(), max_bytes + 1 - len(data))
+                if not chunk:
+                    break
+                data += chunk
+                if len(data) > max_bytes:
+                    return EXIT_TOO_LARGE, b""
+        finally:
+            _stop(process)
+            process.stdout.close()
+    if process.returncode != 0 or not data:
+        return EXIT_NOT_TEXT, b""
+    try:
+        text = bytes(data).decode("utf-8")
+    except UnicodeDecodeError:
+        return EXIT_NOT_TEXT, b""
+    return 0, (json.dumps({"text": text}, ensure_ascii=True) + "\n").encode("ascii")
+
+
+def _terminated(signum: int, frame: object) -> None:
+    # The shell stops a paste that overran by sending SIGTERM. Exiting through
+    # SystemExit runs the `finally` above, so wl-paste is stopped too.
+    raise SystemExit(EXIT_TIMEOUT)
+
+
+def main(argv: list[str] | None = None) -> int:
+    signal.signal(signal.SIGTERM, _terminated)
+    parser = argparse.ArgumentParser(prog="omarchy-audible-paste", add_help=True)
+    parser.add_argument("--max-bytes", type=int, default=DEFAULT_MAX_BYTES)
+    parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT)
+    args = parser.parse_args(argv)
+    max_bytes = max(1, min(args.max_bytes, CEILING_MAX_BYTES))
+    timeout = max(0.05, min(args.timeout, CEILING_TIMEOUT))
+    code, data = read_clipboard(max_bytes, timeout)
+    if code == 0:
+        sys.stdout.buffer.write(data)
+        sys.stdout.buffer.flush()
+    return code
+
+
+if __name__ == "__main__":
+    sys.exit(main())

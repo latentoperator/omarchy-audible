@@ -110,24 +110,14 @@ Item {
     opener.running = true
   }
 
-  // Clipboard I/O for the onboarding view: copy the install command, and read
-  // the clipboard for "Paste from clipboard" (the text goes back to the view
-  // through `clipboardRead` in chunks, never into a property). The view
-  // clears its field before calling `readClipboard` and appends each chunk.
-  // `target` is the view that asked, so another monitor's field never fills.
-  signal clipboardRead(var target, string text)
+  // Clipboard I/O for the onboarding view: copy the install command. Reading
+  // the clipboard is the field's own bounded paste (BoundedTextField.qml).
   // Every view clears its paste field: the text was sent, or sign-in ended.
   signal clearPaste()
-  property var clipboardTarget: null
 
   function copyText(text) {
     copier.text = String(text)
     copier.running = true
-  }
-
-  function readClipboard(target) {
-    clipboardTarget = target
-    paster.running = true
   }
 
   // A record from the job runner: the sign-in link, and login-finish's
@@ -192,15 +182,5 @@ Item {
     }
     onExited: stdinEnabled = true
     command: ["wl-copy"]
-  }
-
-  Process {
-    id: paster
-    command: ["wl-paste", "--no-newline"]
-    // Chunks go straight to the view's field; nothing here keeps them.
-    stdout: SplitParser {
-      splitMarker: ""
-      onRead: function(chunk) { root.clipboardRead(root.clipboardTarget, chunk) }
-    }
   }
 }

@@ -134,7 +134,7 @@ Setup runs once. Running it again does nothing unless `backend/requirements.lock
 
 **Network traffic after setup** goes only to Amazon and Audible: sign-in, library sync, cover images, book downloads, and reading and writing your listening position. All of it comes from the Python backend; the shell side of the plugin makes no network requests.
 
-**System tools it uses**, none of which it installs: `python3`, `mpv` and `ffmpeg`/`ffprobe`, plus `wl-copy`/`wl-paste`, `xdg-open`, `notify-send`, and `systemd-run --user`/`systemctl --user`, which run and stop the player in its own user scope. All ship with Omarchy. `mpv-mpris` is optional.
+**System tools it uses**, none of which it installs: `python3`, `mpv` and `ffmpeg`/`ffprobe`, plus `wl-copy`/`wl-paste` (pasting goes through `bin/omarchy-audible-paste`, which reads at most 16 KiB and gives up after 2 seconds, so a runaway clipboard can't freeze the shell), `xdg-open`, `notify-send`, and `systemd-run --user`/`systemctl --user`, which run and stop the player in its own user scope. All ship with Omarchy. `mpv-mpris` is optional.
 
 **Files it writes:**
 
