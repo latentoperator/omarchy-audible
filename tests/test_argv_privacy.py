@@ -399,7 +399,11 @@ LAUNCH_SITES = {
     ),
     ("qml/SigninFlow.qml", 'opener.command = ["xdg-open", url]'),
     ("qml/SigninFlow.qml", 'command: ["wl-copy"]'),
-    ("qml/SigninFlow.qml", 'command: ["wl-paste", "--no-newline"]'),
+    # The bounded paste helper: its argv is the helper path and two numbers.
+    (
+        "qml/components/BoundedTextField.qml",
+        "paster.command = Typing.pasteCommand(pasteHelper, pasteBytes)",
+    ),
     ("qml/BackendCall.qml", "command: root.command"),
 }
 

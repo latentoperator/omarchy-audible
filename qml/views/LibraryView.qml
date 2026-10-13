@@ -14,6 +14,7 @@ import "../lib/Settings.js" as Settings
 import "../lib/Onboarding.js" as Onboarding
 import "../lib/Panel.js" as Panel
 import "../lib/Signin.js" as Signin
+import "../lib/Typing.js" as Typing
 
 // Library view (U2): search, sort, filters, the book list, the storage line
 // and Remove all downloads. Every decision comes from `LibraryUi.js` and
@@ -72,10 +73,14 @@ ColumnLayout {
     Layout.fillWidth: true
     spacing: Style.spacing.md
 
-    TextField {
+    // Read-only to Qt, so it never reads the clipboard itself; typing and a
+    // bounded paste go through `editKey` (components/BoundedTextField.qml).
+    BoundedTextField {
       id: search
       Layout.fillWidth: true
       Layout.minimumWidth: 0
+      maxChars: Typing.SEARCH_MAX_CHARS
+      pasteBytes: Typing.SEARCH_PASTE_BYTES
       placeholderText: "Search"
       onTextChanged: {
         if (root.library) root.library.searchText = text
@@ -92,7 +97,7 @@ ColumnLayout {
         else if (action === Drawer.KEY_MOVE_DOWN) root.move(1)
         else if (action === Drawer.KEY_PICK) root.pickAt(Drawer.pickIndex(root.selected, root.library ? root.library.count : 0, search.text))
         else if (action === Drawer.KEY_TOGGLE) { if (root.service && root.service.player.loaded) root.service.playPause() }
-        else return
+        else if (!search.editKey(event)) return
         event.accepted = true
       }
     }

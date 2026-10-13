@@ -20,7 +20,7 @@ line-length = 88
 extend-exclude = ["spikes"]
 # The launcher has no .py suffix, so it must be named to be picked up by
 # `ruff check .` / `ruff format .` without being listed on the command line.
-extend-include = ["bin/omarchy-audible"]
+extend-include = ["bin/omarchy-audible", "bin/omarchy-audible-paste"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["qjs", "omarchy_audible", "player_harness"]

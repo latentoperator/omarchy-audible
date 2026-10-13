@@ -41,7 +41,6 @@ STATE = (
     "pasteRejected",
     "pasteEmpty",
     "loginStarting",
-    "clipboardTarget",
 )
 
 MOVED = (
@@ -81,7 +80,7 @@ def test_the_flow_declares_its_state_and_processes():
         assert re.search(rf"property \w+ {name}:", flow), name
     for name in ("onboardingStep", "loginPhase", "settingUp"):
         assert re.search(rf"readonly property \w+ {name}:", flow), name
-    for name in ("opener", "copier", "paster"):
+    for name in ("opener", "copier"):
         assert f"id: {name}" in flow, name
     for name in (
         "checkStatus",
@@ -94,7 +93,6 @@ def test_the_flow_declares_its_state_and_processes():
         "reconnect",
         "openUrl",
         "copyText",
-        "readClipboard",
         "onboardingFinished",
         "handleEvent",
         "handleFinished",
@@ -148,7 +146,6 @@ def test_the_service_keeps_the_names_views_use():
         "function disconnect() { return signinFlow.disconnect() }",
         "function reconnect() { signinFlow.reconnect() }",
         "function copyText(text) { signinFlow.copyText(text) }",
-        "function readClipboard(target) { signinFlow.readClipboard(target) }",
     ):
         assert line in service, line
     # The views still read and call the Service, never the flow.

@@ -41,21 +41,18 @@ def test_view_uses_the_field_text_only_to_send_or_clear():
     allowed = {
         'paste.text = ""',
         'paste.text = "" }',
-        "paste.text += chunk }",
         "paste.text)",
     }
     assert uses, "the paste field is gone?"
     for use in uses:
         assert use.strip() in allowed, f"unexpected use of the pasted text: {use!r}"
     assert "password: true" in view
-    # Clipboard chunks fill only the view that asked (another monitor's field
-    # never holds the text), and every view clears on clearPaste.
-    assert (
-        "function onClipboardRead(target, chunk) { if (target === root) paste.text += chunk }"
-        in view
-    )
+    # The field pastes into itself through its bounded helper, so another
+    # monitor's field never holds the text, and every view clears on
+    # clearPaste.
     assert 'function onClearPaste() { paste.text = "" }' in view
-    assert "root.service.readClipboard(root)" in view
+    assert "paste.pasteClipboard()" in view
+    assert "readClipboard" not in view and "onClipboardRead" not in view
 
 
 def test_service_passes_the_paste_only_to_the_check_and_stdin():
@@ -78,13 +75,25 @@ def test_service_passes_the_paste_only_to_the_check_and_stdin():
     assert not re.search(r"property \w+ pasted", service)
 
 
-def test_clipboard_text_is_streamed_not_stored():
-    service = read("qml/SigninFlow.qml")
-    paster = service[service.index("id: paster") :]
+def test_clipboard_text_goes_only_into_the_field():
+    # The bounded paste (BoundedTextField.qml) hands the helper's line to
+    # Typing.pasteResult and the result to the field's own edit; it is never
+    # stored in a property, logged or passed on.
+    field = read("qml/components/BoundedTextField.qml")
+    paster = field[field.index("id: paster") :]
     paster = paster[: paster.index("\n  }\n")]
     assert "SplitParser" in paster and "StdioCollector" not in paster
-    assert "root.clipboardRead(root.clipboardTarget, chunk)" in paster
-    assert re.search(r"signal clipboardRead\(var target, string text\)", service)
+    handler = paster[paster.index("onRead: function(line)") :]
+    assert re.findall(r"\bline\b", handler)[:2] == ["line", "line"]
+    assert "var value = Typing.pasteResult(line)" in handler
+    assert "if (value !== null) root.edit(Typing.ACTION_PASTE, value)" in handler
+    assert "console." not in field and "logEvent" not in field
+    assert not re.search(r"property \w+ (pasted|clip|value)", field)
+    # Nothing else reads the clipboard: the old shared `paster` is gone.
+    for rel in ("Service.qml", "qml/SigninFlow.qml", "qml/views/OnboardingView.qml"):
+        text = read(rel)
+        for name in ("wl-paste", "readClipboard", "clipboardRead", "clipboardTarget"):
+            assert name not in text, (rel, name)
 
 
 def test_no_log_line_mentions_the_input():
@@ -164,22 +173,13 @@ def test_service_forwarders_hand_the_paste_straight_to_the_flow():
         assert name not in service, name
 
 
-def test_service_re_sends_clipboard_chunks_without_keeping_them():
+def test_service_re_sends_only_the_clear_signal():
     service = read("Service.qml")
-    assert re.search(r"signal clipboardRead\(var target, string text\)", service)
     assert "signal clearPaste()" in service
     block = service[service.index("  SigninFlow {") :]
     block = block[: block.index("\n  }\n") + 1]
-    assert (
-        "onClipboardRead: function(target, text) { root.clipboardRead(target, text) }"
-        in block
-    )
     assert "onClearPaste: root.clearPaste()" in block
-    # The chunk is the handler's parameter, passed on unchanged.
-    assert len(re.findall(r"\btext\b", block)) == 2
-    assert "function readClipboard(target) { signinFlow.readClipboard(target) }" in (
-        service
-    )
+    assert "Clipboard" not in block
 
 
 KEPT = {

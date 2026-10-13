@@ -2,8 +2,10 @@ import QtQuick
 import QtQuick.Layouts
 import qs.Commons
 import qs.Ui
+import "../components"
 import "../lib/Onboarding.js" as Onboarding
 import "../lib/Signin.js" as Signin
+import "../lib/Typing.js" as Typing
 
 // Onboarding view (U3): missing tools, setup, and connecting Audible (store,
 // sign-in link, paste, or import an existing audible-cli login). Steps come
@@ -30,7 +32,6 @@ ColumnLayout {
 
   Connections {
     target: root.service
-    function onClipboardRead(target, chunk) { if (target === root) paste.text += chunk }
     function onClearPaste() { paste.text = "" }
   }
 
@@ -188,16 +189,20 @@ ColumnLayout {
         font.pixelSize: Style.font.body
       }
 
-      TextField {
+      // Read-only to Qt, so it never reads the clipboard itself; typing and a
+      // bounded paste go through `editKey` (components/BoundedTextField.qml).
+      BoundedTextField {
         id: paste
         Layout.fillWidth: true
         password: true
+        maxChars: Typing.SIGNIN_MAX_CHARS
+        pasteBytes: Typing.SIGNIN_PASTE_BYTES
         placeholderText: "Page address"
         Keys.onPressed: function(event) {
           var action = Signin.pasteKey(event.key)
           if (action === "close") root.closeRequested()
           else if (action === "send") root.send()
-          else return
+          else if (!paste.editKey(event)) return
           event.accepted = true
         }
       }
@@ -219,7 +224,7 @@ ColumnLayout {
           text: "Paste from clipboard"
           onClicked: {
             paste.text = ""
-            root.service.readClipboard(root)
+            paste.pasteClipboard()
           }
         }
         Button {
