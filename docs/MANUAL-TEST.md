@@ -2,6 +2,26 @@
 
 Hand-run journeys from `docs/SCOPE.md` §3, one line per run. Chris does all the clicking; the driving CLI checks state over IPC and writes the line. Real mode unless a line says otherwise.
 
+## 0.1.3 bounded paste (desktop) — 2026-10-13, HMSP-OMARCHYBEE, fake mode, live folder detached at `bf4ace4` (PR #119)
+
+Start state: real mode on clean `main` (`b6f6eed`), shell 57797, player idle (no mpv), 91 books, 4 local (2 796 652 955 bytes), screen unlocked. Dante switched the live checkout to `bf4ace4`, set the dev-fake flag and restarted once (57797 → 73840). Dante drove the keyboard (`wtype`) and mouse (`ydotool`, cursor via `hyprctl dispatch 'hl.dsp.cursor.move({x=…,y=…})'` on Hyprland 0.56) and read IPC; test clipboards were set with `wl-copy --sensitive`, so Omarchy's clipboard history skipped them. Quickshell 0.3.1, two 1920×1080 monitors.
+
+| # | Check | Result |
+|---|---|---|
+| 1 | Type in Library search | **Pass.** Search focused on open (caret drawn). `ember` → 1 of 5; five Backspaces → 5 of 5; `lighthouse`, Ctrl+A, Backspace → 5 of 5. |
+| 2 | Ctrl+V into search | **Pass.** `orchard` → 1 of 5. `\nember\n` → 1 of 5 (line breaks dropped). |
+| 3 | Shift+Insert into search | **Pass.** `winter` → 1 of 5; screenshot shows `winter` in the field, caret after it. |
+| 4 | Too large for search | **Pass.** 1 100 bytes (over 1 KiB) → nothing pasted, 5 of 5. 1 000 bytes (under 1 KiB, over 256 characters) → refused whole, 5 of 5. |
+| 5 | Huge clipboard, search | **Pass.** 300 MB offered, then Ctrl+V: IPC answered in 33–37 ms throughout, nothing pasted, shell RSS unchanged (738 → 738 MB), no helper left running; typing worked straight after. Closing and reopening the panel three times with the 300 MB clipboard held: zero `QWaylandDataOffer` warnings from the shell (Qt no longer reads it). The helper alone on 300 MB: exit 3 in 270 ms. |
+| 6 | Sign-in **Paste from clipboard** | **Pass.** After `fakeOnboarding logout`/`login`: a non-address text pasted (masked), Connect → "That doesn't look like the Amazon page address", not sent; 20 KB (over 16 KiB) and 50 MB → nothing pasted, Connect → "Paste the address first", IPC 32–35 ms during the 50 MB paste; a fake `maplanding?openid.oa2.authorization_code=` address → pasted, Connect → signed in, Library. The helper was seen running for each refused paste (the good address finished too fast to catch at 50 ms polling) and none was left afterwards. |
+| 7 | Ctrl+V in the sign-in field | **Pass.** Click into the field, Ctrl+V → masked text filled. |
+
+Shell 73840 logged one pair of `QWaylandDataOffer: timeout reading from pipe` warnings (00:24:48–49), when the panel first opened. At that moment the clipboard owner was not answering (a direct `wl-paste` shortly before returned nothing, probably gliff's remote clipboard). Which component read it was not established: the shell reads the clipboard whenever any editable field anywhere in it sees a new offer, and the same pair appears under shell 4184 on `main` on 2026-10-10 at a screen lock. After that, zero such warnings, including three panel reopenings with a 300 MB clipboard held. No warnings from our files in the windows checked.
+
+**Restore:** live checkout back to clean `main` (`b6f6eed`), dev-fake flag removed, test clipboard and files deleted, one restart (73840 → 116638). Player status byte-identical to the baseline, 91 books, 4 local (same bytes), signed in (US), fake IPC refused (`dev only`), `shell.json` `cmp` identical, zero warnings from the new shell.
+
+**Notes:** (a) The red sign-in error line moves the button row down about 22 px; a scripted click at the old height lands on the error text and does nothing (not a bug). (b) gliff 0.3.0's remote clipboard showed "Paste of text failed / no progress for 30 s" for the huge test clipboards; that is gliff's own sync, outside the shell.
+
 ## R5 — Clean install (laptop) — 2026-10-09, HMSP-OMARCHYXPS, Chris's own account, `main` at `2acadfc`
 
 Omarchy allows one user account, so R5 ran in Chris's. Dante backed up and moved aside the plugin link (`~/.config/omarchy/plugins/latentoperator.audible` → `~/Projects/omarchy-audible`), `shell.json` (SHA-256 recorded), `~/.config/omarchy-audible`, `~/.local/share/omarchy-audible`, `~/.audible`, `~/Audiobooks/Audible` (824 MB, one book) and `/run/user/1000/omarchy-audible`, and ended the real mpv by stopping its scope (no plugin Stop, so no push). `omarchy plugin remove` unlinked the plugin and dropped its bar entry. Then, at 17:50:21, `omarchy plugin add https://github.com/latentoperator/omarchy-audible --enable --yes`: anonymous clone of the public repo, validation passed, enabled and placed in the bar; `listPlugins` showed the name **Omaudible**; first state `setup`, nothing missing. Chris did the clicking; Dante read IPC, `state.json`, `pushed.json` and the event log over SSH. Times are local (UTC−5).
