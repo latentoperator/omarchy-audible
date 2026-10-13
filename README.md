@@ -1,6 +1,6 @@
 # Omaudible: Omarchy Audible
 
-Your Audible library in the [Omarchy](https://omarchy.org) bar. Click the book icon to browse your library in a drawer that follows your theme, pick a book, and a mini player takes over. Close the panel and the book keeps playing. Your place syncs with the Audible phone app in both directions, and only the books you're listening to are kept on your computer.
+Your Audible audiobooks in the [Omarchy](https://omarchy.org) bar. Click the book icon to browse your audiobook library in a drawer that follows your theme, pick a book, and a mini player takes over. Close the panel and the book keeps playing. Your place syncs with the Audible phone app in both directions, and only the books you're listening to are kept on your computer.
 
 ![The library drawer and the full player](preview.png)
 
