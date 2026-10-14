@@ -255,6 +255,18 @@ function step(status) {
   return STEP_READY;
 }
 
+// Idle setup copy distinguishes first install from repair or stale tools.
+function setupText(status) {
+  var state = _p.isObject(status) ? status.venv_state : null;
+  if (state === "broken") {
+    return "The plugin's tools need repairing. Run Set up to repair them.";
+  }
+  if (state === "usable_old") {
+    return "The plugin's tools need updating. Downloaded books still play. Run Set up to update them.";
+  }
+  return _p.ERROR_TEXT.no_venv.body;
+}
+
 // The command that installs the missing tools (ARCHITECTURE §4.1): `ffprobe`
 // comes from `ffmpeg`, duplicates collapse, and the first-seen order is kept so
 // the same status always shows the same command. Nothing missing gives "".

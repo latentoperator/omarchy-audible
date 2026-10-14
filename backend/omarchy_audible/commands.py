@@ -35,7 +35,7 @@ from .auth import (
     read_account_record,
     valid_session_id,
 )
-from .bootstrap import run_setup, venv_state
+from .bootstrap import migrate_legacy_marker, run_setup, venv_state
 from .catalog import open_client, run_sync
 from .download import FAKE_FAIL_MODES, parse_fake_chapters, run_get
 from .errors import Cancelled, PipelineError
@@ -206,6 +206,7 @@ def cmd_status(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -
 
     missing = _missing_required_tools()
     authenticated = paths.auth_file.is_file()
+    migrate_legacy_marker(paths.venv_dir)
     environment_state = venv_state(paths.venv_dir)
     venv = environment_state == "current_ready"
     record = read_account_record(paths)

@@ -101,8 +101,9 @@ ColumnLayout {
 
     Text {
       Layout.fillWidth: true
-      text: Signin.setupLine(root.service ? root.service.settingUp : false,
-        root.service ? root.service.runner.progress : null)
+      text: root.service && root.service.settingUp
+        ? Signin.setupLine(true, root.service.runner.progress)
+        : Onboarding.setupText(root.status)
       textFormat: Text.PlainText
       wrapMode: Text.WordWrap
       color: Color.muted
