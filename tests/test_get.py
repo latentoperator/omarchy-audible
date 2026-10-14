@@ -848,7 +848,8 @@ def test_partial_drops_an_inherited_default_acl(tmp_path):
         pytest.skip("this filesystem has no POSIX ACLs")
     partial = books / "B00FAKE01" / dl.PARTIAL_DIRNAME
 
-    dl.fsutil.ensure_private_staging_dir(partial)
+    partial.parent.mkdir()
+    dl.fsutil.make_private_staging_dir(partial)
 
     acl = subprocess.run(
         ["getfacl", "-c", "-p", str(partial)],
@@ -864,3 +865,73 @@ def test_partial_drops_an_inherited_default_acl(tmp_path):
     )
     proc.wait()
     assert stat.S_IMODE(voucher.stat().st_mode) == 0o600
+
+
+def test_a_leftover_partial_symlink_is_unlinked_not_followed(tmp_path):
+    """A ``.partial`` symlink to someone's directory is never written through."""
+    book = tmp_path / "B00FAKE01"
+    book.mkdir(mode=0o755)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "B00FAKE01.voucher").write_text("planted", encoding="utf-8")
+    partial = book / dl.PARTIAL_DIRNAME
+    partial.symlink_to(elsewhere)
+
+    dl._make_partial(partial)
+
+    assert not partial.is_symlink()
+    assert stat.S_IMODE(partial.stat().st_mode) == 0o700
+    assert list(partial.iterdir()) == []
+    assert (elsewhere / "B00FAKE01.voucher").read_text(encoding="utf-8") == "planted"
+
+
+def test_a_partial_that_cannot_be_removed_stops_the_download(tmp_path, monkeypatch):
+    """Fail closed: a ``.partial/`` still there after cleanup is never reused."""
+    book = tmp_path / "B00FAKE01"
+    book.mkdir()
+    partial = book / dl.PARTIAL_DIRNAME
+    partial.mkdir(mode=0o755)
+    monkeypatch.setattr(dl, "_rmtree", lambda path: None)
+
+    with pytest.raises(PipelineError) as excinfo:
+        dl._make_partial(partial)
+
+    assert excinfo.value.code == "unsafe_path"
+
+
+def test_a_book_dir_that_is_not_ours_stops_the_download(tmp_path, monkeypatch):
+    book = tmp_path / "B00FAKE01"
+    book.mkdir()
+    monkeypatch.setattr(dl.fsutil.os, "geteuid", lambda: os.getuid() + 1)
+
+    with pytest.raises(PipelineError) as excinfo:
+        dl._make_partial(book / dl.PARTIAL_DIRNAME)
+
+    assert excinfo.value.code == "unsafe_path"
+    assert not (book / dl.PARTIAL_DIRNAME).exists()
+
+
+def test_a_shared_writable_book_dir_loses_its_group_and_other_write(tmp_path):
+    """Nobody else may swap ``.partial`` for a directory of their own."""
+    book = tmp_path / "B00FAKE01"
+    book.mkdir()
+    book.chmod(0o777)
+
+    dl._make_partial(book / dl.PARTIAL_DIRNAME)
+
+    assert stat.S_IMODE(book.stat().st_mode) == 0o755
+
+
+def test_ffprobe_runs_under_the_private_umask(tmp_path, monkeypatch):
+    seen: dict = {}
+
+    def fake_run(argv, **kwargs):
+        seen.update(kwargs)
+        import subprocess
+
+        return subprocess.CompletedProcess(argv, 0, stdout="1.0\n", stderr="")
+
+    monkeypatch.setattr(dl.subprocess, "run", fake_run)
+    monkeypatch.setattr(dl, "_tool", lambda name: name)
+    dl.probe_duration_ms(tmp_path / "book.audio.tmp")
+    assert seen.get("umask") == dl.PRIVATE_UMASK

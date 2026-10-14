@@ -250,6 +250,30 @@ def _rmtree(path: Path) -> None:
     shutil.rmtree(path, ignore_errors=True)
 
 
+def _make_partial(partial: Path) -> None:
+    """Start ``.partial/`` afresh as a private ``0700`` directory, or refuse.
+
+    The voucher audible-cli writes here holds the book's key, and the books
+    folder may be traversable by other local users. A leftover symlink is
+    unlinked (never followed), the old tree is removed, and the directory is
+    then created new; if anything is still in the way, or the book directory
+    is not ours or is writable by others, the download stops before any child
+    starts (``fsutil.make_private_staging_dir``).
+    """
+    if partial.is_symlink():
+        _unlink(partial)
+    _rmtree(partial)
+    try:
+        fsutil.make_private_staging_dir(partial)
+    except OSError as exc:
+        log(f"the staging folder could not be made private: {type(exc).__name__}")
+        raise PipelineError(
+            protocol.ErrorCode.UNSAFE_PATH,
+            "the download's staging folder could not be made private",
+            hint="check that the book folder belongs to you and only you can write to it",
+        ) from exc
+
+
 def _unlink(path: Path) -> None:
     try:
         path.unlink()
@@ -375,6 +399,7 @@ def probe_duration_ms(path: Path) -> int | None:
         capture_output=True,
         text=True,
         check=False,
+        umask=PRIVATE_UMASK,
     )
     if result.returncode != 0:
         return None
@@ -796,8 +821,7 @@ def _real_fetch(
         if exc.code != protocol.ErrorCode.NO_VOUCHER:
             raise
         log("the aaxc download offered no voucher; retrying as aax")
-    _rmtree(partial)
-    fsutil.ensure_private_staging_dir(partial)
+    _make_partial(partial)
     # The metadata size is the aaxc file's; the aax file's size is not known
     # in advance, so its progress events carry no total (the UI then shows no
     # percent rather than a wrong one).
@@ -905,11 +929,7 @@ def run_get(
         # The book directory is untouched from here until the commit below: a
         # failure at any earlier step leaves the previous copy exactly as it was.
         target_dir.mkdir(parents=True, exist_ok=True)
-        _rmtree(partial)
-        # ``0700`` before any child starts: the voucher audible-cli writes
-        # here holds the book's key, and the books folder may be traversable
-        # by other local users.
-        fsutil.ensure_private_staging_dir(partial)
+        _make_partial(partial)
 
         if fake:
             raw = _fake_fetch(asin, partial, emit, tracker, fake_fail, chapter_count)
