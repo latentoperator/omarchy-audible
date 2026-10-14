@@ -6,7 +6,7 @@ Your Audible audiobooks in the [Omarchy](https://omarchy.org) bar. Click the boo
 
 - **A library drawer** with search, four sorts (recently listened, recently added, title, author) and filters for downloaded or in-progress books.
 - **A mini player** with cover, chapter, back and forward skips, speed, scrub and Stop. Open the full view for the chapter list and a sleep timer.
-- **Downloads on demand.** A book downloads only when you pick it, and one click removes it from your computer again. Removing never touches your Audible account.
+- **Downloads on demand.** Pick a book and confirm Download to keep it on your computer. Ordinary cached books have one-click removal in Library; books no longer in your Audible library need an extra warning and confirmation. Removing never touches your Audible account.
 - **Your place follows you.** Start on your phone and carry on here at the same spot, or the other way round.
 - **Sign in from the drawer.** Amazon's own sign-in page opens in your browser, so passwords, passkeys, two-step codes and captchas all stay there.
 - **Playback survives** closing the panel and restarting the shell.
@@ -50,7 +50,7 @@ A middle click on the bar icon plays or pauses the loaded book.
 
 When you play a book, the plugin checks Audible for a newer position from another device and moves there if it finds one. While you listen, it sends your position back about once a minute and again when you pause or stop, so your phone can pick up where you left off. Whichever device you listened on most recently wins: the plugin never overwrites a position from more recent listening on another device.
 
-Without a network connection, downloaded books still play and the drawer shows the last synced library, with cloud books marked **Offline**. A book that has left your Audible library but is still downloaded stays playable and is marked **No longer in your Audible library**.
+Without a network connection, downloaded books still play and the drawer shows the last synced library, with cloud books marked **Offline**. A book that has left your Audible library but is still downloaded stays playable and is marked **No longer in your Audible library**. Removing that copy requires a title-specific confirmation because re-download may be unavailable; bulk removal and auto-remove leave it alone.
 
 ## Hotkeys and IPC
 
@@ -128,9 +128,9 @@ The plugin itself is QML and Python source. Nothing is compiled, and the plugin 
 1. Creates a Python virtual environment at `~/.local/share/omarchy-audible/venv` with your system `python3`.
 2. Runs `pip install -r backend/requirements.lock` inside it. That downloads two packages from [PyPI](https://pypi.org) at pinned versions, [`audible-cli`](https://pypi.org/project/audible-cli/) 0.6.0 and [`audible[cryptography]`](https://pypi.org/project/audible/) 0.12.0 (both AGPL-3.0, by mkb79), plus the libraries they depend on: about 30 packages and 75 MB in all. The two named packages are pinned by version, not by hash, and their dependencies resolve to current releases.
 3. Installs this repository's `backend/` package into the same environment. pip fetches the `hatchling` build tool from PyPI to do it.
-4. Imports `audible` and the backend once to prove the environment works, then writes a ready marker.
+4. Checks the installed dependencies, backend, interpreter compatibility and package pins with a bounded offline probe, then writes a ready marker with file fingerprints.
 
-Setup runs once. Running it again does nothing unless `backend/requirements.lock` has changed, A run that fails removes the half-built environment, and a run that was interrupted is cleaned up by the next one, so setup always starts clean. Nothing is installed system-wide.
+Running setup again first probes the environment offline; it does nothing only when the environment is healthy and its pins are current. Missing dependencies, a changed Python interpreter or changed pins trigger repair/rebuilding. If rebuilding fails, the half-built environment is removed and a prior working environment is restored only after it has passed the health probe; broken environments are not kept as usable fallbacks. An interrupted rebuild is checked and recovered on the next setup. The drawer offers **Set up** again when repair or an update is needed, while a usable older fallback can still run. Nothing is installed system-wide.
 
 **Network traffic after setup** goes only to Amazon and Audible: sign-in, library sync, cover images, book downloads, and reading and writing your listening position. All of it comes from the Python backend; the shell side of the plugin makes no network requests.
 
@@ -152,7 +152,7 @@ It reads `~/.audible` only if you choose **Use existing audible-cli login**, and
 
 1. Click **Stop** in the player, so no player is left running.
 2. Optionally, click **Remove all downloads** in the drawer to delete the books from this computer. Your Audible library is not affected.
-3. Click **Disconnect**. This removes the plugin's login and, if you signed in through the drawer, deregisters this computer from your Amazon account. An imported audible-cli login stays registered, because audible-cli still uses it. Downloaded books stay unless you removed them in step 2.
+3. Click **Disconnect**. This removes the plugin's local login and attempts to deregister only the device created by drawer sign-in, when saved ownership matches the login identity. Imported or unverified devices stay registered. Downloaded books stay unless you removed them in step 2.
 4. Remove the plugin. This takes the icon off the bar and deletes the plugin folder:
 
    ```sh
@@ -171,10 +171,10 @@ Deregistering needs a network connection. If you remove the plugin without disco
 ## FAQ
 
 **Does removing a book delete it from Audible?**
-No. **Remove from this device** and **Remove all downloads** delete only the files on this computer. The book stays in your Audible library as a cloud book, and downloading it again resumes where you were.
+No. **Remove from this device** and **Remove all downloads** delete only the files on this computer. A book still in your Audible library remains a cloud book, and downloading it again resumes where you were. A copy marked **No longer in your Audible library** may not be downloadable again; bulk removal skips it and individual removal asks you to confirm.
 
 **Does it change anything on my Audible account?**
-Two things. It writes your listening position, but never over a position from more recent listening on another device. Signing in from the drawer also registers this computer as a device on your account, as the phone app does, and **Disconnect** removes it. It never buys, returns, rates or deletes anything.
+Position write-back is the only change to your Audible library, and never overwrites a position from more recent listening on another device. Separately, signing in from the drawer registers a plugin-created device on your account, as the phone app does. **Disconnect** attempts to deregister only that device when its saved ownership and login identity match; imported or unverified devices are left registered. It never buys, returns, rates or deletes books.
 
 **Are my books stored unlocked?**
 No. Each book is stored exactly as Audible sent it (`book.aaxc` or `book.aax`). The key that plays it is kept in a `0600` file (beside the book, or for older `aax` books with your login) and is used only in memory while the book plays. No decrypted copy is ever written to disk, and there is no export.
@@ -188,8 +188,8 @@ The Audible stores in the United States, United Kingdom, Germany, France, Canada
 **Can it play books I downloaded some other way?**
 No. It plays the books it downloaded itself.
 
-**It says "Audible is limiting downloads for this account right now".**
-That is Audible, not the plugin. Every so often — usually for a day or two — Audible stops licensing downloads for an account, even though the phone app still downloads your books. Omaudible then pauses downloads, tells you when it will try again, and keeps the books that were waiting in the Library as **Waiting**; they start on their own, in the same order, once the pause is over. Your downloaded books still play, and syncing, removing and your listening positions are unaffected. The best thing to do is wait. If you would rather not, **Disconnect** in the drawer and sign in again: a new sign-in registers a new device on your account, which clears Audible's pause, and it is the surest fix. Downloading a few books at a time is a courtesy to Audible's servers, not a rule, so you don't need to change how you use it.
+**It says "Audible is limiting downloads. Downloaded books still play."**
+Audible refused a download license. Omaudible pauses downloads, shows a deadline-derived retry estimate, and keeps waiting books in the Library as **Waiting**. They retry automatically in order when the pause ends, but Audible may still refuse the retry. Downloaded books still play; syncing, removal and position sync continue. The cooldown persists across shell restarts, but the waiting list does not: select those books again after a restart. **Disconnect** discards waiting and queued download intents; reconnecting does not restore them. Signing in again clears the plugin's saved pause and registers a new device, but is not a guarantee Audible will allow downloads.
 
 **It says "Audible connection problem".**
 Audible returned something the plugin didn't expect. Downloaded books still play from the saved library. **Copy diagnostic** copies a short report with credentials removed; include it if you open an issue.
@@ -214,7 +214,7 @@ For Library error states, fake `sync --fake-fail network|internal` exercises off
 **Setup and health**
 
 ```sh
-omarchy-audible setup     # build the private Python env (audible-cli 0.6.0, audible 0.12.0); a second run does nothing
+omarchy-audible setup     # build/repair the private Python env; healthy current installs need no rebuild
 omarchy-audible status    # {"type":"status","ready":true,"authenticated":true,"marketplace":"us","account":"c…@…",…}
 omarchy-audible doctor    # checks python, mpv, ffmpeg/ffprobe, wl-paste, xdg-open, systemd-run, the env and the login
 ```
@@ -255,7 +255,7 @@ omarchy-audible position-get <asin> [<asin>…]          # {"type":"positions","
 omarchy-audible position-push <asin> <ms> --at <iso-8601>
 ```
 
-`position-push` is the only command that changes anything on your Audible account. It re-reads Audible's position first and refuses (`error` code `stale`) if Audible's is newer than your local listening time, so it can't move your phone backwards; `--at` (the local listening time the position came from) is required, and omitting it is `error` code `invalid_args`. Audible stamps a push with its own server clock, so the command also remembers its own writes in `<data dir>/pushed.json` and treats an exactly-matching remote position as its own echo rather than a newer listening. That keeps a computer whose clock runs behind Audible's from locking itself out. `position-get` marks such an echo with `"own": true`. The Audible phone app follows a pushed position on its own, with an undo notice. With `--fake`, positions are kept in `<fake data dir>/fake-account-positions.json` instead of the account, so a push, a resume and the stale check can all be tried with no account.
+`position-push` is the only command that mutates your Audible **library**, by updating the listening position. Authentication is separate: browser sign-in registers a plugin-created device, and Disconnect attempts to deregister only that device when its saved ownership matches the loaded login; imported or unverified devices are never deregistered. Before pushing, `position-push` re-reads Audible's position first and refuses (`error` code `stale`) if Audible's is newer than your local listening time, so it can't move your phone backwards; `--at` (the local listening time the position came from) is required, and omitting it is `error` code `invalid_args`. Audible stamps a push with its own server clock, so the command also remembers its own writes in `<data dir>/pushed.json` and treats an exactly-matching remote position as its own echo rather than a newer listening. That keeps a computer whose clock runs behind Audible's from locking itself out. `position-get` marks such an echo with `"own": true`. The Audible phone app follows a pushed position on its own, with an undo notice. With `--fake`, positions are kept in `<fake data dir>/fake-account-positions.json` instead of the account, so a push, a resume and the stale check can all be tried with no account.
 
 ## Development
 

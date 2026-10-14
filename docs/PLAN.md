@@ -13,6 +13,27 @@ Read [SCOPE.md](SCOPE.md) (what and why) and [ARCHITECTURE.md](ARCHITECTURE.md) 
 - If a task's assumption turns out false, **stop and write it up** in `docs/SPIKE-RESULTS.md` rather than improvising a different design. The maintainer decides.
 - Update the checkbox in this file in the same PR that completes the task.
 
+## v0.1.6 remediation
+
+Source: [v0.1.5 code/UX brief](briefs/REVIEW-v0.1.5-CODE-UX.md). These checkboxes record implementation on `v016`, not a release to `main`. Combined exact-head review, attended BEE fake-mode checks and plugin validation remain before release. Issues #114 (keyboard), #115 (contrast) and #116 (old-shell callbacks) remain open separately. Earlier milestones below are historical task/acceptance records.
+
+- [x] **B01** — Backup/rollback recovery preserves old audio (#126).
+- [x] **B02** — Crash-consistent credential provenance (#123).
+- [x] **B03** — Safe default/fallback books roots (#124).
+- [x] **B04** — Setup health checks and repair (#128).
+- [x] **B05** — Catalog ASIN and cover-path validation (#125).
+- [x] **R01** — Multiline denial parsing (#125).
+- [x] **S01** — Disconnect drops held/queued downloads (#129).
+- [x] **S02** — Resume replies belong to the current play intent (#130).
+- [x] **S03** — Empty-pause settlement and bounded status refresh (#129).
+- [x] **S04** — Cancellation survives throttled completion (#129).
+- [x] **U01** — Explicit orphan-removal protection (#127).
+- [x] **U02** — Destructive-confirmation lifecycle reset (#131).
+- [x] **U03** — Full position-sync warning (#131).
+- [x] **U04** — Input-preserving paste errors (#131).
+- [x] **U05** — Deadline-derived throttle/retry copy (#131).
+- [x] **D01** — Current docs, changelog and 0.1.6 version reconciliation (integration PR).
+
 ## Dependency graph (summary)
 
 ```
@@ -284,7 +305,7 @@ Placed by Dante. Order: B14 lands on `b11` before it merges, then the rest in th
 2. `make test` and `make lint` pass (lint includes `omarchy plugin validate .` and the no-symlink check); new behavior has tests (or a MANUAL-TEST entry for QML).
 3. No secrets, real library data, or personal paths in the diff.
 4. No hard-coded colors in QML; theme tokens only.
-5. No code path that mutates the Audible account other than position write-back.
+5. Position write-back is the only library mutation. Browser sign-in registers a plugin-created device; logout deregisters only that proven device (ARCHITECTURE §4.7), never an imported device. No Audible book delete/return endpoints.
 6. Docs updated if behavior or protocol changed (ARCHITECTURE/protocol schemas first, then code).
 
 ## Suggested order for a single agent working alone

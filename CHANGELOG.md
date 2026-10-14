@@ -2,6 +2,27 @@
 
 All notable changes to Omaudible. Versions follow `manifest.json`.
 
+## 0.1.6 (unreleased)
+
+### Fixed
+
+- B01: Failed re-download backup/install moves now restore the previous book; if rollback itself fails, recovery files are retained and retry refuses rather than deleting the only copy.
+- B02: Interrupted sign-in/import can no longer authorize deregistering an external audible-cli device; Disconnect requires matching plugin-owned device identity.
+- B03: Unsafe default and fallback books folders now fail closed, including fake-mode symlink escapes, without touching files outside the safe books root.
+- B04: Setup detects broken dependencies, incompatible Python and stale pins, repairs instead of silently succeeding, and restores a previous environment only if it is usable.
+- B05: Malformed catalog identifiers and escaping cover paths are rejected before fetching or writing covers outside the cache.
+- R01: Multiline license-denial messages now retain throttling recognition without exposing book details or credentials in diagnostics.
+- S01: Disconnect discards held and queued downloads; delayed status replies cannot start them after sign-out or reconnect.
+- S02: Stop, replay and book switches invalidate old resume replies so only the latest play intent chooses the start position.
+- S03: Expired download pauses clear even with no waiting books; status refreshes are deduplicated and failures back off instead of polling every second.
+- S04: Cancelling a download during a throttled completion no longer puts that book back in the waiting list; completed installs still count as successful.
+- U01: Removing a book no longer in your Audible library requires a title-specific warning and confirmation in Library and Full; bulk removal and auto-remove preserve it.
+- U02: Remove-all and Disconnect confirmations reset on dismissal, view changes and changes to eligible books; Esc dismisses the question first.
+- U03: The unresolved position-sync warning now stays visible in Full as well as Mini and clears after a successful push.
+- U04: Failed clipboard pastes preserve existing input and explain size, timeout and unavailable-clipboard errors without showing pasted secrets.
+- U05: Download-throttle errors and the waiting banner now agree: downloaded books still play, with one deadline-based automatic-retry estimate rather than a contradictory “tomorrow” instruction.
+- D01: Current-state, locked-original playback, setup-recovery and device-versus-library mutation documentation now match the implementation; earlier decisions and test logs remain historical.
+
 ## 0.1.5 (2026-10-14)
 
 ### Added
