@@ -117,6 +117,8 @@ Item {
   // passes (0.1.5, ARCHITECTURE 4.8). A shell restart loses the list; the
   // backend's own pause keeps the app from asking again meanwhile.
   property var held: Held.create()
+  property int downloadLifecycle: 0
+  property bool downloadsDisconnected: false
   readonly property string downloadsPausedUntil: Held.until(held)
   readonly property bool downloadsPaused: Held.paused(held, statusAtMs)
   property string pendingResume: ""
@@ -247,8 +249,44 @@ Item {
       logEvent(command, "refused: dev flag not read yet")
       return false
     }
+    if (command === "get" && !jobAllowed({ "command": command })) return false
+    if (command === "status") purpose = "status:" + downloadLifecycle
     runner.run(command, args, purpose)
     return true
+  }
+
+  // Disconnect discards waiting intents before logout enters the job queue.
+  function beginDisconnect() {
+    downloadsDisconnected = true
+    downloadLifecycle += 1
+    held = Held.create()
+    confirmAsin = ""
+    schedulePauseWake()
+    var pending = runner.pendingJobs.slice()
+    for (var index = 0; index < pending.length; index++) {
+      var job = pending[index]
+      if (job && job.command === "get" && job.asin) runner.cancel(job.asin)
+    }
+  }
+
+  function finishDisconnect() {
+    // Invalidate reads started while logout waited for the exclusive job slot.
+    downloadLifecycle += 1
+  }
+
+  function downloadsConnected() {
+    downloadLifecycle += 1
+    downloadsDisconnected = false
+  }
+
+  function jobAllowed(job) {
+    if (job.command === "get")
+      return !downloadsDisconnected && status && status.authenticated === true
+    return removals.jobAllowed(job)
+  }
+
+  function statusCurrent(job) {
+    return job.command === "status" && job.purpose === "status:" + downloadLifecycle
   }
 
   function acknowledgeBooksLocation() {
@@ -536,7 +574,7 @@ Item {
   // A `release`: the pause is over, so the held downloads go to the runner in
   // the order they were held. A refusal again holds them straight back.
   function runHeldEffect(effect) {
-    if (!effect || effect.kind !== Held.EFFECT_RELEASE) return
+    if (!effect || effect.kind !== Held.EFFECT_RELEASE || !jobAllowed({ "command": "get" })) return
     logEvent("get", "pause over: " + effect.asins.length + " download(s) resume")
     for (var index = 0; index < effect.asins.length; index++) run("get", [effect.asins[index]], "download")
   }
@@ -641,6 +679,7 @@ Item {
   // it: none of them would be served, and asking again is another license
   // request. They come back in order when the pause ends (ARCHITECTURE 4.8).
   function holdRefusedDownloads(job, outcome) {
+    if (!jobAllowed({ "command": "get" })) return
     var failed = job.asin ? job.asin : ""
     var queued = []
     var pending = runner.pendingJobs
@@ -1024,7 +1063,7 @@ Item {
 
   JobRunner {
     id: runner
-    gate: removals.jobAllowed
+    gate: root.jobAllowed
     launcher: root.pluginDir + "/bin/omarchy-audible"
     environment: {
       var values = root.fake ? { "OMARCHY_AUDIBLE_FAKE": "1" } : {}
@@ -1036,16 +1075,22 @@ Item {
     onEvent: function(record, job) {
       var silentAckFailure = ""
       if (record.type === "status") {
+        if (!root.statusCurrent(job)) return
         root.status = record
         root.statusAtMs = Date.now()
         root.refreshCatalogAge()
         root.refreshLocal()
         // The backend's pause is the authority: while it runs, nothing is
         // asked for; once it is over, the held downloads go again (0.1.5).
-        root.applyHeld({
-          "type": Held.EVENT_STATUS, "until": record.downloads_paused_until,
-          "now": Date.now()
-        })
+        if (root.jobAllowed({ "command": "get" })) {
+          root.applyHeld({
+            "type": Held.EVENT_STATUS, "until": record.downloads_paused_until,
+            "now": Date.now()
+          })
+        } else {
+          root.held = Held.create()
+          root.schedulePauseWake()
+        }
         var ackStep = BooksLocation.ackStep(root.booksAckState, record,
           root.downloadActive(), root.settingsReceived)
         root.booksAckState = ackStep.state
