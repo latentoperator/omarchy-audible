@@ -29,11 +29,10 @@ Pipeline, in order:
    commit, so a cancel that lands in it is delivered only once the book is
    whole (F35). An old ``book.m4b`` therefore never sits beside a locked file
    (B14).
-7. On any failure or SIGTERM, ``.partial/`` and every temp file are removed and
-   the book directory is left exactly as it was: nothing new reaches it before
-   the commit, and a failure inside the commit puts the old files back, so a
-   failed or cancelled re-download never costs the user a playable book
-   (ARCHITECTURE 4.3, 4.8).
+7. A failure inside the commit restores the old files, including incomplete
+   backups. Cleanup removes ``.partial/`` unless rollback failed: unresolved
+   backups are kept there, and a later ``get`` refuses rather than deleting
+   recovery data (B01, ARCHITECTURE 4.3, 4.8).
 
 No ``ffmpeg`` or ``ffprobe`` argv here ever contains a key, iv or activation
 bytes: the key is written to ``key.json`` and only read again by ``play-info``.
@@ -250,6 +249,27 @@ def _rmtree(path: Path) -> None:
     shutil.rmtree(path, ignore_errors=True)
 
 
+def _has_recovery(partial: Path) -> bool:
+    if partial.is_symlink():
+        return False
+    try:
+        (partial / _OLD_DIRNAME).lstat()
+    except (FileNotFoundError, NotADirectoryError):
+        return False
+    except OSError:
+        # An unreadable backup is not evidence that it is safe to delete.
+        return True
+    return True
+
+
+def _recovery_error(code: str = protocol.ErrorCode.UNSAFE_PATH) -> PipelineError:
+    return PipelineError(
+        code,
+        "the previous book needs recovery; its staging files were kept",
+        hint="preserve .partial/old and restore the previous book before retrying",
+    )
+
+
 def _make_partial(partial: Path) -> None:
     """Start ``.partial/`` afresh as a private ``0700`` directory, or refuse.
 
@@ -258,8 +278,11 @@ def _make_partial(partial: Path) -> None:
     unlinked (never followed), the old tree is removed, and the directory is
     then created new; if anything is still in the way, or the book directory
     is not ours or is writable by others, the download stops before any child
-    starts (``fsutil.make_private_staging_dir``).
+    starts (``fsutil.make_private_staging_dir``). An unresolved commit backup
+    is never removed: it may hold the only remaining copy of the old book.
     """
+    if _has_recovery(partial):
+        raise _recovery_error()
     try:
         if partial.is_symlink():
             _unlink(partial)
@@ -281,39 +304,26 @@ def _unlink(path: Path) -> None:
         pass
 
 
-def _clear_local(directory: Path, aside: Path) -> list[str]:
-    """Move a previous copy's audio, key, chapters and meta into ``aside``.
-
-    Called only at the commit step of a download, once everything in
-    ``.partial/`` has been built and checked, so a directory never holds a
-    ``.m4b`` beside a locked file (B11, B14). The files are renamed, not
-    deleted, so :func:`_restore_local` can put the previous copy back byte for
-    byte when the commit fails partway; ``aside`` lives inside ``.partial/``,
-    so it goes away with the rest of the staging directory (F35).
-
-    Returns the names that were moved.
-    """
-    moved: list[str] = []
+def _clear_local(directory: Path, aside: Path, moved: list[str]) -> None:
+    """Back up old files, journalling each move even if a later one fails."""
     for name in (*AUDIO_FILENAMES, KEY_FILENAME, CHAPTERS_FILENAME, META_FILENAME):
         source = directory / name
         if source.is_file():
             os.replace(source, aside / name)
             moved.append(name)
-    return moved
 
 
-def _restore_local(directory: Path, aside: Path, moved: Iterable[str]) -> None:
-    """Put back exactly what :func:`_clear_local` moved aside (F35).
-
-    Anything the failed commit installed is removed first, then the previous
-    files are renamed back, so the directory is left as it was: same files,
-    sizes, mtimes and modes (B14).
-    """
-    for name in (*AUDIO_FILENAMES, KEY_FILENAME, CHAPTERS_FILENAME, META_FILENAME):
-        if name not in moved:
-            _unlink(directory / name)
-    for name in moved:
+def _restore_local(
+    directory: Path, aside: Path, moved: Iterable[str], installed: Iterable[str]
+) -> None:
+    """Undo only journalled changes; keep backups if any restore fails (B01)."""
+    for name in installed:
+        _unlink(directory / name)
+    # Restore sidecars before audio, so a failed key restore cannot leave old
+    # audio paired with the replacement's key.
+    for name in sorted(moved, key=lambda name: name in AUDIO_FILENAMES):
         os.replace(aside / name, directory / name)
+    aside.rmdir()
 
 
 def _reclaimable_bytes(partial: Path) -> int:
@@ -325,7 +335,7 @@ def _reclaimable_bytes(partial: Path) -> int:
     download has been staged, so those bytes are not free while the fetch runs
     (F34).
     """
-    return dir_size(partial) if partial.is_dir() else 0
+    return dir_size(partial) if partial.is_dir() and not _has_recovery(partial) else 0
 
 
 def _free_bytes(path: Path) -> int:
@@ -942,9 +952,10 @@ def run_get(
 
     The whole book is built in ``.partial/`` and only moved into the book
     directory once it has been verified there, so a failure or a cancel leaves
-    a previous copy untouched. ``.partial/`` and every temp file are removed on
-    success and on every failure path, and the final audio only ever appears
-    through an atomic rename. ``fake_chapters`` (and
+    a previous copy untouched when rollback succeeds. An unresolved backup
+    keeps ``.partial/`` and prevents retries from wiping recovery data (B01);
+    otherwise staging is removed. The final audio only ever appears through
+    an atomic rename. ``fake_chapters`` (and
     ``OMARCHY_AUDIBLE_FAKE_CHAPTERS``) only affects fake mode.
     """
     tracker = children if children is not None else ChildTracker()
@@ -966,6 +977,8 @@ def run_get(
 
     target_dir = book_dir(paths.books_dir, asin)
     partial = target_dir / PARTIAL_DIRNAME
+    if _has_recovery(partial):
+        raise _recovery_error()
 
     if fake:
         chapter_count = _resolve_chapter_count(fake_chapters)
@@ -1039,35 +1052,48 @@ def run_get(
         signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM})
         try:
             aside = partial / _OLD_DIRNAME
-            aside.mkdir(parents=True, exist_ok=True)
-            moved = _clear_local(target_dir, aside)
+            aside.mkdir(mode=0o700)
+            moved: list[str] = []
+            installed: list[str] = []
             try:
+                _clear_local(target_dir, aside, moved)
                 os.replace(staged_key, target_dir / KEY_FILENAME)
+                installed.append(KEY_FILENAME)
                 if raw.chapters:
                     os.replace(staged_chapters, target_dir / CHAPTERS_FILENAME)
+                    installed.append(CHAPTERS_FILENAME)
                 final = target_dir / f"book.{raw.container}"
                 os.replace(staged_audio, final)
+                installed.append(final.name)
                 if fake:
                     fakestate.ensure_activation_bytes(paths)
+                installed.append(META_FILENAME)
                 write_meta(
                     target_dir,
                     _meta_payload(asin, paths, raw, final, duration_ms, acr),
                 )
                 committed = True
             except BaseException:
-                _restore_local(target_dir, aside, moved)
+                try:
+                    _restore_local(target_dir, aside, moved, installed)
+                except BaseException as exc:
+                    log(f"restoring the previous book failed: {type(exc).__name__}")
+                    raise _recovery_error(protocol.ErrorCode.INTERNAL) from exc
                 raise
         finally:
             signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGTERM})
     except Cancelled:
         if not committed:
+            if _has_recovery(partial):
+                raise _recovery_error(protocol.ErrorCode.INTERNAL) from None
             raise
         # The SIGTERM was pending across the commit and was delivered at the
         # unblock above. The new book is already whole and local, so the run is
         # a success, not a cancel (F35).
     finally:
         tracker.terminate_all()
-        _rmtree(partial)
+        if committed or not _has_recovery(partial):
+            _rmtree(partial)
     assert final is not None
     # A book that came down proves the account is not being throttled, so the
     # next refusal starts its count again (ARCHITECTURE 4.2).
