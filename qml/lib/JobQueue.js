@@ -80,7 +80,7 @@ function complete(state, result) {
   var job = state.active;
   state.active = null;
   if (!isNull(result) && result.busy === true) {
-    if (job.retried !== true) {
+    if (job.retried !== true && job.cancelRequested !== true) {
       job.retried = true;
       state.pending.unshift(job);
       return action(ACTION_RETRY, job, state.busyDelayMs, result);
@@ -100,6 +100,9 @@ function cancel(state, asin) {
     return action(CANCEL_NONE, null, 0, null);
   }
   if (!isNull(state.active) && state.active.command === "get" && state.active.asin === asin) {
+    // This object is also owned by BackendCall through the exit-drain window.
+    // Keep the intent on the request, not the ASIN (a later retry is new work).
+    state.active.cancelRequested = true;
     return action(CANCEL_SEND, state.active, 0, null);
   }
   for (var index = 0; index < state.pending.length; index++) {

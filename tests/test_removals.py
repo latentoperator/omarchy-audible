@@ -245,7 +245,6 @@ def test_removals_owns_the_list_and_its_timers():
         "flushRemovals",
         "abandonRemovals",
         "removeIfStillFinished",
-        "function jobAllowed",
     ):
         assert gone not in service, gone
     assert service.count("Removals {") == 1
@@ -253,7 +252,8 @@ def test_removals_owns_the_list_and_its_timers():
     block = block[: block.index("\n  }\n") + 1]
     for line in ("id: removals", "service: root", "player: player", "library: library"):
         assert f"    {line}\n" in block, line
-    assert "gate: removals.jobAllowed" in service
+    assert "gate: root.jobAllowed" in service
+    assert "return removals.jobAllowed(job)" in function_body(service, "jobAllowed")
 
 
 def test_service_keeps_the_names_views_use():

@@ -117,6 +117,16 @@ Item {
   // passes (0.1.5, ARCHITECTURE 4.8). A shell restart loses the list; the
   // backend's own pause keeps the app from asking again meanwhile.
   property var held: Held.create()
+  property int downloadLifecycle: 0
+  property int statusLifecycle: -1
+  property bool downloadsDisconnected: false
+  // One current status read; failed pause refreshes retry separately from the
+  // cooldown clock, so a missing/slow reply never spawns a one-second loop.
+  property string statusRequest: ""
+  property int statusSerial: 0
+  property bool statusAgain: false
+  property bool statusRefreshNeeded: false
+  property int statusRetryMs: 30000
   readonly property string downloadsPausedUntil: Held.until(held)
   readonly property bool downloadsPaused: Held.paused(held, statusAtMs)
   property string pendingResume: ""
@@ -247,8 +257,81 @@ Item {
       logEvent(command, "refused: dev flag not read yet")
       return false
     }
+    if (command === "get" && !jobAllowed({ "command": command })) return false
+    if (command === "status") return requestStatus(purpose)
     runner.run(command, args, purpose)
     return true
+  }
+
+  // Disconnect discards waiting intents before logout enters the job queue.
+  function beginDisconnect() {
+    downloadsDisconnected = true
+    downloadLifecycle += 1
+    invalidateStatus()
+    held = Held.create()
+    confirmAsin = ""
+    schedulePauseWake()
+    var pending = runner.pendingJobs.slice()
+    for (var index = 0; index < pending.length; index++) {
+      var job = pending[index]
+      if (job && job.command === "get" && job.asin) runner.cancel(job.asin)
+    }
+  }
+
+  function finishDisconnect() {
+    // Invalidate reads started while logout waited for the exclusive job slot.
+    downloadLifecycle += 1
+    invalidateStatus()
+  }
+
+  function downloadsConnected() {
+    downloadLifecycle += 1
+    invalidateStatus()
+    downloadsDisconnected = false
+  }
+
+  function jobAllowed(job) {
+    if (job.command === "get")
+      return !downloadsDisconnected && statusLifecycle === downloadLifecycle && status && status.authenticated === true
+    return removals.jobAllowed(job)
+  }
+
+  function invalidateStatus() {
+    statusRequest = ""
+    statusAgain = false
+    statusRefreshNeeded = false
+    statusRetryMs = 30000
+    statusRetryTimer.stop()
+  }
+
+  function requestStatus(purpose) {
+    if (statusRequest.length > 0) {
+      // Coalesce ordinary checks too, but keep one follow-up for changed
+      // settings/job completion while the existing process was reading.
+      if (purpose !== "pause-refresh") statusAgain = true
+      return true
+    }
+    statusRetryTimer.stop()
+    statusRequest = "status:" + downloadLifecycle + ":" + (++statusSerial)
+    runner.run("status", [], statusRequest)
+    return true
+  }
+
+  function statusCurrent(job) {
+    return job.command === "status" && statusRequest.length > 0 && job.purpose === statusRequest
+  }
+
+  function finishStatus(job) {
+    if (!statusCurrent(job)) return
+    statusRequest = ""
+    if (statusAgain) {
+      statusAgain = false
+      run("status", [])
+    } else if (statusRefreshNeeded && !downloadsDisconnected) {
+      statusRetryTimer.interval = statusRetryMs
+      statusRetryMs = Math.min(300000, statusRetryMs * 2)
+      statusRetryTimer.restart()
+    }
   }
 
   function acknowledgeBooksLocation() {
@@ -536,7 +619,7 @@ Item {
   // A `release`: the pause is over, so the held downloads go to the runner in
   // the order they were held. A refusal again holds them straight back.
   function runHeldEffect(effect) {
-    if (!effect || effect.kind !== Held.EFFECT_RELEASE) return
+    if (!effect || effect.kind !== Held.EFFECT_RELEASE || !jobAllowed({ "command": "get" })) return
     logEvent("get", "pause over: " + effect.asins.length + " download(s) resume")
     for (var index = 0; index < effect.asins.length; index++) run("get", [effect.asins[index]], "download")
   }
@@ -633,15 +716,19 @@ Item {
   // case `status` is slow or the read fails — then read the real one, which
   // releases whatever is still held (0.1.5, ARCHITECTURE 4.2).
   function onPauseElapsed() {
+    var hadPause = downloadsPausedUntil.length > 0
     applyHeld({ "type": Held.EVENT_NOW, "now": Date.now() })
-    run("status", [])
+    if (!hadPause || downloadsDisconnected) return
+    statusRefreshNeeded = true
+    run("status", [], "pause-refresh")
   }
 
   // Hold the book Audible just refused, and every `get` still queued behind
   // it: none of them would be served, and asking again is another license
   // request. They come back in order when the pause ends (ARCHITECTURE 4.8).
   function holdRefusedDownloads(job, outcome) {
-    var failed = job.asin ? job.asin : ""
+    if (!jobAllowed({ "command": "get" })) return
+    var failed = job.cancelRequested === true ? "" : (job.asin ? job.asin : "")
     var queued = []
     var pending = runner.pendingJobs
     for (var index = 0; index < pending.length; index++) {
@@ -971,6 +1058,12 @@ Item {
   }
 
   Timer {
+    id: statusRetryTimer
+    repeat: false
+    onTriggered: root.run("status", [], "pause-refresh")
+  }
+
+  Timer {
     id: settingsTimer
     interval: 1000
     repeat: false
@@ -1024,7 +1117,7 @@ Item {
 
   JobRunner {
     id: runner
-    gate: removals.jobAllowed
+    gate: root.jobAllowed
     launcher: root.pluginDir + "/bin/omarchy-audible"
     environment: {
       var values = root.fake ? { "OMARCHY_AUDIBLE_FAKE": "1" } : {}
@@ -1036,16 +1129,26 @@ Item {
     onEvent: function(record, job) {
       var silentAckFailure = ""
       if (record.type === "status") {
+        if (!root.statusCurrent(job)) return
+        root.statusRefreshNeeded = false
+        root.statusRetryMs = 30000
+        statusRetryTimer.stop()
+        root.statusLifecycle = root.downloadLifecycle
         root.status = record
         root.statusAtMs = Date.now()
         root.refreshCatalogAge()
         root.refreshLocal()
         // The backend's pause is the authority: while it runs, nothing is
         // asked for; once it is over, the held downloads go again (0.1.5).
-        root.applyHeld({
-          "type": Held.EVENT_STATUS, "until": record.downloads_paused_until,
-          "now": Date.now()
-        })
+        if (root.jobAllowed({ "command": "get" })) {
+          root.applyHeld({
+            "type": Held.EVENT_STATUS, "until": record.downloads_paused_until,
+            "now": Date.now()
+          })
+        } else {
+          root.held = Held.create()
+          root.schedulePauseWake()
+        }
         var ackStep = BooksLocation.ackStep(root.booksAckState, record,
           root.downloadActive(), root.settingsReceived)
         root.booksAckState = ackStep.state
@@ -1074,6 +1177,7 @@ Item {
     }
 
     onJobFinished: function(job, outcome) {
+      if (job.command === "status") root.finishStatus(job)
       var text = outcome.ok ? "ok" : String(outcome.code) + (Signin.isOnboardingCommand(job.command)
         ? "" : ": " + String(outcome.message || ""))
       signinFlow.handleFinished(job, outcome)
