@@ -130,6 +130,9 @@ Item {
   readonly property string downloadsPausedUntil: Held.until(held)
   readonly property bool downloadsPaused: Held.paused(held, statusAtMs)
   property string pendingResume: ""
+  // Only the current read keeps a result; an obsolete read has no slot to write.
+  property var resumeRequest: null
+  property int resumeSerial: 0
   // The book a `play-info` is being read for (B11; PlayRequest.js), or null.
   // Only the newest request plays: a newer intent or a quit drops it, and a
   // reply for an older one is ignored.
@@ -139,7 +142,6 @@ Item {
   // views' "Couldn't start playback" line.
   property string playError: ""
   readonly property string playFailure: Player.playFailure(player.connection, player.lastError, playError)
-  property var resumeRemotes: ({})
 
   // ⏯ catching up with other devices (qml/CatchupFlow.qml): the book a ⏯
   // waits on an account read for, and the Mini line after a jump.
@@ -385,13 +387,15 @@ Item {
     // were read would replace them.
     if (!store.loaded) return "error: state not loaded yet"
     if (!/^[A-Za-z0-9]+$/.test(asin)) return "error: bad asin"
-    if (startSec >= 0) {
-      pendingResume = ""
-      return playNow(asin, startSec)
-    }
+    pendingResume = ""
+    resumeRequest = null
+    playRequest = null
+    if (startSec >= 0) return playNow(asin, startSec)
     pendingResume = asin
-    if (!run("position-get", [asin], "resume")) {
+    resumeRequest = { "asin": asin, "purpose": "resume:" + (++resumeSerial), "remote": null }
+    if (!run("position-get", [asin], resumeRequest.purpose)) {
       pendingResume = ""
+      resumeRequest = null
       return playNow(asin, cachedStartSec(asin))
     }
     return "ok"
@@ -464,9 +468,24 @@ Item {
     Quickshell.execDetached(["systemctl", "--user", "stop", "omarchy-audible-fake-mpv.scope"])
   }
 
-  function finishResume(asin, remoteEntry) {
-    if (pendingResume !== asin) return
+  function resumeCurrent(job) {
+    return resumeRequest !== null && job.command === "position-get"
+      && job.purpose === resumeRequest.purpose
+      && Array.isArray(job.args) && job.args[0] === resumeRequest.asin
+  }
+
+  function recordResume(job, record) {
+    if (!resumeCurrent(job)) return
+    resumeRequest = { "asin": resumeRequest.asin, "purpose": resumeRequest.purpose,
+      "remote": record.items[resumeRequest.asin] || null }
+  }
+
+  function finishResume(job, outcome) {
+    if (!resumeCurrent(job)) return
+    var asin = resumeRequest.asin
+    var remoteEntry = outcome.ok ? resumeRequest.remote : null
     pendingResume = ""
+    resumeRequest = null
     var local = store.doc.books ? store.doc.books[asin] : null
     var start = remoteEntry ? Positions.resumeMs(local, remoteEntry) / 1000 : cachedStartSec(asin)
     playNow(asin, start)
@@ -551,7 +570,8 @@ Item {
     catchupFlow.noteIntent()
     askAsin = ""
     confirmAsin = ""
-    if (pendingResume !== asin) pendingResume = ""
+    pendingResume = ""
+    resumeRequest = null
     // A play still waiting for its play-info is overtaken by any new intent.
     playRequest = null
     removals.dropIntent(asin)
@@ -567,6 +587,7 @@ Item {
   // Stop: no play that is still on its way may start the player again.
   function quitPlayer() {
     pendingResume = ""
+    resumeRequest = null
     playRequest = null
     // Nothing is pending after Stop, so an old play failure is gone too (F37).
     playError = ""
@@ -846,7 +867,10 @@ Item {
     // Removing is newer than a play of this book still on its way (a resume
     // read or a play-info): drop it, or its reply would start the book again.
     if (PlayRequest.busyAsin(playRequest) === asin) playRequest = null
-    if (pendingResume === asin) pendingResume = ""
+    if (pendingResume === asin) {
+      pendingResume = ""
+      resumeRequest = null
+    }
     if (asin === loadedAsin) return removals.unloadThenRemove(asin, removalPurpose)
     return run("remove", [asin], removalPurpose) ? "ok" : "error: refused"
   }
@@ -1161,11 +1185,8 @@ Item {
         root.doctorChecks = record.checks || []
       } else if (record.type === "play_info") {
         root.startPlayInfo(job, record)
-      } else if (record.type === "positions" && job.purpose === "resume") {
-        var resumed = job.args[0]
-        var remotes = root.resumeRemotes
-        remotes[resumed] = record.items[resumed] || null
-        root.resumeRemotes = remotes
+      } else if (record.type === "positions") {
+        root.recordResume(job, record)
       }
       catchupFlow.handleEvent(record, job)
       sync.handleEvent(record, job)
@@ -1191,12 +1212,7 @@ Item {
       sync.handleFinished(job, outcome)
       catchupFlow.handleFinished(job, outcome)
       if (job.command === PlayRequest.COMMAND) root.finishPlayInfo(job, outcome)
-      if (job.purpose === "resume") {
-        var resumedAsin = job.args[0]
-        var remote = outcome.ok ? (root.resumeRemotes[resumedAsin] || null) : null
-        delete root.resumeRemotes[resumedAsin]
-        root.finishResume(resumedAsin, remote)
-      }
+      if (job.command === "position-get" && root.resumeCurrent(job)) root.finishResume(job, outcome)
       if (job.command === "sync") {
         root.lastSyncCode = outcome.ok ? "" : String(outcome.code || "internal")
         root.lastSyncMessage = outcome.ok ? "" : String(outcome.message || "")
