@@ -10,7 +10,7 @@ The current snapshot and next steps below supersede earlier milestones. Older de
 
 - v0.1.5 is released (PR #121); its review brief is merged in #122. `v016` contains all remediation component PRs: B02 #123, B03 #124, B05/R01 #125, B01 #126, U01 #127, B04 #128, S01/S03/S04 #129, S02 #130 and U02–U05 #131. Every parent merge SHA was verified as an ancestor of `a83b823` before docs/version integration.
 - The latest component merge was independently verified at **3,451 passed, 0 skipped**, with ruff check/format and no-symlink checks clean. This is component-handoff evidence; the integration card reruns all gates and records exact results in the release PR.
-- D01 reconciles the docs and sets version 0.1.6, still unreleased. The docs/version PR targets `v016`; the combined `main` ← `v016` PR stays draft for independent exact-head review and attended checks. No tag, release publication or live-plugin change belongs to this integration phase.
+- D01 (#132) reconciles the docs and sets version 0.1.6, still unreleased. The docs/version PR targets `v016`; the combined `main` ← `v016` PR stays draft for independent exact-head review and attended checks. No tag, release publication or live-plugin change belongs to this integration phase.
 - #114 (keyboard access), #115 (contrast), #116 (old-shell callbacks) remain open separately; no accessibility or live-shell fix is implied by headless tests.
 
 ## Historical milestone and test records

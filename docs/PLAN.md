@@ -32,7 +32,7 @@ Source: [v0.1.5 code/UX brief](briefs/REVIEW-v0.1.5-CODE-UX.md). These checkboxe
 - [x] **U03** — Full position-sync warning (#131).
 - [x] **U04** — Input-preserving paste errors (#131).
 - [x] **U05** — Deadline-derived throttle/retry copy (#131).
-- [x] **D01** — Current docs, changelog and 0.1.6 version reconciliation (integration PR).
+- [x] **D01** — Current docs, changelog and 0.1.6 version reconciliation (#132).
 
 ## Dependency graph (summary)
 
