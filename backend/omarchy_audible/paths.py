@@ -93,6 +93,11 @@ def books_dir_problem(path: Path, paths: Paths, home: Path) -> str | None:
             resolved == root or resolved.is_relative_to(root) for root in system_roots
         ):
             return "path cannot be inside a system directory"
+        if paths.fake_mode and (
+            resolved == paths.data_dir.resolve()
+            or not resolved.is_relative_to(paths.data_dir.resolve())
+        ):
+            return "fake mode only allows paths inside its data directory"
         if resolved.exists() and not resolved.is_dir():
             return "path exists and is not a directory"
         ancestor = resolved
@@ -147,7 +152,7 @@ class Paths:
     config_dir: Path
     data_dir: Path
     runtime_dir: Path
-    books_dir: Path
+    books_dir: Path | None
     default_books_dir: Path
     home_dir: Path
     fake_mode: bool = False
@@ -175,50 +180,31 @@ class Paths:
                 fake_mode=True,
             )
             override = env.get("OMARCHY_AUDIBLE_BOOKS_DIR")
-            if not (override or "").strip():
-                return result
             requested = requested_books_dir(override, home)
             real_default = result.home_dir / "Audiobooks" / "Audible"
-            if requested == real_default:
-                return result
-            problem = books_dir_problem(requested, result, home)
-            if problem is not None:
-                return cls(**{**result.__dict__, "books_dir_problem": problem})
-            try:
-                inside = (
-                    requested.resolve().is_relative_to(data_dir.resolve())
-                    and requested.resolve() != data_dir.resolve()
-                )
-            except (OSError, RuntimeError, ValueError):
-                inside = False
-            if not inside:
-                return cls(
-                    **{
-                        **result.__dict__,
-                        "books_dir_problem": "fake mode only allows paths inside its data directory",
-                    }
-                )
-            return cls(
-                **{
-                    **result.__dict__,
-                    "books_dir": requested,
-                }
+            if not (override or "").strip() or requested == real_default:
+                requested = result.default_books_dir
+        else:
+            result = cls(
+                config_dir=config_root / PLUGIN_DIR_NAME,
+                data_dir=data_root / PLUGIN_DIR_NAME,
+                runtime_dir=_runtime_dir(env, home) / PLUGIN_DIR_NAME,
+                books_dir=home / "Audiobooks" / "Audible",
+                default_books_dir=home / "Audiobooks" / "Audible",
+                home_dir=home,
             )
-        books = env.get("OMARCHY_AUDIBLE_BOOKS_DIR")
-        result = cls(
-            config_dir=config_root / PLUGIN_DIR_NAME,
-            data_dir=data_root / PLUGIN_DIR_NAME,
-            runtime_dir=_runtime_dir(env, home) / PLUGIN_DIR_NAME,
-            books_dir=home / "Audiobooks" / "Audible",
-            default_books_dir=home / "Audiobooks" / "Audible",
-            home_dir=home,
-        )
-        requested = requested_books_dir(books, home)
+            requested = requested_books_dir(env.get("OMARCHY_AUDIBLE_BOOKS_DIR"), home)
         problem = books_dir_problem(requested, result, home)
+        effective = requested
+        if problem is not None:
+            fallback_problem = books_dir_problem(result.default_books_dir, result, home)
+            effective = result.default_books_dir if fallback_problem is None else None
+            if fallback_problem is not None:
+                problem = f"no safe books directory: {fallback_problem}"
         return cls(
             **{
                 **result.__dict__,
-                "books_dir": requested if problem is None else result.default_books_dir,
+                "books_dir": effective,
                 "books_dir_problem": problem,
             }
         )

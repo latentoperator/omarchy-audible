@@ -40,8 +40,15 @@ from .catalog import open_client, run_sync
 from .download import FAKE_FAIL_MODES, parse_fake_chapters, run_get
 from .errors import Cancelled, PipelineError
 from .fsutil import atomic_write_json
-from .library import _ASIN_RE, play_info_payload, remove_book, scan_local, validate_asin
-from .paths import Paths
+from .library import (
+    _ASIN_RE,
+    play_info_payload,
+    remove_book,
+    require_books_dir,
+    scan_local,
+    validate_asin,
+)
+from .paths import Paths, books_dir_problem
 from .positions import (
     FakePositions,
     RealPositions,
@@ -101,7 +108,7 @@ def _status_dirs(paths: Paths) -> dict[str, str]:
         "config_dir": str(paths.config_dir),
         "data_dir": str(paths.data_dir),
         "runtime_dir": str(paths.runtime_dir),
-        "books_dir": str(paths.books_dir),
+        "books_dir": str(paths.books_dir or paths.default_books_dir),
     }
 
 
@@ -135,23 +142,26 @@ def _books_location(paths: Paths) -> dict[str, object]:
         value = data.get("books_dir") if isinstance(data, dict) else None
         if isinstance(value, str) and Path(value).is_absolute():
             candidate = Path(value)
-            if value == str(paths.books_dir):
+            if books_dir_problem(candidate, paths, paths.home_dir) is None:
                 previous = candidate
-                recorded = True
-            elif not paths.fake_mode or (
-                candidate.resolve().is_relative_to(paths.data_dir.resolve())
-                and candidate.resolve() != paths.data_dir.resolve()
-            ):
-                previous = candidate
-                recorded = candidate.resolve() == paths.books_dir.resolve()
-    except (OSError, ValueError, TypeError):
+                recorded = (
+                    paths.books_dir is not None
+                    and candidate.resolve() == paths.books_dir.resolve()
+                )
+    except (OSError, RuntimeError, ValueError, TypeError):
         pass
     old_books = None
     try:
-        previous_is_current = previous.resolve() == paths.books_dir.resolve()
+        previous_is_current = (
+            paths.books_dir is not None
+            and previous.resolve() == paths.books_dir.resolve()
+        )
     except (OSError, RuntimeError, ValueError):
         previous_is_current = True
-    if not previous_is_current:
+    if (
+        not previous_is_current
+        and books_dir_problem(previous, paths, paths.home_dir) is None
+    ):
         try:
             count = len(scan_local(previous))
         except OSError:
@@ -642,7 +652,12 @@ def cmd_cancel(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -
 
 def cmd_local(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> int:
     """List the books downloaded on this machine (ARCHITECTURE 4.2)."""
-    protocol.emit("local", books=scan_local(paths.books_dir))
+    try:
+        books = scan_local(paths.books_dir)
+    except PipelineError as exc:
+        protocol.error(exc.code, exc.message, exc.hint)
+        return protocol.EXIT_ERROR
+    protocol.emit("local", books=books)
     protocol.done()
     return protocol.EXIT_OK
 
@@ -658,10 +673,15 @@ def cmd_books_location_ack(
             "books-location-ack accepts only --if-no-old-books",
         )
         return protocol.EXIT_USAGE
+    try:
+        books_dir = require_books_dir(paths.books_dir)
+    except PipelineError as exc:
+        protocol.error(exc.code, exc.message, exc.hint)
+        return protocol.EXIT_ERROR
     if conditional and _books_location(paths)["old_books"] is not None:
         protocol.done(acked=False)
         return protocol.EXIT_OK
-    atomic_write_json(paths.books_location_file, {"books_dir": str(paths.books_dir)})
+    atomic_write_json(paths.books_location_file, {"books_dir": str(books_dir)})
     if conditional:
         protocol.done(acked=True)
     else:
