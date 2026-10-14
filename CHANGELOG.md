@@ -9,7 +9,7 @@ All notable changes to Omaudible. Versions follow `manifest.json`.
 - B01: Failed re-download backup/install moves now restore the previous book; if rollback itself fails, recovery files are retained and retry refuses rather than deleting the only copy.
 - B02: Interrupted sign-in/import can no longer authorize deregistering an external audible-cli device; Disconnect requires matching plugin-owned device identity.
 - B03: Unsafe default and fallback books folders now fail closed, including fake-mode symlink escapes, without touching files outside the safe books root.
-- B04: Setup detects broken dependencies, incompatible Python and stale pins, repairs instead of silently succeeding, and restores a previous environment only if it is usable.
+- B04: Setup detects broken dependencies, incompatible Python and stale pins, repairs instead of silently succeeding, and restores a previous environment only if it is usable; healthy existing environments are upgraded automatically without another Set up step.
 - B05: Malformed catalog identifiers and escaping cover paths are rejected before fetching or writing covers outside the cache.
 - R01: Multiline license-denial messages now retain throttling recognition without exposing book details or credentials in diagnostics.
 - S01: Disconnect discards held and queued downloads; delayed status replies cannot start them after sign-out or reconnect.

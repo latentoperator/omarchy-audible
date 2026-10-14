@@ -12,8 +12,9 @@ launcher handles ``setup`` itself, before any dependency exists. It builds
 4. An isolated, bounded offline probe checks imports, interpreter ABI and pins.
 
 A health marker is written last. A second run probes before reporting a no-op;
-status and dispatch only check the saved file fingerprints. Interrupted or
-broken installs are rebuilt, while a verified usable old environment is kept
+status migrates legacy markers once, then status and dispatch only check the
+saved file fingerprints. Interrupted or broken installs are rebuilt, while a
+verified usable old environment is kept
 as a fallback and restored if the replacement fails. The ``audible`` library
 is imported only in the venv subprocess, never by this bootstrap module.
 """
@@ -111,6 +112,44 @@ def read_marker(venv_dir: Path) -> dict[str, object] | None:
     except (OSError, ValueError):
         return None
     return data if isinstance(data, dict) else None
+
+
+def is_legacy_marker(marker: dict[str, object] | None) -> bool:
+    """Recognize the complete schema-1 marker written by 0.1.4/0.1.5."""
+    digest = marker.get("requirements") if marker else None
+    return bool(
+        marker
+        and set(marker) == {"schema", "requirements", "requirements_file", "created_at"}
+        and type(marker.get("schema")) is int
+        and marker["schema"] == 1
+        and isinstance(digest, str)
+        and len(digest) == 64
+        and all(c in "0123456789abcdef" for c in digest)
+        and marker.get("requirements_file") == REQUIREMENTS_NAME
+        and isinstance(marker.get("created_at"), str)
+        and marker["created_at"]
+    )
+
+
+def migrate_legacy_marker(venv_dir: Path) -> None:
+    """Probe a legacy install once; persist success or failure atomically.
+
+    Failed probes also become schema 2 (without usable health evidence), so
+    subsequent status polls and dispatch fail closed until setup repairs it.
+    """
+    marker = read_marker(venv_dir)
+    if marker is None or not is_legacy_marker(marker):
+        return
+    health = _probe(venv_dir, _subprocess_run, _clean_env())
+    # Another status or setup may have finished while the probe was running.
+    if read_marker(venv_dir) != marker:
+        return
+    try:
+        _write_marker(venv_dir, str(marker["requirements"]), health or {})
+    except OSError:
+        # Atomic writes leave the legacy marker intact; status stays broken,
+        # but the pre-migration launcher compatibility path is not destroyed.
+        return
 
 
 def python_identity() -> list[object]:

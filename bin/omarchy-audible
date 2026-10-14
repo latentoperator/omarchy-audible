@@ -99,6 +99,22 @@ def _venv_ready(venv_python: Path) -> bool:
     root = venv_python.parent.parent
     try:
         marker = json.loads((root / VENV_MARKER).read_text(encoding="utf-8"))
+        # Preserve 0.1.5 dispatch until status records the one-time probe.
+        # Only the complete old format qualifies, never a damaged new marker.
+        if (
+            isinstance(marker, dict)
+            and set(marker)
+            == {"schema", "requirements", "requirements_file", "created_at"}
+            and type(marker.get("schema")) is int
+            and marker["schema"] == 1
+            and isinstance(marker.get("requirements"), str)
+            and len(marker["requirements"]) == 64
+            and all(c in "0123456789abcdef" for c in marker["requirements"])
+            and marker.get("requirements_file") == "requirements.lock"
+            and isinstance(marker.get("created_at"), str)
+            and marker["created_at"]
+        ):
+            return venv_python.is_file() and os.access(venv_python, os.X_OK)
         identity = [
             sys.implementation.name,
             sys.implementation.cache_tag,
