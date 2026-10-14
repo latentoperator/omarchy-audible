@@ -172,6 +172,17 @@ ColumnLayout {
     }
   }
 
+  // The same unresolved position-sync warning as Mini; playback continues.
+  SoftText {
+    Layout.fillWidth: true
+    visible: text.length > 0
+    text: root.service ? root.service.staleNotice : ""
+    textFormat: Text.PlainText
+    wrapMode: Text.WordWrap
+    font.family: Style.font.family
+    font.pixelSize: Style.font.bodySmall
+  }
+
   // A play that never started (G3 finding 2).
   Text {
     Layout.fillWidth: true

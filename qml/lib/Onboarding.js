@@ -31,7 +31,7 @@ var STEP_READY = "ready";
 // account (0.1.5, ARCHITECTURE 4.2). The backend's `throttled` error carries
 // the same sentence in its `message`; this is the one home the drawer's
 // banner reads too, and a test keeps the two in step.
-var THROTTLED_TEXT = "Audible is limiting downloads for this account right now. Your books still play. Try again tomorrow.";
+var THROTTLED_TEXT = "Audible is limiting downloads. Downloaded books still play.";
 
 var _p = {};
 

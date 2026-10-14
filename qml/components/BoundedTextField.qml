@@ -26,7 +26,15 @@ TextField {
   // reads. A paste that would go past either is dropped whole.
   property int maxChars: Typing.SEARCH_MAX_CHARS
   property int pasteBytes: Typing.SEARCH_PASTE_BYTES
-  readonly property bool pasting: paster.running
+  readonly property bool pasting: _pasteActive
+  property string pasteError: ""
+  property bool _pasteActive: false
+  property bool _replacePaste: false
+  property var _pasteValue: null
+  property bool _pasteInvalid: false
+  property bool _pasteTimedOut: false
+  property int _pasteExitCode: 0
+  property int _pasteExitStatus: 0
 
   readonly property string pasteHelper: decodeURIComponent(
     String(Qt.resolvedUrl("../../bin/omarchy-audible-paste")).replace(/^file:\/\//, ""))
@@ -68,20 +76,56 @@ TextField {
   // Applies one edit at the selection or cursor; false when nothing changed.
   function edit(action, value) {
     var next = Typing.apply({ "text": text, "start": selectionStart, "end": selectionEnd }, action, value, maxChars)
-    if (next === null) return false
+    if (next === null) {
+      if ((action === Typing.ACTION_INSERT || action === Typing.ACTION_PASTE) && Typing.clean(value).length > 0)
+        pasteError = "Text is too large for this field. Copy a shorter selection and retry."
+      return false
+    }
+    pasteError = ""
     text = next.text
     cursorPosition = next.cursor
     return true
   }
 
-  // Pastes the clipboard at the selection or cursor through the bounded
-  // helper. One paste at a time; false when one is already running.
-  function pasteClipboard() {
-    if (paster.running) return false
+  // The button may replace the field; keyboard paste keeps its selection.
+  // Neither changes the text until the bounded helper finishes successfully.
+  function pasteClipboard(replaceAll) {
+    if (pasting) return false
+    pasteError = ""
+    _pasteValue = null
+    _pasteInvalid = false
+    _pasteTimedOut = false
+    _replacePaste = replaceAll === true
+    _pasteActive = true
     paster.command = Typing.pasteCommand(pasteHelper, pasteBytes)
     paster.running = true
     watchdog.restart()
     return true
+  }
+
+  function finishPaste() {
+    if (!_pasteActive) return
+    var value = _pasteValue
+    _pasteValue = null
+    _pasteActive = false
+    if (_pasteTimedOut || _pasteExitCode === 4) {
+      pasteError = "Clipboard read timed out. Copy the text again and retry."
+    } else if (_pasteExitCode === 3) {
+      pasteError = "Clipboard text is too large. Copy a shorter selection and retry."
+    } else if (_pasteExitCode !== 0 || _pasteExitStatus !== 0 || _pasteInvalid || value === null || Typing.clean(value).length === 0) {
+      pasteError = "Clipboard text is unavailable. Copy the text again and retry."
+    } else {
+      var next = Typing.apply({ "text": text,
+        "start": _replacePaste ? 0 : selectionStart,
+        "end": _replacePaste ? text.length : selectionEnd }, Typing.ACTION_PASTE, value, maxChars)
+      if (next === null) {
+        pasteError = "Text is too large for this field. Copy a shorter selection and retry."
+      } else {
+        pasteError = ""
+        text = next.text
+        cursorPosition = next.cursor
+      }
+    }
   }
 
   Timer {
@@ -96,19 +140,50 @@ TextField {
   Timer {
     id: watchdog
     interval: Typing.PASTE_TIMEOUT_S * 1000 + Typing.PASTE_GRACE_MS
-    onTriggered: if (paster.running) paster.running = false
+    onTriggered: if (root._pasteActive) {
+      root._pasteValue = null
+      root._pasteTimedOut = true
+      root.pasteError = "Clipboard read timed out. Copy the text again and retry."
+      drain.stop()
+      paster.running = false
+    }
   }
 
   Process {
     id: paster
-    // The helper writes one line, and only after a complete, bounded read.
-    // The text goes straight into the field; nothing here keeps it.
+    // FailedToStart has runningChanged but no exited signal in Quickshell.
+    onRunningChanged: if (!running) Qt.callLater(function() {
+      if (root._pasteActive && !root._pasteTimedOut && !paster.running && !drain.running) {
+        root._pasteExitCode = 2
+        root._pasteExitStatus = 0
+        root.finishPaste()
+      }
+    })
+    // One bounded line, held only until exit/stdout draining has completed.
     stdout: SplitParser {
       onRead: function(line) {
+        if (!root._pasteActive || root._pasteTimedOut) return
         var value = Typing.pasteResult(line)
-        if (value !== null) root.edit(Typing.ACTION_PASTE, value)
+        if (root._pasteInvalid || root._pasteValue !== null || value === null) {
+          root._pasteInvalid = true
+          root._pasteValue = null
+        } else root._pasteValue = value
       }
     }
-    onExited: watchdog.stop()
+    onExited: function(code, status) {
+      watchdog.stop()
+      if (!root._pasteActive) return
+      root._pasteExitCode = code
+      root._pasteExitStatus = status
+      if (root._pasteTimedOut) root.finishPaste()
+      else drain.restart()
+    }
+  }
+
+  // As BackendCall: the last stdout signal may follow the exit signal.
+  Timer {
+    id: drain
+    interval: 60
+    onTriggered: root.finishPaste()
   }
 }

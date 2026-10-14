@@ -656,6 +656,9 @@ def test_the_fake_pause_and_the_real_pause_are_separate_files(fake_paths, paths)
 def test_the_drawer_uses_the_backend_sentence_exactly():
     onboarding = qjs.load("Onboarding")
     assert onboarding.evaluate("THROTTLED_TEXT") == pause.THROTTLED_MESSAGE
+    assert pause.THROTTLED_MESSAGE == (
+        "Audible is limiting downloads. Downloaded books still play."
+    )
     entry = onboarding.call("errorText", "throttled")
     assert entry["body"] == pause.THROTTLED_MESSAGE
     assert entry["title"] == "Audible is limiting downloads"

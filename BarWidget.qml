@@ -21,7 +21,11 @@ BarWidget {
   readonly property string barTitle: Panel.barTitle(service ? service.showTitleInBar : String(setting("showTitleInBar", "Off")), vertical,
     player ? player.loaded : false, service && service.loadedRow ? service.loadedRow.title : "")
 
+  signal panelClosed()
+  signal panelEscapeRequested(var event)
+  property QtObject panelEscapeEvent: QtObject { property bool accepted: false }
   property bool opened: false
+  onOpenedChanged: if (!opened) panelClosed()
   property bool settingsInjected: false
   property bool popoutSwitchClosing: false
   property bool enterPressed: false
@@ -143,7 +147,11 @@ BarWidget {
       anchors.fill: parent
       // While the Library search field has focus it handles its own keys.
       blocked: libraryView.searchFocused || onboardingView.inputFocused
-      onCloseRequested: root.close()
+      onCloseRequested: {
+        root.panelEscapeEvent.accepted = false
+        root.panelEscapeRequested(root.panelEscapeEvent)
+        if (!root.panelEscapeEvent.accepted) root.close()
+      }
       // The catcher sends Enter as returnRequested then activateRequested,
       // and Space as activateRequested alone.
       onReturnRequested: root.enterPressed = true
@@ -171,6 +179,7 @@ BarWidget {
         LibraryView {
           id: libraryView
           service: root.service
+          panelSurface: root
           onCloseRequested: root.close()
         }
         MiniView {
