@@ -25,6 +25,7 @@ EXPECTED_API = {
     "STEP_MISSING",
     "STEP_READY",
     "STEP_SETUP",
+    "THROTTLED_TEXT",
     "clipboardNotice",
     "errorText",
     "installCommand",

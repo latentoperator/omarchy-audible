@@ -1,14 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "error event",
-  "description": "Final event of a failed backend run (ARCHITECTURE 4.2).",
+  "description": "Final event of a failed backend run (ARCHITECTURE 4.2). `until` is present only on `throttled`: the ISO-8601 time downloads resume, when Audible is limiting downloads for the account.",
   "type": "object",
   "required": ["type", "code", "message"],
   "properties": {
     "type": { "const": "error" },
     "code": { "type": "string", "minLength": 1 },
     "message": { "type": "string" },
-    "hint": { "type": "string" }
+    "hint": { "type": "string" },
+    "until": { "type": "string", "minLength": 1 }
   },
   "additionalProperties": false
 }

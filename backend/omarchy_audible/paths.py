@@ -24,6 +24,10 @@ FAKE_POSITIONS_FILE = "fake-account-positions.json"
 # This device's own successful pushes, ``{asin: {ms, at}}`` (P6, F1).
 PUSHED_FILE = "pushed.json"
 BOOKS_LOCATION_FILE = "books-location.json"
+# The download pause: Audible refused a license with CustomerThrottled (0.1.5).
+# Real mode resolves to the real data dir, fake mode to the fake tree, so the
+# two never read each other's pause.
+DOWNLOAD_PAUSE_FILE = "download-pause.json"
 
 
 def requested_books_dir(value: str | None, home: Path) -> Path:
@@ -222,6 +226,16 @@ class Paths:
     @property
     def books_location_file(self) -> Path:
         return self.data_dir / BOOKS_LOCATION_FILE
+
+    @property
+    def download_pause_file(self) -> Path:
+        """The download pause, ``{until, since, count}`` (0.1.5, 4.3).
+
+        ``get`` writes, extends and clears it; ``status`` reports it and the
+        login commands clear it. Real mode uses the real data dir, fake mode
+        the fake tree, so neither can see the other's pause.
+        """
+        return self.data_dir / DOWNLOAD_PAUSE_FILE
 
     # --- plugin-owned files (ARCHITECTURE 3) -------------------------------
     @property

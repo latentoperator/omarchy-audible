@@ -1,12 +1,15 @@
 .pragma library
+.import "Format.js" as Format
+.import "Onboarding.js" as Onboarding
 
 // Library view (drawer) decisions that `LibraryUi.js` does not make (U2): the
 // sort and filter choices, the catalog's age for the sync-on-open check, the
 // sync state, keys typed in the search field, which row Enter picks, which
 // books can be removed, and the text for each list state and banner.
 //
-// Pure ECMAScript for the Qt JS engine: no imports, no Qt types, and nothing
-// here throws on bad input.
+// Pure ECMAScript for the Qt JS engine: no imports but `Format.js` (the
+// resume clock) and `Onboarding.js` (the throttled refusal's wording), no Qt
+// types, and nothing here throws on bad input.
 
 // After any sync attempt, an automatic sync waits this long, so a failing
 // sync (offline) is not retried on every open.
@@ -255,8 +258,23 @@ function bannerText(banner, age) {
 
 // Banners that report a problem use the theme's urgent colour; the offline
 // and syncing notes stay muted (R2 cosmetic: the connection banner was faint).
+// The paused banner is urgent too: it says why nothing is downloading.
 function bannerUrgent(banner) {
-  return banner === "reconnect" || banner === "connection";
+  return banner === "reconnect" || banner === "connection" || banner === "paused";
+}
+
+// The paused banner: Audible's refusal, then when downloads resume, e.g.
+// "… Try again tomorrow. Downloads resume at 9:40 PM." — or "… resume tomorrow
+// at 9:40 AM." when the pause ends on the next calendar day. The instant is
+// `status.downloads_paused_until`, and `nowMs` (the engine's clock when
+// missing) is what tells the two apart; an unusable instant leaves the
+// sentence alone (0.1.5, ARCHITECTURE 4.2 and 6).
+function pausedBanner(untilIso, nowMs) {
+  var when = Format.resumeAt(untilIso, nowMs);
+  if (when.length === 0) {
+    return Onboarding.THROTTLED_TEXT;
+  }
+  return Onboarding.THROTTLED_TEXT + " Downloads resume " + when + ".";
 }
 
 // A row's author names as a plain array for `Format.names`. A row that

@@ -6,6 +6,7 @@ import "qml/lib/Drawer.js" as Drawer
 import "qml/lib/EventLog.js" as EventLog
 import "qml/lib/Diagnostic.js" as Diagnostic
 import "qml/lib/Format.js" as Format
+import "qml/lib/Held.js" as Held
 import "qml/lib/Library.js" as Library
 import "qml/lib/LibraryUi.js" as LibraryUi
 import "qml/lib/Mpv.js" as Mpv
@@ -112,6 +113,12 @@ Item {
 
   // Failed downloads by ASIN, shown as the row's error state until retried.
   property var failures: ({})
+  // Downloads Audible refused to license, held in memory until the pause
+  // passes (0.1.5, ARCHITECTURE 4.8). A shell restart loses the list; the
+  // backend's own pause keeps the app from asking again meanwhile.
+  property var held: Held.create()
+  readonly property string downloadsPausedUntil: Held.until(held)
+  readonly property bool downloadsPaused: Held.paused(held, statusAtMs)
   property string pendingResume: ""
   // The book a `play-info` is being read for (B11; PlayRequest.js), or null.
   // Only the newest request plays: a newer intent or a quit drops it, and a
@@ -157,7 +164,7 @@ Item {
   property string lastSyncHint: ""
   property var doctorChecks: []
   property real catalogAgeSeconds: 0
-  readonly property string diagnosticText: Diagnostic.build(manifest ? manifest.version : "0.1.4",
+  readonly property string diagnosticText: Diagnostic.build(manifest ? manifest.version : "0.1.5",
     "sync", lastSyncCode, lastSyncMessage, lastSyncHint, doctorChecks)
   readonly property bool syncing: Drawer.syncing(runner.pendingJobs, runner.activeJob)
   readonly property var syncFailure: Drawer.syncFailure(lastSyncCode)
@@ -166,7 +173,8 @@ Item {
     "total": library.allRows.length, "shown": library.count,
     "offline": syncFailure.offline,
     "connectionProblem": Drawer.connectionProblem(authFailed ? "auth_failed" : lastSyncCode),
-    "errorCode": authFailed ? "auth_failed" : syncFailure.errorCode
+    "errorCode": authFailed ? "auth_failed" : syncFailure.errorCode,
+    "paused": downloadsPaused
   })
   // A downloaded book plays when its `get` finishes; a finished book far
   // from its end asks first (`askAsin`); a book picked from the drawer
@@ -493,9 +501,46 @@ Item {
     }
     if (decision === LibraryUi.PICK_PLAY) return playPicked(asin, true)
     if (decision === LibraryUi.PICK_DOWNLOAD || decision === LibraryUi.PICK_RETRY) {
+      // While Audible is limiting downloads, picking a book holds it instead
+      // of asking for a license that will be refused (0.1.5, ARCHITECTURE 4.2).
+      if (downloadsPaused) return holdBook(asin)
       return run("get", [asin], "download") ? "ok" : "error: refused"
     }
     return "error: nothing to do"
+  }
+
+  // Hold one book (a pick while paused) or several: the held list keeps the
+  // order, and the pause's own timer releases them (ARCHITECTURE 4.8).
+  function holdBook(asin) {
+    applyHeld({ "type": Held.EVENT_HOLD, "asins": [asin], "until": downloadsPausedUntil })
+    logEvent("get", "held: Audible is limiting downloads")
+    return "held"
+  }
+
+  // Apply one Held.js transition and run whatever it asks for.
+  function applyHeld(event) {
+    var next = Held.step(held, event)
+    if (!Held.same(held, next.state)) held = next.state
+    for (var index = 0; index < next.effects.length; index++) runHeldEffect(next.effects[index])
+    schedulePauseWake()
+  }
+
+  // A `release`: the pause is over, so the held downloads go to the runner in
+  // the order they were held. A refusal again holds them straight back.
+  function runHeldEffect(effect) {
+    if (!effect || effect.kind !== Held.EFFECT_RELEASE) return
+    logEvent("get", "pause over: " + effect.asins.length + " download(s) resume")
+    for (var index = 0; index < effect.asins.length; index++) run("get", [effect.asins[index]], "download")
+  }
+
+  // Wake exactly when the pause ends: the backend's `until` is the clock, and
+  // the wake re-reads `status` and lets the held books go (ARCHITECTURE 4.8).
+  function schedulePauseWake() {
+    var delay = Held.wakeInMs(held, Date.now())
+    pauseTimer.stop()
+    if (delay <= 0) return
+    pauseTimer.interval = delay
+    pauseTimer.restart()
   }
 
   // The question's Download button: the same as picking that book again.
@@ -521,6 +566,13 @@ Item {
   // running one is sent `cancel`, and its `get` cleans up and ends
   // `cancelled`, which Playback.updateFailures does not count as a failure.
   function cancelDownload(asin) {
+    // A held download is not in the runner: its ✕ drops it from the held
+    // list, so the pause no longer fetches it (0.1.5).
+    if (Held.has(held, asin)) {
+      logEvent("get", "cancel requested")
+      applyHeld({ "type": Held.EVENT_DROP, "asin": asin })
+      return "dropped"
+    }
     if (!LibraryUi.canCancel(library.rowFor(asin))) return "error: not downloading"
     logEvent("get", "cancel requested")
     return runner.cancel(asin)
@@ -567,6 +619,41 @@ Item {
 
   function anySurfaceOpen() {
     return surfaces.some(function(s) { return s.opened === true })
+  }
+
+  // The pause's deadline arrived: drop the stale pause locally as well — in
+  // case `status` is slow or the read fails — then read the real one, which
+  // releases whatever is still held (0.1.5, ARCHITECTURE 4.2).
+  function onPauseElapsed() {
+    applyHeld({ "type": Held.EVENT_NOW, "now": Date.now() })
+    run("status", [])
+  }
+
+  // Hold the book Audible just refused, and every `get` still queued behind
+  // it: none of them would be served, and asking again is another license
+  // request. They come back in order when the pause ends (ARCHITECTURE 4.8).
+  function holdRefusedDownloads(job, outcome) {
+    var failed = job.asin ? job.asin : ""
+    var queued = []
+    var pending = runner.pendingJobs
+    for (var index = 0; index < pending.length; index++) {
+      var next = pending[index]
+      if (next && next.command === "get" && next.asin) queued.push(next.asin)
+    }
+    for (index = 0; index < queued.length; index++) runner.cancel(queued[index])
+    applyHeld({
+      "type": Held.EVENT_THROTTLED, "asin": failed, "queued": queued,
+      "until": refusedUntil(outcome)
+    })
+    logEvent("get", "held: Audible is limiting downloads")
+  }
+
+  // The resume time from a refused `get`: the error's own `until`, else
+  // whatever the last `status` said (the re-read that follows sets it).
+  function refusedUntil(outcome) {
+    var terminal = outcome && outcome.terminal ? outcome.terminal : null
+    if (terminal && typeof terminal.until === "string" && terminal.until.length > 0) return terminal.until
+    return downloadsPausedUntil
   }
 
   // The open panel, or null.
@@ -708,7 +795,7 @@ Item {
     id: library
     stateDoc: store.doc
     coversDir: root.dataDir.length > 0 ? root.dataDir + "/covers" : ""
-    jobs: Playback.jobStates(runner.pendingJobs, runner.activeJob, runner.progress, root.failures)
+    jobs: Playback.jobStates(runner.pendingJobs, runner.activeJob, runner.progress, root.failures, root.held.asins)
   }
 
   Connections {
@@ -830,6 +917,14 @@ Item {
     onTriggered: root.reopenAsin = ""
   }
 
+  // The download pause's own deadline (0.1.5, ARCHITECTURE 4.8): the held
+  // downloads are let go and the backend's pause is read again.
+  Timer {
+    id: pauseTimer
+    repeat: false
+    onTriggered: root.onPauseElapsed()
+  }
+
   Timer {
     id: settingsTimer
     interval: 1000
@@ -900,6 +995,12 @@ Item {
         root.statusAtMs = Date.now()
         root.refreshCatalogAge()
         root.refreshLocal()
+        // The backend's pause is the authority: while it runs, nothing is
+        // asked for; once it is over, the held downloads go again (0.1.5).
+        root.applyHeld({
+          "type": Held.EVENT_STATUS, "until": record.downloads_paused_until,
+          "now": Date.now()
+        })
         var ackStep = BooksLocation.ackStep(root.booksAckState, record,
           root.downloadActive(), root.settingsReceived)
         root.booksAckState = ackStep.state
@@ -932,6 +1033,11 @@ Item {
         ? "" : ": " + String(outcome.message || ""))
       signinFlow.handleFinished(job, outcome)
       root.logEvent(job.command + " exit", text)
+      if (job.command === "get" && !outcome.ok && outcome.code === "throttled") {
+        // Audible refused the license: the book waits instead of failing, and
+        // so does everything queued behind it (0.1.5, ARCHITECTURE 4.8).
+        root.holdRefusedDownloads(job, outcome)
+      }
       root.failures = Playback.updateFailures(root.failures, job, outcome)
       sync.handleFinished(job, outcome)
       catchupFlow.handleFinished(job, outcome)

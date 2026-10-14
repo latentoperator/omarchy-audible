@@ -30,6 +30,9 @@ var STATE_DOWNLOADING = "downloading";
 var STATE_CONVERTING = "converting";
 var STATE_LOCAL = "local";
 var STATE_ERROR = "error";
+// A held download: Audible is throttling the account, so it waits (0.1.5,
+// ARCHITECTURE 4.8). Not a failure, and it still has a running `get` coming.
+var STATE_PAUSED = "paused";
 
 // `sortRows` keys.
 var SORT_RECENT = "recent";
@@ -51,7 +54,7 @@ _p.BOOK_KEYS = ["ms", "updated_at", "last_played_at", "played_since_download", "
 _p.QUEUE_KEYS = ["asin", "ms", "at"];
 
 // The job states a book can be in, least to most advanced.
-_p.JOB_STATES = [STATE_QUEUED, STATE_DOWNLOADING, STATE_CONVERTING, STATE_ERROR];
+_p.JOB_STATES = [STATE_QUEUED, STATE_DOWNLOADING, STATE_CONVERTING, STATE_ERROR, STATE_PAUSED];
 
 _p.isNull = function (value) {
   return value === null || value === undefined;

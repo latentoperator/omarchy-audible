@@ -17,7 +17,7 @@
 // "<1m". `clock` is the elapsed/remaining time: "0:00", "2:05", "1:02:33",
 // "123:04:05". `bytes` is 1024-based and shows one decimal under 10.
 //
-// The public surface is the nine functions below. Everything else lives on the
+// The public surface is the ten functions below. Everything else lives on the
 // private `_p` namespace so it cannot leak into QML.
 
 var _p = {};
@@ -112,6 +112,40 @@ function clock(ms) {
     return minutes + ":" + _p.pad2(remainder);
   }
   return hours + ":" + _p.pad2(minutes) + ":" + _p.pad2(remainder);
+}
+
+// The local wall-clock time a timestamp falls at, as the drawer's paused
+// banner says it: "at 9:40 PM" when that is still today, "tomorrow at 9:40 AM"
+// when it is not. "" for a missing or unparseable one. `nowMs` is the clock to
+// compare against (the engine's when missing), so tests can pin it. A pause
+// lasts at most a day (ARCHITECTURE 4.3), so the day is all this has to reach
+// for: 0.1.5, ARCHITECTURE 6.
+function resumeAt(iso, nowMs) {
+  if (typeof iso !== "string" || iso.length === 0) {
+    return "";
+  }
+  var ms = Date.parse(iso);
+  if (isNaN(ms)) {
+    return "";
+  }
+  var when = new Date(ms);
+  var now = _p.amount(nowMs);
+  if (now === null) {
+    now = new Date();
+  } else {
+    now = new Date(now);
+  }
+  var later = when.getFullYear() !== now.getFullYear()
+    || when.getMonth() !== now.getMonth()
+    || when.getDate() !== now.getDate();
+  var hours = when.getHours();
+  var half = hours < 12 ? "AM" : "PM";
+  var hour = hours % 12;
+  if (hour === 0) {
+    hour = 12;
+  }
+  var clock = hour + ":" + _p.pad2(when.getMinutes()) + " " + half;
+  return later ? "tomorrow at " + clock : "at " + clock;
 }
 
 // 1024-based size: "0 B", "512 B", "1.0 KB", "5.5 MB", "780 MB", "100 GB".

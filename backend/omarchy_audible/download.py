@@ -64,8 +64,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from . import fakestate, fsutil, protocol
-from .audible_download import ASIN_ENV
+from . import fakestate, fsutil, pause, protocol
+from .audible_download import ASIN_ENV, DENIED_FILE, REASON_RE, THROTTLED_RE
 from .chapters import Chapter, build_ffmetadata, parse_chapters
 from .errors import Cancelled, PipelineError, classify_audible_error
 from .library import (
@@ -86,7 +86,7 @@ from .paths import Paths
 FREE_SPACE_FACTOR = 1.1
 
 # --- fake mode (ARCHITECTURE 4.2) --------------------------------------------
-FAKE_FAIL_MODES = ("disk", "network", "decrypt", "novoucher")
+FAKE_FAIL_MODES = ("disk", "network", "decrypt", "novoucher", "throttled")
 FAKE_RAW_CHAPTERS = 3
 # The fake sine's shortest length; ``--fake-chapters`` grows it by a second per
 # chapter so every chapter has room (B11).
@@ -482,6 +482,10 @@ def _fake_fetch(
                 "simulated network failure",
                 hint="retry the download",
             )
+        if fake_fail == "throttled" and tick >= 1:
+            # Audible refused the license; ``run_get`` turns this into the
+            # pause (ARCHITECTURE 4.2, 0.1.5).
+            raise PipelineError(protocol.ErrorCode.THROTTLED, pause.THROTTLED_MESSAGE)
 
     spec = fake_chapters_spec(chapter_count)
     _fake_generate_raw(raw, children, fake_audio_ms(chapter_count))
@@ -738,13 +742,60 @@ def _audible_download(
             emit("progress", stage="download", bytes=dir_size(partial), total=total)
             time.sleep(_REAL_POLL_SECONDS)
     if proc.returncode != 0:
+        reasons, flagged = _denial(partial)
         detail = _last_stderr_line(stderr_path)
+        if _throttled(reasons, detail, flagged):
+            # Audible refused the license because the account is throttled: not
+            # a network problem, and asking again is another license request.
+            # Only the reason codes are logged, never the message, which names
+            # the book (ARCHITECTURE 4.2, 4.3).
+            log(f"audible refused the license ({fmt}): {', '.join(reasons)}")
+            raise PipelineError(protocol.ErrorCode.THROTTLED, pause.THROTTLED_MESSAGE)
         log(f"audible download ({fmt}) failed: {detail}")
         raise PipelineError(
             protocol.ErrorCode.NETWORK,
             f"audible download ({fmt}) failed",
             hint="check the network and retry",
         )
+
+
+def _denial(partial: Path) -> tuple[list[str], bool]:
+    """The license-denial notes the wrapper wrote: its reason codes and flag.
+
+    The wrapper records them in ``.partial/license-denied.json`` (0.1.5); only
+    the codes are read back, and nothing from Audible's human message. A
+    missing or unusable file is ``([], False)`` — no denial to read.
+    """
+    try:
+        data = json.loads((partial / DENIED_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return [], False
+    if not isinstance(data, dict) or not isinstance(data.get("reasons"), list):
+        return [], False
+    return (
+        [
+            reason
+            for reason in data["reasons"]
+            if isinstance(reason, str) and REASON_RE.match(reason)
+        ],
+        data.get("throttled") is True,
+    )
+
+
+def _throttled(reasons: Iterable[str], detail: str, flagged: bool = False) -> bool:
+    """True when a refusal says the account is being throttled.
+
+    ``CustomerThrottled`` is the code; some denials only say so in Audible's
+    message, which the wrapper reads from the DEBUG record (its ``throttled``
+    flag) and which reaches this process's own stderr line when the wrapper
+    wrote no notes at all (ARCHITECTURE 4.2).
+    """
+    if flagged:
+        return True
+    for reason in reasons:
+        if THROTTLED_RE.search(reason):
+            return True
+    return THROTTLED_RE.search(detail) is not None
 
 
 def _find_raw(partial: Path, container: str) -> Path | None:
@@ -900,6 +951,19 @@ def run_get(
     # ``cmd_get`` validates before calling; guard direct callers too, so an
     # unvalidated ASIN can never reach the ``book_dir``/rmtree below.
     validate_asin(paths.books_dir, asin)
+
+    # Audible already refused a license for this account: do not ask again.
+    # This comes before the content metadata and the license request, and
+    # before ``.partial/`` exists, so a refused ``get`` makes no network call
+    # and leaves nothing behind (ARCHITECTURE 4.2, 0.1.5).
+    waiting = pause.paused(paths)
+    if waiting is not None:
+        raise PipelineError(
+            protocol.ErrorCode.THROTTLED,
+            pause.THROTTLED_MESSAGE,
+            until=pause.iso(waiting.until),
+        )
+
     target_dir = book_dir(paths.books_dir, asin)
     partial = target_dir / PARTIAL_DIRNAME
 
@@ -932,10 +996,21 @@ def run_get(
         target_dir.mkdir(parents=True, exist_ok=True)
         _make_partial(partial)
 
-        if fake:
-            raw = _fake_fetch(asin, partial, emit, tracker, fake_fail, chapter_count)
-        else:
-            raw = _real_fetch(asin, partial, paths, emit, tracker, content_size)
+        try:
+            if fake:
+                raw = _fake_fetch(
+                    asin, partial, emit, tracker, fake_fail, chapter_count
+                )
+            else:
+                raw = _real_fetch(asin, partial, paths, emit, tracker, content_size)
+        except PipelineError as exc:
+            if exc.code != protocol.ErrorCode.THROTTLED:
+                raise
+            # Start or extend the pause, and say when downloads resume: the
+            # error carries the same instant the file holds. ``.partial/`` is
+            # removed by the ``finally`` below as for any other failure.
+            exc.until = pause.iso(pause.record_refusal(paths).until)
+            raise
 
         # Stage the whole book in ``.partial/``: key.json (0600) and
         # chapters.txt first, then the audio, then the sanity check.
@@ -994,4 +1069,7 @@ def run_get(
         tracker.terminate_all()
         _rmtree(partial)
     assert final is not None
+    # A book that came down proves the account is not being throttled, so the
+    # next refusal starts its count again (ARCHITECTURE 4.2).
+    pause.clear(paths)
     return final

@@ -188,6 +188,9 @@ The Audible stores in the United States, United Kingdom, Germany, France, Canada
 **Can it play books I downloaded some other way?**
 No. It plays the books it downloaded itself.
 
+**It says "Audible is limiting downloads for this account right now".**
+That is Audible, not the plugin. Every so often — usually for a day or two — Audible stops licensing downloads for an account, even though the phone app still downloads your books. Omaudible then pauses downloads, tells you when it will try again, and keeps the books that were waiting in the Library as **Waiting**; they start on their own, in the same order, once the pause is over. Your downloaded books still play, and syncing, removing and your listening positions are unaffected. The best thing to do is wait. If you would rather not, **Disconnect** in the drawer and sign in again: a new sign-in registers a new device on your account, which clears Audible's pause, and it is the surest fix. Downloading a few books at a time is a courtesy to Audible's servers, not a rule, so you don't need to change how you use it.
+
 **It says "Audible connection problem".**
 Audible returned something the plugin didn't expect. Downloaded books still play from the saved library. **Copy diagnostic** copies a short report with credentials removed; include it if you open an issue.
 
@@ -204,7 +207,7 @@ Add `--fake` (or set `OMARCHY_AUDIBLE_FAKE=1`) to any command to run against a b
 
 Fake mode also carries its own onboarding state, so the sign-in and setup screens can be tested without an account. A fresh fake tree starts signed in; `logout --fake` signs the fake account out and `login-finish --fake` / `login-import-cli --fake` sign it back in (fake `login-finish` accepts any pasted text containing `openid.oa2.authorization_code=`). To preview the missing-tools or setup screen, write `~/.config/omarchy-audible-fake/fake-status.json` with `{"missing": ["mpv"]}` or `{"venv_ready": false}` (both keys optional), and delete it afterward; `setup --fake` clears the `venv_ready` override again. Real mode reads neither the marker nor `fake-status.json`.
 
-To exercise the player against a long book, fake `get <asin> --fake-chapters 120` (or `OMARCHY_AUDIBLE_FAKE_CHAPTERS=120`) writes 120 evenly spaced chapters instead of the default 5; the range is 1–500, and real mode ignores it. Fake `get` also fakes the failures that matter: `--fake-fail disk` (the volume is treated as nearly full), `network` (the download breaks part-way), `decrypt` (the voucher arrives without key/iv) and `novoucher` (no aaxc voucher, so the aax fallback runs).
+To exercise the player against a long book, fake `get <asin> --fake-chapters 120` (or `OMARCHY_AUDIBLE_FAKE_CHAPTERS=120`) writes 120 evenly spaced chapters instead of the default 5; the range is 1–500, and real mode ignores it. Fake `get` also fakes the failures that matter: `--fake-fail disk` (the volume is treated as nearly full), `network` (the download breaks part-way), `decrypt` (the voucher arrives without key/iv), `novoucher` (no aaxc voucher, so the aax fallback runs) and `throttled` (Audible is limiting downloads: the run ends `error(code=throttled)` and writes the fake pause, which fake `get` honours and fake `status` reports until it is cleared).
 
 For Library error states, fake `sync --fake-fail network|internal` exercises offline and connection-problem UI. Fake `sync --fake-hide <asin>` persistently hides a fixture book until `~/.config/omarchy-audible-fake/fake-hidden-asins.json` is removed. These controls work only in fake mode.
 
