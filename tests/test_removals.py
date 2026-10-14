@@ -55,6 +55,7 @@ def test_the_api(unload):
             "PURPOSE_AUTO",
             "PURPOSE_AUTO_UNLOADED",
             "PURPOSE_USER",
+            "PURPOSE_CONFIRMED",
             "_p",
             "asins",
             "jobAllowed",
@@ -261,17 +262,17 @@ def test_service_keeps_the_names_views_use():
     assert "function removeAll() { return removals.removeAll() }" in service
     body = function_body(service, "removeBook")
     assert (
-        "if (asin === loadedAsin) return removals.unloadThenRemove(asin, "
-        "purpose === Unload.PURPOSE_AUTO ? purpose : Unload.PURPOSE_USER)"
-    ) in body
-    # Everyone else's removeBook is the user's.
-    assert 'return run("remove", [asin], "user")' in body
-    for view in (
-        "qml/views/LibraryView.qml",
-        "qml/views/FullView.qml",
-        "qml/ServiceIpc.qml",
+        "if (asin === loadedAsin) return removals.unloadThenRemove(asin, removalPurpose)"
+        in body
+    )
+    assert 'return run("remove", [asin], removalPurpose)' in body
+    assert "Unload.PURPOSE_CONFIRMED" in body
+    for view, name in (
+        ("qml/views/LibraryView.qml", "removeBook"),
+        ("qml/views/FullView.qml", "confirmRemoveBook"),
+        ("qml/ServiceIpc.qml", "removeBook"),
     ):
-        calls = re.findall(r"removeBook\(([^)]*)\)", read(view))
+        calls = re.findall(rf"{name}\(([^)]*)\)", read(view))
         assert calls and all("," not in c for c in calls), view
 
 

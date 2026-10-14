@@ -212,6 +212,8 @@ Every child of `get` (the audible-cli wrapper, ffprobe, fake mode's ffmpeg) runs
 ### 4.4 Removal safety (hard requirement)
 `remove <asin>` only deletes `<booksDir>/<asin>/`. It must verify the resolved path is inside `booksDir` and refuse otherwise. The backend has no code path that calls an Audible endpoint with a mutating method except position write-back (§4.6). A test greps the package for `delete`, `remove`, and `return` calls to the API and fails if any is found.
 
+The UI requires a title-specific destructive confirmation for a local book whose merged row has `inLibrary:false`: the warning says re-download may be unavailable. Library keeps one-click removal for ordinary cached books; Full keeps its confirmation for both kinds. Service owns the pending question, validates the book and its orphan status again on confirmation, and clears it on Cancel, panel dismissal, view change, reopening, or a new play intent. Explicit orphan consent travels with just that removal as the internal `user-confirmed` purpose, including an unload wait; it is not retained as permission for a future removal. Bulk removal and auto-remove exclude orphan copies. The auto-remove timer checks this before unloading or submitting work, and the job gate rechecks the current row before any queued removal starts. A queued ordinary or automatic removal cannot delete a book that has since become an orphan.
+
 ### 4.5 Catalog ✅ (S4)
 `audible library export --format json` ✅ returned 91 items with: `asin`, `title`, `authors`, `narrators`, `genres`, `cover_url`, `runtime_length_min`, `date_added`, `purchase_date`, `release_date`, `rating`, `is_finished`, `percent_complete`.
 

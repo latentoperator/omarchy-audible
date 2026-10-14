@@ -158,7 +158,34 @@ function canRemove(row) {
   return !!row && row.local === true && typeof row.asin === "string";
 }
 
-// The ASINs "Remove all downloads" removes: every book on the laptop.
+// A confirmed removal is one user intent, not permission for future auto-removes.
+var PURPOSE_CONFIRMED = "user-confirmed";
+
+function removalDecision(row, purpose) {
+  if (!canRemove(row)) return "blocked";
+  if (row.inLibrary !== false || purpose === PURPOSE_CONFIRMED) return "remove";
+  if (purpose === "autoremove" || purpose === "autoremove-unloaded") return "blocked";
+  return "confirm";
+}
+
+function removeConfirmation(row) {
+  return canRemove(row) ? { "asin": row.asin, "orphan": row.inLibrary === false } : null;
+}
+
+function removeConfirmValid(confirm, row) {
+  return !!confirm && canRemove(row) && confirm.asin === row.asin
+    && confirm.orphan === (row.inLibrary === false);
+}
+
+function removeQuestion(row) {
+  var title = row && typeof row.title === "string" && row.title.trim().length > 0 ? row.title.trim() : "this book";
+  if (row && row.inLibrary === false) {
+    return "Remove “" + title + "” from this device? It is no longer in your Audible library. You may not be able to download it again. This deletes your local copy.";
+  }
+  return "Remove this book from this device? It stays in your library.";
+}
+
+// Bulk removal excludes potentially irreplaceable orphan copies.
 function removableAsins(rows) {
   var out = [];
   if (!Array.isArray(rows)) return out;

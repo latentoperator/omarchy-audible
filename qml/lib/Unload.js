@@ -12,6 +12,7 @@
 // A loaded book's auto-remove waits for the unload too, and keeps saying it
 // is an auto-remove after it (P8 nit 3): its job runs as AUTO_UNLOADED.
 var PURPOSE_USER = "user";
+var PURPOSE_CONFIRMED = Drawer.PURPOSE_CONFIRMED;
 var PURPOSE_AUTO = "autoremove";
 var PURPOSE_AUTO_UNLOADED = "autoremove-unloaded";
 
@@ -71,7 +72,7 @@ function jobAllowed(job, autoRemove, atEnd, playing, busy) {
     return true;
   }
   var asin = job.args[0];
-  if (job.purpose === PURPOSE_USER) {
+  if (job.purpose === PURPOSE_USER || job.purpose === PURPOSE_CONFIRMED) {
     return Drawer.removalAllowed(asin, busy);
   }
   if (job.purpose === PURPOSE_AUTO) {
@@ -87,7 +88,7 @@ var _p = {};
 
 _p.isEntry = function (entry) {
   return entry !== null && typeof entry === "object" && typeof entry.asin === "string" && entry.asin.length > 0
-    && (entry.purpose === PURPOSE_USER || entry.purpose === PURPOSE_AUTO);
+    && (entry.purpose === PURPOSE_USER || entry.purpose === PURPOSE_CONFIRMED || entry.purpose === PURPOSE_AUTO);
 };
 
 _p.clean = function (pending) {
@@ -105,7 +106,7 @@ _p.add = function (list, asin, purpose) {
   for (var i = 0; i < list.length; i++) {
     if (list[i].asin === asin) {
       found = true;
-      next.push(purpose === PURPOSE_USER ? entry : list[i]);
+      next.push(purpose === PURPOSE_AUTO ? list[i] : entry);
     } else {
       next.push(list[i]);
     }
@@ -119,8 +120,8 @@ _p.unloaded = function (list, busy, autoRemove) {
   var kept = list.filter(function (entry) { return ready.indexOf(entry) < 0; });
   var effects = kept.length === 0 ? [{ "type": "timer", "on": false }] : [];
   ready.forEach(function (entry) {
-    if (entry.purpose === PURPOSE_USER) {
-      effects.push({ "type": "run", "asin": entry.asin, "purpose": PURPOSE_USER });
+    if (entry.purpose === PURPOSE_USER || entry.purpose === PURPOSE_CONFIRMED) {
+      effects.push({ "type": "run", "asin": entry.asin, "purpose": entry.purpose });
     } else if (autoRemove) {
       effects.push({ "type": "log", "text": "auto-remove " + entry.asin });
       effects.push({ "type": "run", "asin": entry.asin, "purpose": PURPOSE_AUTO_UNLOADED });

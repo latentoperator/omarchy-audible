@@ -195,6 +195,12 @@ Item {
   // Books to remove once the player has unloaded them (Removals), for the
   // Library's "removing" state.
   readonly property var removeAfterUnload: removals.waiting
+  property var removeConfirm: null
+  property var removeConfirmSurface: null
+  readonly property string removeConfirmAsin: removeConfirm ? removeConfirm.asin : ""
+  readonly property bool removeConfirmStillValid: Drawer.removeConfirmValid(removeConfirm, library.rowFor(removeConfirmAsin))
+  onRemoveConfirmStillValidChanged: if (!removeConfirmStillValid) Qt.callLater(dropInvalidRemoveConfirm)
+  onViewChanged: cancelRemoveConfirm()
   property real lastSyncAttemptAtMs: 0
 
   // mpv may report playing before the new path, so check on both.
@@ -257,6 +263,7 @@ Item {
 
   // Called by a widget just before its panel opens.
   function viewForOpen() {
+    cancelRemoveConfirm()
     view = Onboarding.view(onboardingStep, player.loaded, null)
     chapterListOpen = false
     sync.resetRetry()
@@ -457,6 +464,7 @@ Item {
   // resume still reading its position, and a pending removal of this book.
   // A download only downloads; the user plays the book when they choose.
   function noteIntent(asin) {
+    cancelRemoveConfirm()
     catchupFlow.noteIntent()
     askAsin = ""
     confirmAsin = ""
@@ -714,16 +722,53 @@ Item {
   // Any local book can be removed (FR-S2). The loaded one is unloaded first
   // (the player saves its position) and removed once it is gone (Removals).
   // `purpose` is Unload.PURPOSE_AUTO for an auto-remove, else the user's.
+  function askRemoveBook(asin) {
+    removeConfirm = Drawer.removeConfirmation(library.rowFor(asin))
+    removeConfirmSurface = removeConfirm ? openSurface() : null
+    return removeConfirm ? "confirm" : "error: not removable"
+  }
+
+  function cancelRemoveConfirm() {
+    removeConfirm = null
+    removeConfirmSurface = null
+    return "ok"
+  }
+
+  function dropInvalidRemoveConfirm() {
+    if (!Drawer.removeConfirmValid(removeConfirm, library.rowFor(removeConfirmAsin))) cancelRemoveConfirm()
+  }
+
+  function confirmRemoveBook(asin) {
+    var row = library.rowFor(asin)
+    var valid = Drawer.removeConfirmValid(removeConfirm, row)
+    cancelRemoveConfirm()
+    if (!valid) return "error: no confirmation"
+    return removeBook(asin, row.inLibrary === false ? Unload.PURPOSE_CONFIRMED : Unload.PURPOSE_USER)
+  }
+
   function removeBook(asin, purpose) {
-    if (!Drawer.canRemove(library.rowFor(asin))) return "error: not removable"
+    var row = library.rowFor(asin)
+    if (!Drawer.canRemove(row)) return "error: not removable"
+    var decision = Drawer.removalDecision(row, purpose)
+    if (decision === "confirm") return askRemoveBook(asin)
+    if (decision !== "remove") return "error: protected"
+    cancelRemoveConfirm()
+    var removalPurpose = purpose === Unload.PURPOSE_CONFIRMED || purpose === Unload.PURPOSE_AUTO ? purpose : Unload.PURPOSE_USER
     // A question about a book being removed no longer has a file to play.
     if (askAsin === asin) askAsin = ""
     // Removing is newer than a play of this book still on its way (a resume
     // read or a play-info): drop it, or its reply would start the book again.
     if (PlayRequest.busyAsin(playRequest) === asin) playRequest = null
     if (pendingResume === asin) pendingResume = ""
-    if (asin === loadedAsin) return removals.unloadThenRemove(asin, purpose === Unload.PURPOSE_AUTO ? purpose : Unload.PURPOSE_USER)
-    return run("remove", [asin], "user") ? "ok" : "error: refused"
+    if (asin === loadedAsin) return removals.unloadThenRemove(asin, removalPurpose)
+    return run("remove", [asin], removalPurpose) ? "ok" : "error: refused"
+  }
+
+  Connections {
+    target: root.removeConfirmSurface
+    function onOpenedChanged() {
+      if (root.removeConfirmSurface && !root.removeConfirmSurface.opened) root.cancelRemoveConfirm()
+    }
   }
 
   function removeAll() { return removals.removeAll() }
