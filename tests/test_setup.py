@@ -7,6 +7,7 @@ marker, idempotency, cleanup on failure, and recovery after a killed run.
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -32,9 +33,24 @@ class RecordingRunner:
             venv_dir = Path(tokens[3])
             (venv_dir / "bin").mkdir(parents=True, exist_ok=True)
             (venv_dir / "bin" / "python").write_text("#!/bin/sh\n", encoding="utf-8")
+            (venv_dir / "bin" / "python").chmod(0o755)
+            (venv_dir / "pyvenv.cfg").write_text("fake = true\n")
         returncode = 1 if (self.fail_on and self.fail_on in tokens) else 0
         stderr = "simulated failure\n" if returncode else ""
-        return subprocess.CompletedProcess(tokens, returncode, stdout="", stderr=stderr)
+        stdout = (
+            json.dumps(
+                {
+                    "python": bootstrap.python_identity(),
+                    "versions": bootstrap.requirement_pins(),
+                    "files": ["pyvenv.cfg"],
+                }
+            )
+            if "-c" in tokens
+            else ""
+        )
+        return subprocess.CompletedProcess(
+            tokens, returncode, stdout=stdout, stderr=stderr
+        )
 
 
 def _collect():
@@ -84,8 +100,9 @@ def test_setup_second_run_is_a_noop(paths: Paths):
 
     events, emit = _collect()
     bootstrap.run_setup(paths, run=runner, emit=emit)
-    # No new subprocesses: the venv was left exactly as it was.
-    assert len(runner.calls) == 4
+    # One bounded health check, but no venv or pip work.
+    assert len(runner.calls) == 5
+    assert runner.calls[-1][1:3] == ["-I", "-c"]
     assert [event["stage"] for event in events] == [bootstrap.UP_TO_DATE_STAGE]
 
 
@@ -130,10 +147,17 @@ class _RealVenvRunner:
             return subprocess.run(tokens, capture_output=True, text=True, check=False)
         if "install" in tokens:
             site = _site_packages(Path(tokens[0]).parent.parent)
-            for name in ("audible", "omarchy_audible"):
+            for name in ("audible", "audible_cli", "cryptography", "omarchy_audible"):
                 module = site / name
                 module.mkdir(exist_ok=True)
                 (module / "__init__.py").write_text("", encoding="utf-8")
+            for name, version in bootstrap.requirement_pins().items():
+                dist = site / f"{name.replace('-', '_')}-{version}.dist-info"
+                dist.mkdir(exist_ok=True)
+                (dist / "METADATA").write_text(
+                    f"Metadata-Version: 2.1\nName: {name}\nVersion: {version}\n"
+                )
+                (dist / "RECORD").write_text(f"{dist.name}/METADATA,,\n")
             return subprocess.CompletedProcess(tokens, 0, stdout="", stderr="")
         return subprocess.run(tokens, capture_output=True, text=True, check=False)
 
@@ -183,10 +207,7 @@ def test_setup_steps_do_not_inherit_pythonpath(paths: Paths, monkeypatch):
     def runner(argv, env=None):
         seen.append(dict(env or {}))
         tokens = [str(token) for token in argv]
-        if tokens[1:3] == ["-m", "venv"]:
-            (paths.venv_dir / "bin").mkdir(parents=True, exist_ok=True)
-            paths.venv_python.write_text("#!/bin/sh\n", encoding="utf-8")
-        return subprocess.CompletedProcess(tokens, 0, stdout="", stderr="")
+        return RecordingRunner()(tokens, env)
 
     bootstrap.run_setup(paths, run=runner)
     assert len(seen) == len(bootstrap.PROGRESS_STAGES)
@@ -260,6 +281,7 @@ def test_a_rebuild_killed_outright_is_recovered_on_the_next_run(paths: Paths):
     bootstrap.run_setup(paths, run=RecordingRunner())
     (paths.venv_dir / "sentinel").write_text("old venv", encoding="utf-8")
     previous = paths.venv_dir.with_name(paths.venv_dir.name + ".previous")
+    bootstrap._write_marker(paths.venv_dir, "0" * 64)
     paths.venv_dir.rename(previous)  # as if killed right after moving it aside
 
     with pytest.raises(PipelineError):

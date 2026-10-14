@@ -9,16 +9,13 @@ launcher handles ``setup`` itself, before any dependency exists. It builds
    ``audible[cryptography]``.
 3. ``pip install <repo>/backend`` — this repo's package, so that
    ``venv/bin/python -m omarchy_audible`` resolves without ``PYTHONPATH``.
-4. ``venv/bin/python -c "import audible, omarchy_audible"`` — prove the venv is
-   usable.
+4. An isolated, bounded offline probe checks imports, interpreter ABI and pins.
 
-A ready marker is written last. That makes the command idempotent (a second run
-is a no-op) and makes a run killed midway recoverable: the partial venv has no
-marker, so the next run removes it and starts clean. Any failure removes the
-venv, so a retry never inherits half an install.
-
-The ``audible`` library is never imported here (it is only installed), so the
-test suite runs without it.
+A health marker is written last. A second run probes before reporting a no-op;
+status and dispatch only check the saved file fingerprints. Interrupted or
+broken installs are rebuilt, while a verified usable old environment is kept
+as a fallback and restored if the replacement fails. The ``audible`` library
+is imported only in the venv subprocess, never by this bootstrap module.
 """
 
 from __future__ import annotations
@@ -29,6 +26,7 @@ import os
 import shutil
 import subprocess
 import sys
+import sysconfig
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Protocol
@@ -41,8 +39,28 @@ from .paths import Paths
 
 REQUIREMENTS_NAME = "requirements.lock"
 MARKER_NAME = "omarchy-audible.setup.json"
-MARKER_SCHEMA = 1
-IMPORT_CHECK = "import audible, omarchy_audible"
+MARKER_SCHEMA = 2
+PROBE_TIMEOUT = 10
+IMPORT_CHECK = """import audible, audible_cli, cryptography, omarchy_audible
+import importlib.metadata as metadata
+import json, sys, sysconfig
+from pathlib import Path
+root = Path(sys.prefix)
+files = {str(Path(m.__file__).relative_to(root))
+         for m in list(sys.modules.values())
+         if getattr(m, '__file__', None) and Path(m.__file__).is_relative_to(root)}
+versions = {}
+for name in ('audible', 'audible-cli'):
+    distribution = metadata.distribution(name)
+    versions[name] = distribution.version
+    for file in distribution.files or ():
+        if file.name == 'METADATA':
+            files.add(str(Path(distribution.locate_file(file)).relative_to(root)))
+print(json.dumps({'python': [sys.implementation.name, sys.implementation.cache_tag,
+                            sys.version_info.major, sys.version_info.minor,
+                            sysconfig.get_config_var("SOABI")],
+                  'versions': versions, 'files': sorted(files)}))
+"""
 
 # Stages streamed as `progress` events, in order. Reported with `n`/`of`.
 PROGRESS_STAGES = ("venv", "requirements", "backend", "verify")
@@ -95,17 +113,123 @@ def read_marker(venv_dir: Path) -> dict[str, object] | None:
     return data if isinstance(data, dict) else None
 
 
+def python_identity() -> list[object]:
+    return [
+        sys.implementation.name,
+        sys.implementation.cache_tag,
+        sys.version_info.major,
+        sys.version_info.minor,
+        sysconfig.get_config_var("SOABI"),
+    ]
+
+
+def _fingerprint(path: Path) -> list[int]:
+    stat = path.stat()
+    return [stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns, stat.st_mode]
+
+
 def venv_ready(venv_dir: Path) -> bool:
-    """True when a completed virtualenv (interpreter plus ready marker) exists."""
-    return (venv_dir / "bin" / "python").is_file() and marker_path(venv_dir).is_file()
+    """Cheap validation of saved offline health evidence; never spawn Python."""
+    marker = read_marker(venv_dir)
+    python = venv_dir / "bin" / "python"
+    if (
+        not marker
+        or marker.get("schema") != MARKER_SCHEMA
+        or marker.get("python") != python_identity()
+        or not python.is_file()
+        or not os.access(python, os.X_OK)
+    ):
+        return False
+    versions = marker.get("versions")
+    files = marker.get("files")
+    if (
+        not isinstance(versions, dict)
+        or not all(
+            isinstance(versions.get(name), str) and versions[name]
+            for name in ("audible", "audible-cli")
+        )
+        or not isinstance(files, dict)
+        or not {"bin/python", "pyvenv.cfg"}.issubset(files)
+    ):
+        return False
+    try:
+        return all(
+            isinstance(name, str)
+            and not Path(name).is_absolute()
+            and ".." not in Path(name).parts
+            and _fingerprint(venv_dir / name) == saved
+            for name, saved in files.items()
+        )
+    except (OSError, ValueError):
+        return False
+
+
+def requirement_pins() -> dict[str, str]:
+    pins = {}
+    for line in requirements_path().read_text(encoding="utf-8").splitlines():
+        if line and not line.startswith("#"):
+            name, version = line.split("==", 1)
+            pins[name.split("[", 1)[0]] = version
+    return pins
 
 
 def is_ready(venv_dir: Path, digest: str) -> bool:
-    """True when ``venv_dir`` was built from the requirements ``digest``."""
+    """Current requirements and compatible, unchanged health evidence."""
     marker = read_marker(venv_dir)
-    if marker is None or marker.get("schema") != MARKER_SCHEMA:
-        return False
-    return marker.get("requirements") == digest and venv_ready(venv_dir)
+    return bool(
+        marker
+        and marker.get("requirements") == digest
+        and marker.get("versions") == requirement_pins()
+        and venv_ready(venv_dir)
+    )
+
+
+def venv_state(venv_dir: Path) -> str:
+    if not venv_dir.exists():
+        return "missing"
+    if not venv_ready(venv_dir):
+        return "broken"
+    try:
+        digest = requirements_digest(requirements_path())
+        return "current_ready" if is_ready(venv_dir, digest) else "usable_old"
+    except (OSError, ValueError):
+        return "usable_old"
+
+
+def _probe(venv_dir: Path, runner: Runner, env: Mapping[str, str]) -> dict | None:
+    python = venv_dir / "bin" / "python"
+    if not python.is_file() or not os.access(python, os.X_OK):
+        return None
+    try:
+        result = runner([str(python), "-I", "-c", IMPORT_CHECK], env)
+        if result.returncode:
+            return None
+        health = json.loads(result.stdout)
+        if (
+            not isinstance(health, dict)
+            or health.get("python") != python_identity()
+            or not isinstance(health.get("versions"), dict)
+            or not all(
+                isinstance(health["versions"].get(name), str)
+                and health["versions"][name]
+                for name in ("audible", "audible-cli")
+            )
+            or not isinstance(health.get("files"), list)
+            or not health["files"]
+        ):
+            return None
+        names = set(health["files"]) | {"bin/python", "pyvenv.cfg"}
+        if any(
+            not isinstance(name, str)
+            or Path(name).is_absolute()
+            or ".." in Path(name).parts
+            for name in names
+        ):
+            return None
+        health["files"] = {name: _fingerprint(venv_dir / name) for name in names}
+        return health
+    except (OSError, ValueError, TypeError, subprocess.SubprocessError):
+        return None
 
 
 def _subprocess_run(
@@ -119,6 +243,7 @@ def _subprocess_run(
         capture_output=True,
         text=True,
         check=False,
+        timeout=PROBE_TIMEOUT if "-c" in argv else None,
     )
 
 
@@ -143,6 +268,20 @@ class FakeRunner:
             python = venv_dir / "bin" / "python"
             python.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
             python.chmod(0o755)
+            (venv_dir / "pyvenv.cfg").write_text("fake = true\n", encoding="utf-8")
+        if "-c" in tokens:
+            return subprocess.CompletedProcess(
+                tokens,
+                0,
+                stdout=json.dumps(
+                    {
+                        "python": python_identity(),
+                        "versions": requirement_pins(),
+                        "files": ["pyvenv.cfg"],
+                    }
+                ),
+                stderr="",
+            )
         return subprocess.CompletedProcess(tokens, 0, stdout="", stderr="")
 
 
@@ -178,7 +317,10 @@ def _check(result: subprocess.CompletedProcess[str], message: str) -> None:
     )
 
 
-def _write_marker(venv_dir: Path, digest: str) -> None:
+def _write_marker(venv_dir: Path, digest: str, health: dict | None = None) -> None:
+    if health is None:
+        existing = read_marker(venv_dir) or {}
+        health = {key: existing.get(key) for key in ("python", "versions", "files")}
     fsutil.atomic_write_json(
         marker_path(venv_dir),
         {
@@ -186,6 +328,7 @@ def _write_marker(venv_dir: Path, digest: str) -> None:
             "requirements": digest,
             "requirements_file": REQUIREMENTS_NAME,
             "created_at": iso_now(),
+            **health,
         },
     )
 
@@ -202,7 +345,8 @@ def run_setup(
 
     ``run`` is the subprocess seam: the real implementation captures output,
     fake mode uses :class:`FakeRunner`, and tests inject their own. Raises
-    :class:`PipelineError` (code ``setup_failed``) after removing the venv.
+    :class:`PipelineError` (code ``setup_failed``) on failure; restores any
+    usable fallback after a failed rebuild.
     """
     runner: Runner = run or (FakeRunner() if fake else _subprocess_run)
     base = base_python or sys.executable or "python3"
@@ -217,25 +361,34 @@ def run_setup(
 
     venv_dir = paths.venv_dir
     venv_python = paths.venv_python
-    if is_ready(venv_dir, digest):
-        emit("progress", stage=UP_TO_DATE_STAGE)
-        return
-
     total = len(PROGRESS_STAGES)
     step_env = _clean_env()
-    # F43: a working venv (one with a marker, even for older pins) is moved
-    # aside, not deleted, and comes back if the rebuild fails, so an update
-    # run offline cannot leave the plugin with no venv at all. It is moved
-    # rather than the new one built elsewhere because a venv's scripts carry
-    # its absolute path. A venv with no marker is a killed run: start clean.
     previous = venv_dir.with_name(venv_dir.name + ".previous")
-    if not venv_ready(venv_dir) and venv_ready(previous):
-        # A rebuild killed outright (SIGKILL, a shell restart) never reached
-        # the restore below: the aside copy is the working venv.
+    marker = read_marker(venv_dir)
+    health = _probe(venv_dir, runner, step_env) if marker else None
+    if health is None and read_marker(previous) is not None:
+        # Restore to its original path before probing: venv scripts contain
+        # absolute paths. Never discard the interrupted rebuild's fallback.
         _remove_tree(venv_dir)
         previous.rename(venv_dir)
+        marker = read_marker(venv_dir)
+        health = _probe(venv_dir, runner, step_env)
+    if health is not None:
+        saved_digest = str((marker or {}).get("requirements", ""))
+        try:
+            _write_marker(venv_dir, saved_digest, health)
+        except OSError:
+            raise PipelineError(
+                protocol.ErrorCode.SETUP_FAILED,
+                "could not record virtualenv health",
+                hint="fix disk access and run setup again",
+            ) from None
+        if saved_digest == digest and health["versions"] == requirement_pins():
+            _remove_tree(previous)
+            emit("progress", stage=UP_TO_DATE_STAGE)
+            return
     _remove_tree(previous)
-    if read_marker(venv_dir) is not None and venv_ready(venv_dir):
+    if health is not None:
         venv_dir.rename(previous)
     try:
         _remove_tree(venv_dir)
@@ -286,15 +439,24 @@ def run_setup(
         )
 
         emit("progress", stage="verify", n=4, of=total)
-        _check(
-            runner([str(venv_python), "-c", IMPORT_CHECK], step_env),
-            "the virtualenv cannot import its dependencies",
-        )
-    except BaseException:
+        health = _probe(venv_dir, runner, step_env)
+        if health is None or health["versions"] != requirement_pins():
+            raise PipelineError(
+                protocol.ErrorCode.SETUP_FAILED,
+                "the virtualenv cannot import compatible pinned dependencies",
+                hint="run setup again to repair the environment",
+            )
+        _write_marker(venv_dir, digest, health)
+    except BaseException as exc:
         _remove_tree(venv_dir)
         if previous.is_dir():
             previous.rename(venv_dir)
+        if isinstance(exc, (OSError, subprocess.SubprocessError)):
+            raise PipelineError(
+                protocol.ErrorCode.SETUP_FAILED,
+                "could not rebuild the virtualenv",
+                hint="fix disk access or Python and run setup again",
+            ) from None
         raise
 
-    _write_marker(venv_dir, digest)
     _remove_tree(previous)
