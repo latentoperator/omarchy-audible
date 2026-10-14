@@ -1,0 +1,8 @@
+{"exception": "OSError", "local_after": false, "old_audio_exists_after": false, "old_book_local_before": true, "probe": "backup_rename_failure", "recovery_partial_exists": false}
+{"books_dir_problem": null, "fake_remove_exit": 0, "probe": "fake_default_symlink", "resolved_books_outside_fake_data": true, "synthetic_real_tree_book_exists": false, "terminal_event": {"freed_bytes": 28, "type": "done"}}
+{"books_dir_problem": "path cannot contain plugin data or runtime files", "probe": "unsafe_real_default", "retained_rejected_default": true, "synthetic_venv_exists_after_remove": false}
+{"dependency_import_error": "ModuleNotFoundError: No module named 'audible'", "dependency_import_exit": 1, "is_ready": true, "probe": "broken_venv_still_ready", "setup_events": [{"stage": "up_to_date", "type": "progress"}], "setup_subprocess_calls": 0, "status_venv_ready": true}
+{"matches_current_pins": false, "probe": "old_pins_status", "status_venv_ready": true}
+{"auth_device_after_failed_import": "imported-synthetic-device", "logout_calls": [{"deregister_all": false, "device": "imported-synthetic-device"}], "origin_after_failed_import": "login", "probe": "failed_import_provenance"}
+{"covers_written": 1, "outside_file_overwritten": true, "probe": "cover_path_traversal", "write_outside_plugin_data": true}
+{"denied": false, "probe": "multiline_throttle_reason", "reasons": [], "throttled": false}
