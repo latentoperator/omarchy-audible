@@ -47,7 +47,6 @@ def service():
         "downloadsConnected",
         "jobAllowed",
         "statusCurrent",
-        "acceptStatus",
         "requestStatus",
         "invalidateStatus",
         "finishStatus",
@@ -75,7 +74,7 @@ this.NOW = Date.parse('2027-01-15T12:00:00Z');
 Date.now = function() { return root.NOW; };
 this.held = Held.create(); this.commands = []; this.logs = [];
 this.flagKnown = true; this.status = {authenticated:true}; this.statusAtMs = NOW;
-this.downloadLifecycle = 0; this.downloadsDisconnected = false;
+this.downloadLifecycle = 0; this.statusLifecycle = 0; this.downloadsDisconnected = false;
 this.statusRequest = ''; this.statusSerial = 0; this.statusRefreshNeeded = false;
 this.statusAgain = false;
 this.statusRetryMs = 30000;
@@ -228,6 +227,18 @@ def test_failed_logout_does_not_restore_dropped_intents(service):
     )
     assert service.evaluate("held.asins") == []
     assert service.call("run", "get", [A], "download") is False
+
+
+@pytest.mark.parametrize("command", ["login-finish", "login-import-cli"])
+def test_signin_waits_for_status_from_its_own_lifecycle(service, command):
+    # The previous authenticated status can still be showing while logout is
+    # queued. It must not authorize a download in the new sign-in lifecycle.
+    service.call("disconnect")
+    service.call("onboardingFinished", {"command": command}, {"ok": True})
+    current = service.evaluate("commands[commands.length-1]")
+    assert service.call("run", "get", [A], "download") is False
+    status_event(service, current, authenticated=True)
+    assert service.call("run", "get", [A], "download") is True
 
 
 def test_service_uses_lifecycle_gate_for_queued_gets():

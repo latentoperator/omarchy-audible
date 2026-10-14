@@ -118,6 +118,7 @@ Item {
   // backend's own pause keeps the app from asking again meanwhile.
   property var held: Held.create()
   property int downloadLifecycle: 0
+  property int statusLifecycle: -1
   property bool downloadsDisconnected: false
   // One current status read; failed pause refreshes retry separately from the
   // cooldown clock, so a missing/slow reply never spawns a one-second loop.
@@ -291,7 +292,7 @@ Item {
 
   function jobAllowed(job) {
     if (job.command === "get")
-      return !downloadsDisconnected && status && status.authenticated === true
+      return !downloadsDisconnected && statusLifecycle === downloadLifecycle && status && status.authenticated === true
     return removals.jobAllowed(job)
   }
 
@@ -727,7 +728,7 @@ Item {
   // request. They come back in order when the pause ends (ARCHITECTURE 4.8).
   function holdRefusedDownloads(job, outcome) {
     if (!jobAllowed({ "command": "get" })) return
-    var failed = job.asin ? job.asin : ""
+    var failed = job.cancelRequested === true ? "" : (job.asin ? job.asin : "")
     var queued = []
     var pending = runner.pendingJobs
     for (var index = 0; index < pending.length; index++) {
@@ -1132,6 +1133,7 @@ Item {
         root.statusRefreshNeeded = false
         root.statusRetryMs = 30000
         statusRetryTimer.stop()
+        root.statusLifecycle = root.downloadLifecycle
         root.status = record
         root.statusAtMs = Date.now()
         root.refreshCatalogAge()
