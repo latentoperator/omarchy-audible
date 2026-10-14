@@ -12,9 +12,9 @@ created ``0600`` under a ``077`` umask:
 
 * ``auth.json`` — the device credentials (written by ``Authenticator.to_file``)
 * ``config.toml`` — an audible-cli profile pointing at ``auth.json``
-* ``account.json`` — ``{origin, marketplace, account}``; ``origin`` records
-  whether this login was created here (``login``) or imported from an existing
-  audible-cli login (``import``)
+* ``account.json`` — ``{origin, device_serial_number, marketplace, account}``;
+  ``origin`` records whether this login was created here (``login``) or imported
+  from an existing audible-cli login (``import``)
 * ``activation_bytes`` — the account-wide legacy AAX key, fetched **after** the
   files above are saved and best effort (B13)
 
@@ -23,9 +23,11 @@ created ``0600`` under a ``077`` umask:
 registered device with nothing saved. The fetch is reported through the ``done``
 event (``warning``) and lazily retried by ``play-info`` at play time (F5, B13).
 
-``logout`` deregisters the device **only** when ``origin`` is ``login``: an
-imported auth file is the user's existing device, so deregistering it would
-break their audible-cli. A missing or unknown origin never deregisters, and
+Replacement durably invalidates ownership before installing new credentials,
+then publishes ownership last. ``logout`` deregisters **only** when ``origin``
+is ``login`` and the recorded device serial matches the loaded authenticator.
+An imported auth file is the user's existing device, so deregistering it would
+break their audible-cli. Unknown/mismatched ownership never deregisters, and
 ``deregister_all`` is never passed ``True``.
 
 The ``audible`` library is imported lazily, inside real-mode code paths only,
@@ -39,6 +41,7 @@ import json
 import os
 import re
 import secrets
+import tempfile
 import time
 import tomllib
 from collections.abc import Callable
@@ -274,12 +277,19 @@ def account_from_auth_file(path: Path) -> str | None:
     return account_from_info(data.get("customer_info"))
 
 
+def _device_serial(auth: Any) -> str | None:
+    info = getattr(auth, "device_info", None)
+    value = info.get("device_serial_number") if isinstance(info, dict) else None
+    return value if isinstance(value, str) and value.strip() else None
+
+
 def _account_payload(
-    origin: str, marketplace: str, account: str | None
+    origin: str, marketplace: str, account: str | None, device_serial: str | None
 ) -> dict[str, Any]:
     return {
         "schema": ACCOUNT_SCHEMA,
         "origin": origin,
+        "device_serial_number": device_serial,
         "marketplace": marketplace,
         "account": account,
         "created_at": iso_now(),
@@ -295,31 +305,93 @@ def read_account_record(paths: Paths) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+def _sync_directory(path: Path) -> None:
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _persist_credentials(
+    paths: Paths,
+    save_auth: Callable[[Path], None],
+    *,
+    origin: str,
+    marketplace: str,
+    account: str | None,
+    device_serial: str | None,
+    activation: str | None = None,
+) -> None:
+    """Stage privately; invalidate ownership durably; publish ownership last.
+
+    Preparation leaves the old set untouched. Once installation starts, an
+    interruption may leave mixed auxiliary files, but never old ownership
+    authorizing deregistration of new credentials (B02, ARCHITECTURE 4.7).
+    """
+    _ensure_private_dir(paths.config_dir)
+    with tempfile.TemporaryDirectory(
+        prefix=".credentials-", dir=paths.config_dir
+    ) as tmp:
+        stage = Path(tmp)
+        save_auth(stage / paths.auth_file.name)
+        _write_private_text(stage / paths.config_toml.name, config_toml(marketplace))
+        _write_private_json(
+            stage / paths.account_file.name,
+            _account_payload(origin, marketplace, account, device_serial),
+        )
+        unowned = stage / "unowned.json"
+        _write_private_json(unowned, {"schema": ACCOUNT_SCHEMA, "origin": "unknown"})
+        if activation:
+            _write_private_text(stage / paths.activation_bytes_file.name, activation)
+        for path in stage.iterdir():
+            os.chmod(path, 0o600)
+            with path.open("rb") as handle:
+                os.fsync(handle.fileno())
+
+        # No credential replacement is allowed until this barrier succeeds.
+        os.replace(unowned, paths.account_file)
+        _sync_directory(paths.config_dir)
+        os.replace(stage / paths.auth_file.name, paths.auth_file)
+        _sync_directory(paths.config_dir)
+        if activation:
+            os.replace(
+                stage / paths.activation_bytes_file.name, paths.activation_bytes_file
+            )
+        else:
+            _unlink(paths.activation_bytes_file)
+        _sync_directory(paths.config_dir)
+        for path in (paths.config_toml, paths.account_file):
+            os.replace(stage / path.name, path)
+            _sync_directory(paths.config_dir)
+
+
 def _persist_login(
     paths: Paths,
     auth: Any,
     marketplace: str,
     account: str | None,
 ) -> None:
-    """Write the credential files, ``0600``, before any later network call (B13).
+    """Save the login before its best-effort activation-bytes fetch (B13)."""
 
-    ``auth.json``, ``config.toml`` and ``account.json`` land here; the
-    account-wide activation bytes are fetched afterwards and are deliberately
-    not part of this step, so a failure there cannot leave a registered device
-    with nothing saved.
-    """
-    _ensure_private_dir(paths.config_dir)
-    previous = os.umask(0o077)
-    try:
-        # ``Authenticator.to_file`` writes with the process umask; force the
-        # mode afterwards too, so the file is 0600 whatever the umask was.
-        auth.to_file(paths.auth_file, encryption=False)
-    finally:
-        os.umask(previous)
-    os.chmod(paths.auth_file, 0o600)
-    _write_private_text(paths.config_toml, config_toml(marketplace))
-    _write_private_json(
-        paths.account_file, _account_payload("login", marketplace, account)
+    def save(path: Path) -> None:
+        # Pre-create at 0600 even when a default ACL makes the umask ineffective.
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        os.close(fd)
+        previous = os.umask(0o077)
+        try:
+            auth.to_file(path, encryption=False)
+        finally:
+            os.umask(previous)
+        os.chmod(path, 0o600)
+
+    _persist_credentials(
+        paths,
+        save,
+        origin="login",
+        marketplace=marketplace,
+        account=account,
+        device_serial=_device_serial(auth),
     )
 
 
@@ -378,15 +450,15 @@ def _fetch_login_activation_bytes(paths: Paths, auth: Any) -> str | None:
 def _persist_import(
     paths: Paths, text: str, marketplace: str, account: str | None, auth: Any
 ) -> None:
-    _ensure_private_dir(paths.config_dir)
-    # Written 0600 regardless of the source mode (audible-cli leaves it 0644).
-    _write_private_text(paths.auth_file, text)
     activation = getattr(auth, "activation_bytes", None)
-    if isinstance(activation, str) and activation:
-        _write_private_text(paths.activation_bytes_file, activation)
-    _write_private_text(paths.config_toml, config_toml(marketplace))
-    _write_private_json(
-        paths.account_file, _account_payload("import", marketplace, account)
+    _persist_credentials(
+        paths,
+        lambda path: _write_private_text(path, text),
+        origin="import",
+        marketplace=marketplace,
+        account=account,
+        device_serial=_device_serial(auth),
+        activation=activation if isinstance(activation, str) and activation else None,
     )
 
 
@@ -691,13 +763,21 @@ def login_import_cli(
     marketplace = (
         profile.get("country_code") or _locale_code(text) or DEFAULT_MARKETPLACE
     )
-    _persist_import(
-        paths,
-        text,
-        str(marketplace),
-        account_from_info(getattr(auth, "customer_info", None)),
-        auth,
-    )
+    try:
+        _persist_import(
+            paths,
+            text,
+            str(marketplace),
+            account_from_info(getattr(auth, "customer_info", None)),
+            auth,
+        )
+    except Exception as exc:
+        log(f"saving the imported login failed: {type(exc).__name__}")
+        raise PipelineError(
+            protocol.ErrorCode.AUTH_FAILED,
+            "the imported credentials could not be saved",
+            hint="check that the plugin config directory is writable",
+        ) from exc
 
 
 def logout(paths: Paths, *, fake: bool, api: AudiblePort | None = None) -> None:
@@ -712,11 +792,18 @@ def logout(paths: Paths, *, fake: bool, api: AudiblePort | None = None) -> None:
         fakestate.mark_signed_out(paths)
         return
     record = read_account_record(paths)
-    if record.get("origin") == "login" and paths.auth_file.is_file():
+    serial = record.get("device_serial_number")
+    if (
+        record.get("origin") == "login"
+        and isinstance(serial, str)
+        and serial.strip()
+        and paths.auth_file.is_file()
+    ):
         try:
             port = api or RealAudible()
             auth = port.authenticator_from_file(paths.auth_file)
-            auth.deregister_device(deregister_all=False)
+            if _device_serial(auth) == serial:
+                auth.deregister_device(deregister_all=False)
         except Exception as exc:  # noqa: BLE001 - best effort, e.g. offline
             log(f"device deregistration failed (best effort): {type(exc).__name__}")
     for path in (
