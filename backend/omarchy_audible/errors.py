@@ -14,11 +14,20 @@ from .protocol import ErrorCode
 class PipelineError(Exception):
     """A download/removal failure with a stable protocol error code."""
 
-    def __init__(self, code: str, message: str, hint: str | None = None) -> None:
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        hint: str | None = None,
+        until: str | None = None,
+    ) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
         self.hint = hint
+        # The ISO-8601 time downloads resume, on a throttled ``get`` only
+        # (ARCHITECTURE 4.2, 0.1.5); ``None`` for every other failure.
+        self.until = until
 
 
 class Cancelled(Exception):

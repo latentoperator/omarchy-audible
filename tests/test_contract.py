@@ -47,6 +47,9 @@ COMMAND_CASES: tuple[tuple[str, tuple[str, ...], str | None], ...] = (
     ("setup", (), None),
     ("sync", (), None),
     ("get", ("B00FAKE01",), None),
+    # The throttled refusal, and the pause it writes (0.1.5): its `error`
+    # carries `until`, and the fake tree is fresh per case.
+    ("get", ("B00FAKE01", "--fake-fail", "throttled"), None),
     ("cancel", ("B00FAKE01",), None),
     ("remove", ("B00FAKE01",), None),
     ("local", (), None),
@@ -59,7 +62,8 @@ COMMAND_CASES: tuple[tuple[str, tuple[str, ...], str | None], ...] = (
     ("position-push", ("B00FAKE01", "1000", "--at", "2026-01-01T00:00:00Z"), None),
 )
 
-CASE_IDS = [name for name, _, _ in COMMAND_CASES]
+# The args are part of the id: `get` appears twice, once for each fake-fail run.
+CASE_IDS = [f"{name} {' '.join(args)}".strip() for name, args, _ in COMMAND_CASES]
 
 
 def _load_schemas(schemas_dir: Path) -> dict[str, dict]:

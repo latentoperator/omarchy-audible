@@ -39,6 +39,8 @@ class ErrorCode:
     UNSAFE_PATH = "unsafe_path"
     BAD_ASIN = "bad_asin"
     AUTH_FAILED = "auth_failed"
+    # Audible refused the license with CustomerThrottled (0.1.5, 4.3).
+    THROTTLED = "throttled"
 
     # auth (B3, ARCHITECTURE 4.7)
     BAD_URL = "bad_url"
@@ -70,9 +72,17 @@ def done(**fields: Any) -> None:
     emit("done", **fields)
 
 
-def error(code: str, message: str, hint: str | None = None) -> None:
-    """Emit the terminal ``error`` event of a failed run."""
+def error(
+    code: str, message: str, hint: str | None = None, until: str | None = None
+) -> None:
+    """Emit the terminal ``error`` event of a failed run.
+
+    ``until`` is the ISO-8601 time downloads resume; only a throttled ``get``
+    carries it (ARCHITECTURE 4.2, 0.1.5).
+    """
     event: dict[str, Any] = {"type": "error", "code": code, "message": message}
     if hint:
         event["hint"] = hint
+    if until:
+        event["until"] = until
     write_event(event)

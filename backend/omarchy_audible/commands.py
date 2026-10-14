@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Self
 
-from . import catalog, fakestate, joblock, protocol
+from . import catalog, fakestate, joblock, pause, protocol
 from .audible_download import ASIN_ENV
 from .auth import (
     AudiblePort,
@@ -188,6 +188,7 @@ def cmd_status(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -
             **_books_location(paths),
             **_status_dirs(paths),
             mpris_script=find_mpris_script(),
+            downloads_paused_until=pause.until_iso(paths),
         )
         protocol.done()
         return protocol.EXIT_OK
@@ -215,6 +216,7 @@ def cmd_status(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -
         **_books_location(paths),
         **_status_dirs(paths),
         mpris_script=find_mpris_script(),
+        downloads_paused_until=pause.until_iso(paths),
     )
     protocol.done()
     return protocol.EXIT_OK
@@ -529,7 +531,7 @@ def cmd_get(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> i
         )
         return protocol.EXIT_ERROR
     except PipelineError as exc:
-        protocol.error(exc.code, exc.message, exc.hint)
+        protocol.error(exc.code, exc.message, exc.hint, until=exc.until)
         return protocol.EXIT_ERROR
     else:
         protocol.done(path=str(path))
@@ -919,6 +921,9 @@ def cmd_login_finish(
     }
     if outcome.warning is not None:
         fields["warning"] = outcome.warning
+    # Signing in registers a new device, so Audible's throttle no longer
+    # applies (ARCHITECTURE 4.2, 0.1.5).
+    pause.clear(paths)
     protocol.done(**fields)
     return protocol.EXIT_OK
 
@@ -934,6 +939,7 @@ def cmd_login_import_cli(
     except PipelineError as exc:
         protocol.error(exc.code, exc.message, exc.hint)
         return _error_exit(exc)
+    pause.clear(paths)  # a freshly imported device is not throttled
     protocol.done()
     return protocol.EXIT_OK
 
@@ -945,6 +951,7 @@ def cmd_logout(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -
     except PipelineError as exc:
         protocol.error(exc.code, exc.message, exc.hint)
         return _error_exit(exc)
+    pause.clear(paths)  # the next sign-in is a new device (ARCHITECTURE 4.2)
     protocol.done()
     return protocol.EXIT_OK
 
