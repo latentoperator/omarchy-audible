@@ -43,7 +43,8 @@ MODELS_LOGGER = "audible_cli.models"
 #: bare code, and :data:`REASON_RE` is what decides whether it is kept.
 _DENIAL_RE = re.compile(
     r"^License denied message for \S+: (?P<message>.*?)"
-    r"\.Reason: (?P<reason>.*?)\.Type: \S+$"
+    r"\.Reason: (?P<reason>.*?)\.Type: \S+$",
+    re.DOTALL,
 )
 #: Reason codes are Audible's; nothing else is kept, and nothing from the
 #: message is written down.

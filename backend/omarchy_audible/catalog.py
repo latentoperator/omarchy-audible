@@ -28,7 +28,7 @@ from typing import Any, Protocol
 from . import fsutil, protocol
 from .auth import DEFAULT_MARKETPLACE
 from .errors import PipelineError, classify_audible_error
-from .library import iso_now
+from .library import _ASIN_RE, iso_now
 from .log import log
 from .paths import Paths
 from .positions import (
@@ -150,11 +150,13 @@ def cover_url(item: dict[str, Any]) -> str | None:
 def book_entry(item: dict[str, Any]) -> tuple[dict[str, Any], str | None] | None:
     """Map a raw library item onto a catalog book plus its cover URL.
 
-    Returns ``None`` when the item cannot become a book (no usable ASIN), so a
-    malformed entry is skipped rather than written into the catalog.
+    Returns ``None`` when the ASIN is not 4-32 ASCII letters or digits (the
+    shared ``library`` ASIN rule), so malformed entries are skipped before
+    their identifiers reach covers or position reads. Match the whole value;
+    whitespace and separators are never stripped or normalized.
     """
     asin = item.get("asin")
-    if not isinstance(asin, str) or not asin:
+    if not isinstance(asin, str) or not _ASIN_RE.fullmatch(asin):
         return None
     title = item.get("title")
     subtitle = item.get("subtitle")
@@ -342,6 +344,28 @@ def http_fetch_cover(url: str) -> bytes:
         return response.read()
 
 
+def _cover_target(paths: Paths, asin: str) -> Path | None:
+    """Validate an identifier and keep its destination in the data covers tree.
+
+    Resolve independently of catalog ingestion: a valid identifier must not
+    redirect a cover through an existing directory or file symlink.
+    """
+    if not isinstance(asin, str) or not _ASIN_RE.fullmatch(asin):
+        return None
+    target = paths.covers_dir / f"{asin}.jpg"
+    try:
+        root = paths.data_dir.resolve() / "covers"
+        if (
+            paths.covers_dir.resolve() != root
+            or target.is_symlink()
+            or target.resolve().parent != root
+        ):
+            return None
+    except (OSError, RuntimeError):
+        return None
+    return target
+
+
 def fetch_covers(
     paths: Paths,
     covers: dict[str, str],
@@ -358,8 +382,8 @@ def fetch_covers(
         return 0
     downloaded = 0
     for asin, url in covers.items():
-        target = paths.covers_dir / f"{asin}.jpg"
-        if target.is_file() and not full:
+        target = _cover_target(paths, asin)
+        if target is None or (target.is_file() and not full):
             continue
         try:
             data = fetch(url)
@@ -367,6 +391,8 @@ def fetch_covers(
             log(f"cover download failed ({type(exc).__name__})")
             continue
         if not isinstance(data, (bytes, bytearray)) or not data:
+            continue
+        if _cover_target(paths, asin) is None:
             continue
         fsutil.atomic_write_bytes(target, bytes(data))
         downloaded += 1
