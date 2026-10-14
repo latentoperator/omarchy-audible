@@ -291,7 +291,7 @@ def test_conditional_ack_reports_both_outcomes(env, run_cli, events, fake_paths)
     }
 
 
-def test_fake_record_equal_to_symlinked_books_dir_is_recorded(env, tmp_path):
+def test_fake_record_equal_to_unsafe_symlinked_books_dir_is_not_recorded(env, tmp_path):
     fake = Paths.from_env(env, fake=True)
     outside = tmp_path / "outside-books"
     outside.mkdir()
@@ -300,7 +300,7 @@ def test_fake_record_equal_to_symlinked_books_dir_is_recorded(env, tmp_path):
     fake.books_location_file.parent.mkdir(parents=True, exist_ok=True)
     fake.books_location_file.write_text(json.dumps({"books_dir": str(fake.books_dir)}))
     location = commands._books_location(fake)
-    assert location["books_location_recorded"] is True
+    assert location["books_location_recorded"] is False
     assert location["old_books"] is None
 
 

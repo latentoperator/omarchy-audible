@@ -132,8 +132,20 @@ def _meta_duration_ms(meta: dict[str, Any]) -> int | None:
     return value
 
 
-def scan_local(books_dir: Path) -> list[dict[str, Any]]:
+def require_books_dir(books_dir: Path | None) -> Path:
+    """Refuse book I/O when root selection found no safe directory."""
+    if books_dir is None:
+        raise PipelineError(
+            ErrorCode.UNSAFE_PATH,
+            "no safe books directory is available",
+            hint="choose a safe booksDir or repair the default folder",
+        )
+    return books_dir
+
+
+def scan_local(books_dir: Path | None) -> list[dict[str, Any]]:
     """Every downloaded book under ``books_dir``, sorted by ASIN."""
+    books_dir = require_books_dir(books_dir)
     if not books_dir.is_dir():
         return []
     books: list[dict[str, Any]] = []
@@ -233,7 +245,7 @@ def play_info_payload(
 
 
 def validate_asin(
-    books_dir: Path, asin: str, *, code: str = ErrorCode.BAD_ASIN
+    books_dir: Path | None, asin: str, *, code: str = ErrorCode.BAD_ASIN
 ) -> Path:
     """Resolve ``<booksDir>/<asin>`` or refuse it (ARCHITECTURE 4.4).
 
@@ -250,6 +262,7 @@ def validate_asin(
             f"invalid ASIN: {asin!r}",
             hint="an ASIN is 4-32 letters or digits, for example B00FAKE01",
         )
+    books_dir = require_books_dir(books_dir)
     target = books_dir / asin
     books_real = books_dir.resolve()
     target_real = target.resolve()
@@ -268,12 +281,12 @@ def validate_asin(
     return target
 
 
-def ensure_safe_target(books_dir: Path, asin: str) -> Path:
+def ensure_safe_target(books_dir: Path | None, asin: str) -> Path:
     """Resolve ``<booksDir>/<asin>`` for ``remove`` (ARCHITECTURE 4.4)."""
     return validate_asin(books_dir, asin, code=ErrorCode.UNSAFE_PATH)
 
 
-def remove_book(books_dir: Path, asin: str) -> int:
+def remove_book(books_dir: Path | None, asin: str) -> int:
     """Delete ``<booksDir>/<asin>`` and return the bytes freed.
 
     Local only: nothing here touches the network or the Audible account.
