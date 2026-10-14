@@ -35,6 +35,31 @@ ColumnLayout {
   property int selected: -1
   property bool confirmRemoveAll: false
   property bool confirmDisconnect: false
+  property var panelSurface: null
+  readonly property string removableKey: removable.slice().sort().join(",")
+  onRemovableKeyChanged: resetConfirmations()
+
+  function resetConfirmations() {
+    confirmRemoveAll = false
+    confirmDisconnect = false
+  }
+
+  Connections {
+    target: root.panelSurface
+    function onPanelClosed() { root.resetConfirmations() }
+    function onPanelEscapeRequested(event) {
+      if (root.service && root.service.view === Panel.VIEW_LIBRARY && (root.confirmRemoveAll || root.confirmDisconnect)) {
+        root.resetConfirmations()
+        event.accepted = true
+      }
+    }
+  }
+  Connections {
+    target: root.service
+    function onViewChanged() {
+      if (root.service.view !== Panel.VIEW_LIBRARY) root.resetConfirmations()
+    }
+  }
 
   signal closeRequested()
 
@@ -90,7 +115,8 @@ ColumnLayout {
         var action = Drawer.searchKey(event.key, search.text)
         // Esc first cancels an open removal or download question, then closes.
         if (action === Drawer.KEY_CLOSE) {
-          if (root.service && root.service.removeConfirmAsin.length > 0) root.service.cancelRemoveConfirm()
+          if (root.confirmRemoveAll || root.confirmDisconnect) root.resetConfirmations()
+          else if (root.service && root.service.removeConfirmAsin.length > 0) root.service.cancelRemoveConfirm()
           else if (root.service && root.service.confirmAsin.length > 0) root.service.cancelConfirm()
           else root.closeRequested()
         }
