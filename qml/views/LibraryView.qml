@@ -168,6 +168,17 @@ ColumnLayout {
 
   }
 
+  Text {
+    Layout.fillWidth: true
+    visible: search.pasteError.length > 0
+    text: search.pasteError
+    textFormat: Text.PlainText
+    wrapMode: Text.WordWrap
+    color: Color.urgent
+    font.family: Style.font.family
+    font.pixelSize: Style.font.bodySmall
+  }
+
   // A pick whose player never started (G3 finding 2). The drawer reopens on
   // Library then, since nothing is loaded for Mini.
   Text {

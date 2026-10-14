@@ -14,6 +14,7 @@ harness drives the real component in a headless Qt window.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -142,6 +143,15 @@ def observed(tmp_path_factory) -> dict:
         target.write_text(text, encoding="utf-8")
     result = subprocess.run(
         [sys.executable, str(Path(__file__).with_name("field_harness.py")), str(stubs)],
+        env={
+            **os.environ,
+            "HOME": str(stubs),
+            "XDG_CONFIG_HOME": str(stubs / "config"),
+            "XDG_DATA_HOME": str(stubs / "data"),
+            "TMPDIR": str(stubs),
+            "OMARCHY_AUDIBLE_FAKE": "1",
+            "QT_QPA_PLATFORM": "offscreen",
+        },
         capture_output=True,
         text=True,
         timeout=60,
@@ -200,6 +210,71 @@ def test_paste_goes_only_through_the_bounded_helper(observed):
     # A paste that would pass maxChars is dropped whole; a bad line is ignored.
     assert observed["over_limit_paste"] == "xa b"
     assert observed["bad_line"] == "xa b"
+
+
+@pytest.mark.parametrize(
+    "name,reason",
+    [
+        ("no_owner", "unavailable"),
+        ("failed_start", "unavailable"),
+        ("missing_tool", "unavailable"),
+        ("too_large", "too large"),
+        ("timeout", "timed out"),
+        ("malformed", "unavailable"),
+        ("empty", "unavailable"),
+        ("over_chars", "too large"),
+        ("failed_with_output", "unavailable"),
+        ("multiple", "unavailable"),
+        ("watchdog", "timed out"),
+        ("watchdog_pending", "timed out"),
+    ],
+)
+def test_failed_replacement_keeps_input_and_explains_without_secrets(
+    observed, name, reason
+):
+    result = observed["paste_cases"][name]
+    assert result["started_text"] == result["before_exit"] == result["text"] == "keep"
+    assert reason in result["error"].lower()
+    assert "retry" in result["error"].lower()
+    assert "SYNTHETIC_PRIVATE_INPUT" not in result["error"]
+    assert result["pending_cleared"]
+    assert result["pasting"] is False
+    if name.startswith("watchdog"):
+        assert result["stopped"]
+        assert result["overlapping_paste"] is False
+
+
+@pytest.mark.parametrize("name", ["success", "late_success"])
+def test_success_replaces_only_after_valid_helper_exit(observed, name):
+    result = observed["paste_cases"][name]
+    assert result["started_text"] == result["before_exit"] == "keep"
+    assert result["text"] == "new"
+    assert result["error"] == ""
+    assert result["pending_cleared"]
+
+
+def test_oversized_edit_explains_without_erasing(observed):
+    assert observed["edit_limit_text"] == "abcdefghijkl"
+    assert "too large" in observed["edit_limit_error"].lower()
+
+
+def test_paste_button_requests_atomic_replacement_and_views_display_errors():
+    onboarding = (REPO / "qml/views/OnboardingView.qml").read_text()
+    button = onboarding.split('text: "Paste from clipboard"', 1)[1].split(
+        "Button {", 1
+    )[0]
+    assert 'paste.text = ""' not in button
+    assert "paste.pasteClipboard(true)" in button
+    for relative, name in (
+        ("qml/views/OnboardingView.qml", "paste"),
+        ("qml/views/LibraryView.qml", "search"),
+    ):
+        source = (REPO / relative).read_text()
+        blocks = re.findall(r"Text\s*\{[^{}]*" + name + r"\.pasteError[^{}]*\}", source)
+        assert len(blocks) == 1
+        assert "textFormat: Text.PlainText" in blocks[0]
+        assert "wrapMode: Text.WordWrap" in blocks[0]
+        assert "color: Color.urgent" in blocks[0]
 
 
 def test_middle_click_pastes_nothing(observed):

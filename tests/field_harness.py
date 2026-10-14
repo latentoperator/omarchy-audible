@@ -25,6 +25,7 @@ from PySide6.QtCore import Q_ARG, Q_RETURN_ARG, QEvent, QMetaObject, QPointF, Qt
 from PySide6.QtGui import QGuiApplication, QKeyEvent, QMouseEvent
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickItem
+from PySide6.QtTest import QTest
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -69,6 +70,8 @@ Window {
     width: 100
   }
 
+  function pasteReplace() { return field.pasteClipboard(true) }
+  function failStart(index) { Hub.processes[index].running = false; return true }
   function processCount() { return Hub.processes.length }
   // The index of the field's own Process: the one that has been started.
   function started() {
@@ -85,7 +88,12 @@ Window {
   function processCommand(index) { return Hub.processes[index].command.map(String) }
   function processRunning(index) { return Hub.processes[index].running }
   function deliver(index, line) { Hub.processes[index].stdout.read(line); return true }
-  function finish(index) { Hub.processes[index].finish(0); return true }
+  function finish(index, code) { Hub.processes[index].finish(code); return true }
+  function finishThenDeliver(index, line) {
+    Hub.processes[index].finish(0)
+    Hub.processes[index].stdout.read(line)
+    return true
+  }
 }
 """
 
@@ -98,6 +106,8 @@ def call(target, name, *args):
         Q_RETURN_ARG("QVariant"),
         *[Q_ARG("QVariant", arg) for arg in args],
     )
+    if name in ("finish", "finishThenDeliver"):
+        QTest.qWait(80)
     return value.toVariant() if hasattr(value, "toVariant") else value
 
 
@@ -186,16 +196,16 @@ def main() -> None:
     settle()
     out["second_paste_while_running"] = text()
     call(window, "deliver", index, json.dumps({"text": "a\nb"}))
-    call(window, "finish", index)
+    call(window, "finish", index, 0)
     out["pasted"] = text()
     key(app, window, Qt.Key_Insert, Qt.ShiftModifier)
     settle()
     call(window, "deliver", index, json.dumps({"text": "far too long to fit"}))
-    call(window, "finish", index)
+    call(window, "finish", index, 0)
     out["over_limit_paste"] = text()
     key(app, window, Qt.Key_V, Qt.ControlModifier, "\x16")
     call(window, "deliver", index, "not json")
-    call(window, "finish", index)
+    call(window, "finish", index, 0)
     out["bad_line"] = text()
 
     # A middle click pastes the primary selection into an editable field. The
@@ -234,6 +244,58 @@ def main() -> None:
     out["password_readOnly"] = other.property("readOnly")
     out["password_canPaste"] = other.property("canPaste")
 
+    field.forceActiveFocus()
+    out["paste_cases"] = {}
+    cases = {
+        "no_owner": ([], 5),
+        "failed_start": ([], 2),
+        "missing_tool": ([], 2),
+        "too_large": ([], 3),
+        "timeout": ([], 4),
+        "malformed": (["SYNTHETIC_PRIVATE_INPUT"], 0),
+        "empty": ([], 0),
+        "over_chars": ([json.dumps({"text": "SYNTHETIC_PRIVATE_INPUT"})], 0),
+        "failed_with_output": ([json.dumps({"text": "new"})], 2),
+        "multiple": ([json.dumps({"text": "new"})] * 2, 0),
+        "success": ([json.dumps({"text": "new"})], 0),
+        "watchdog": ([json.dumps({"text": "new"})], 0),
+        "watchdog_pending": ([json.dumps({"text": "new"})], 0),
+        "late_success": ([json.dumps({"text": "new"})], 0),
+    }
+    for name, (lines, code) in cases.items():
+        field.setProperty("text", "keep")
+        field.setProperty("cursorPosition", 4)
+        call(window, "pasteReplace")
+        result: dict[str, object] = {"started_text": text()}
+        if name == "watchdog_pending":
+            call(window, "deliver", index, lines[0])
+        if name.startswith("watchdog"):
+            QTest.qWait(3750)
+            result["stopped"] = not call(window, "processRunning", index)
+            result["overlapping_paste"] = call(window, "pasteReplace")
+        if name != "late_success":
+            for line in lines:
+                call(window, "deliver", index, line)
+        result["before_exit"] = text()
+        if name == "failed_start":
+            call(window, "failStart", index)
+            settle()
+        elif name == "late_success":
+            call(window, "finishThenDeliver", index, lines[0])
+        else:
+            call(window, "finish", index, code)
+        result["text"] = text()
+        result["error"] = field.property("pasteError") or ""
+        result["pending_cleared"] = field.property("_pasteValue") is None
+        result["pasting"] = field.property("pasting")
+        out["paste_cases"][name] = result
+
+    # A rejected ordinary insertion also explains the limit without erasing.
+    field.setProperty("text", "abcdefghijkl")
+    field.setProperty("cursorPosition", 12)
+    keys(app, window, "x")
+    out["edit_limit_error"] = field.property("pasteError") or ""
+    out["edit_limit_text"] = text()
     out["readOnly_end"] = field.property("readOnly")
     print(json.dumps(out))
 
