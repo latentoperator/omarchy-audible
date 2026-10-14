@@ -93,12 +93,12 @@ _p.result = function (state, effects) {
 // resume time goes with the release, so the banner goes too; the next
 // `status` writes the real one.
 _p.settled = function (state, now) {
-  if (state.asins.length === 0 || paused(state, now)) {
+  if (paused(state, now)) {
     return _p.result(state);
   }
   return _p.result(
     { "asins": [], "until": "" },
-    [{ "kind": EFFECT_RELEASE, "asins": state.asins }]
+    state.asins.length === 0 ? [] : [{ "kind": EFFECT_RELEASE, "asins": state.asins }]
   );
 };
 

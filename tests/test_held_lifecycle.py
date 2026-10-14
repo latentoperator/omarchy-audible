@@ -18,7 +18,15 @@ UNTIL = "2027-01-15T16:00:00Z"
 @pytest.fixture
 def service():
     module = qjs.load("Held")
-    for name in ("Held", "JobQueue", "Signin", "Onboarding", "LibraryUi", "Playback"):
+    for name in (
+        "Held",
+        "JobQueue",
+        "Signin",
+        "Onboarding",
+        "LibraryUi",
+        "Playback",
+        "PlayRequest",
+    ):
         path = REPO / "qml/lib" / f"{name}.js"
         source, imports = qjs._resolve_imports(
             qjs._strip_pragma(path.read_text()), path
@@ -41,6 +49,7 @@ def service():
         "statusCurrent",
         "acceptStatus",
         "requestStatus",
+        "invalidateStatus",
         "finishStatus",
     ):
         if f"function {name}(" in source:
@@ -68,6 +77,7 @@ this.held = Held.create(); this.commands = []; this.logs = [];
 this.flagKnown = true; this.status = {authenticated:true}; this.statusAtMs = NOW;
 this.downloadLifecycle = 0; this.downloadsDisconnected = false;
 this.statusRequest = ''; this.statusSerial = 0; this.statusRefreshNeeded = false;
+this.statusAgain = false;
 this.statusRetryMs = 30000;
 Object.defineProperty(this, 'downloadsPausedUntil', {get:function(){return Held.until(held);}});
 Object.defineProperty(this, 'downloadsPaused', {get:function(){return Held.paused(held,statusAtMs);}});

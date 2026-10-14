@@ -119,6 +119,13 @@ Item {
   property var held: Held.create()
   property int downloadLifecycle: 0
   property bool downloadsDisconnected: false
+  // One current status read; failed pause refreshes retry separately from the
+  // cooldown clock, so a missing/slow reply never spawns a one-second loop.
+  property string statusRequest: ""
+  property int statusSerial: 0
+  property bool statusAgain: false
+  property bool statusRefreshNeeded: false
+  property int statusRetryMs: 30000
   readonly property string downloadsPausedUntil: Held.until(held)
   readonly property bool downloadsPaused: Held.paused(held, statusAtMs)
   property string pendingResume: ""
@@ -250,7 +257,7 @@ Item {
       return false
     }
     if (command === "get" && !jobAllowed({ "command": command })) return false
-    if (command === "status") purpose = "status:" + downloadLifecycle
+    if (command === "status") return requestStatus(purpose)
     runner.run(command, args, purpose)
     return true
   }
@@ -259,6 +266,7 @@ Item {
   function beginDisconnect() {
     downloadsDisconnected = true
     downloadLifecycle += 1
+    invalidateStatus()
     held = Held.create()
     confirmAsin = ""
     schedulePauseWake()
@@ -272,10 +280,12 @@ Item {
   function finishDisconnect() {
     // Invalidate reads started while logout waited for the exclusive job slot.
     downloadLifecycle += 1
+    invalidateStatus()
   }
 
   function downloadsConnected() {
     downloadLifecycle += 1
+    invalidateStatus()
     downloadsDisconnected = false
   }
 
@@ -285,8 +295,42 @@ Item {
     return removals.jobAllowed(job)
   }
 
+  function invalidateStatus() {
+    statusRequest = ""
+    statusAgain = false
+    statusRefreshNeeded = false
+    statusRetryMs = 30000
+    statusRetryTimer.stop()
+  }
+
+  function requestStatus(purpose) {
+    if (statusRequest.length > 0) {
+      // Coalesce ordinary checks too, but keep one follow-up for changed
+      // settings/job completion while the existing process was reading.
+      if (purpose !== "pause-refresh") statusAgain = true
+      return true
+    }
+    statusRetryTimer.stop()
+    statusRequest = "status:" + downloadLifecycle + ":" + (++statusSerial)
+    runner.run("status", [], statusRequest)
+    return true
+  }
+
   function statusCurrent(job) {
-    return job.command === "status" && job.purpose === "status:" + downloadLifecycle
+    return job.command === "status" && statusRequest.length > 0 && job.purpose === statusRequest
+  }
+
+  function finishStatus(job) {
+    if (!statusCurrent(job)) return
+    statusRequest = ""
+    if (statusAgain) {
+      statusAgain = false
+      run("status", [])
+    } else if (statusRefreshNeeded && !downloadsDisconnected) {
+      statusRetryTimer.interval = statusRetryMs
+      statusRetryMs = Math.min(300000, statusRetryMs * 2)
+      statusRetryTimer.restart()
+    }
   }
 
   function acknowledgeBooksLocation() {
@@ -671,8 +715,11 @@ Item {
   // case `status` is slow or the read fails — then read the real one, which
   // releases whatever is still held (0.1.5, ARCHITECTURE 4.2).
   function onPauseElapsed() {
+    var hadPause = downloadsPausedUntil.length > 0
     applyHeld({ "type": Held.EVENT_NOW, "now": Date.now() })
-    run("status", [])
+    if (!hadPause || downloadsDisconnected) return
+    statusRefreshNeeded = true
+    run("status", [], "pause-refresh")
   }
 
   // Hold the book Audible just refused, and every `get` still queued behind
@@ -1010,6 +1057,12 @@ Item {
   }
 
   Timer {
+    id: statusRetryTimer
+    repeat: false
+    onTriggered: root.run("status", [], "pause-refresh")
+  }
+
+  Timer {
     id: settingsTimer
     interval: 1000
     repeat: false
@@ -1076,6 +1129,9 @@ Item {
       var silentAckFailure = ""
       if (record.type === "status") {
         if (!root.statusCurrent(job)) return
+        root.statusRefreshNeeded = false
+        root.statusRetryMs = 30000
+        statusRetryTimer.stop()
         root.status = record
         root.statusAtMs = Date.now()
         root.refreshCatalogAge()
@@ -1119,6 +1175,7 @@ Item {
     }
 
     onJobFinished: function(job, outcome) {
+      if (job.command === "status") root.finishStatus(job)
       var text = outcome.ok ? "ok" : String(outcome.code) + (Signin.isOnboardingCommand(job.command)
         ? "" : ": " + String(outcome.message || ""))
       signinFlow.handleFinished(job, outcome)
