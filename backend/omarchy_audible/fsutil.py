@@ -65,6 +65,29 @@ def ensure_private_dir(path: Path) -> None:
         pass
 
 
+_ACL_XATTRS = ("system.posix_acl_default", "system.posix_acl_access")
+
+
+def ensure_private_staging_dir(path: Path) -> None:
+    """Create ``path`` as ``0700`` with no POSIX ACLs (best effort).
+
+    A directory inherits its parent's default ACL, and a default ACL makes the
+    kernel ignore the umask for every file created inside, so a child's
+    ``0666`` open could still grant access to the users the ACL names. With
+    both ACLs removed, the plain ``0700`` mode and the child's umask decide.
+    """
+    ensure_private_dir(path)
+    for name in _ACL_XATTRS:
+        try:
+            os.removexattr(path, name)
+        except OSError:  # no ACL there, or a filesystem without ACL support
+            pass
+    try:
+        os.chmod(path, 0o700)
+    except OSError:  # pragma: no cover - a directory we cannot chmod
+        pass
+
+
 def write_private_text(path: Path, text: str) -> None:
     """Create ``path`` as ``0600`` and write ``text``.
 

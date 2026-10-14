@@ -705,3 +705,162 @@ def test_get_refuses_a_symlink_pointing_outside(
     parsed = validate_stream(result, expect_last="error")
     assert parsed[-1]["code"] == "bad_asin"
     assert (victim / "keep.txt").is_file()
+
+
+# --- the voucher is private from its creation (marketplace review of 0.1.3) ---
+
+
+def _voucher_probe_script(tmp_path: Path, asin: str) -> Path:
+    """A fake audible-cli that downloads like the real one and records modes.
+
+    It writes the voucher first, as audible-cli 0.6.0 does, and records the
+    umask it runs under, ``.partial/``'s mode and the voucher's mode while the
+    "download" is still in progress.
+    """
+    script = tmp_path / "fake-audible-probe"
+    voucher = json.dumps(
+        {"content_license": {"license_response": {"key": "00" * 16, "iv": "11" * 16}}}
+    )
+    script.write_text(
+        "#!/bin/sh\n"
+        f"printf '%s' '{voucher}' > './{asin}.voucher'\n"
+        f"printf 'x' > './{asin}.aaxc'\n"
+        'printf \'umask=%s\\n\' "$(umask)" >> "$PROBE"\n'
+        'printf \'dir=%s\\n\' "$(stat -c %a .)" >> "$PROBE"\n'
+        f"printf 'voucher=%s\\n' \"$(stat -c %a './{asin}.voucher')\" >> \"$PROBE\"\n",
+        encoding="utf-8",
+    )
+    script.chmod(0o755)
+    return script
+
+
+def test_real_get_keeps_the_voucher_private_under_a_022_umask(
+    paths, monkeypatch, tmp_path
+):
+    """No other local user can read the voucher, even mid-download.
+
+    audible-cli writes the decrypted key/IV into ``<asin>.voucher`` before the
+    audio has finished. ``.partial/`` is ``0700`` before audible-cli starts, and
+    audible-cli runs under umask ``077``, so the voucher is never readable by
+    anyone else, whatever the shell's umask and the books folder's mode.
+    """
+    import subprocess
+
+    asin = "B0REAL0001"
+    probe = tmp_path / "probe.txt"
+    script = _voucher_probe_script(tmp_path, asin)
+    metadata = {
+        "content_metadata": {
+            "content_reference": {"content_size_in_bytes": 1, "acr": "ACR00001"},
+            "chapter_info": {"runtime_length_ms": 60_000},
+        }
+    }
+
+    def fake_run(argv, **kwargs):
+        return subprocess.CompletedProcess(argv, 0, stdout="60.0\n", stderr="")
+
+    monkeypatch.setattr(dl.subprocess, "run", fake_run)
+    monkeypatch.setattr(dl, "_wrapper_python", lambda: str(script))
+    monkeypatch.setattr(
+        dl,
+        "_audible_env",
+        lambda paths: {
+            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+            "PROBE": str(probe),
+        },
+    )
+    monkeypatch.setattr(dl, "_real_content_metadata", lambda asin, paths: metadata)
+    # A world-traversable books folder and a stale, world-readable .partial/.
+    paths.books_dir.chmod(0o755)
+    stale = paths.books_dir / asin / dl.PARTIAL_DIRNAME
+    stale.mkdir(parents=True)
+    stale.chmod(0o755)
+
+    previous = os.umask(0o022)
+    try:
+        final = dl.run_get(asin, paths, fake=False, emit=lambda *a, **k: None)
+    finally:
+        os.umask(previous)
+
+    seen = dict(
+        line.split("=", 1) for line in probe.read_text(encoding="utf-8").splitlines()
+    )
+    assert seen["dir"] == "700", f".partial/ was {seen['dir']} while downloading"
+    assert seen["umask"] == "0077", f"audible-cli ran under umask {seen['umask']}"
+    assert seen["voucher"] == "600", f"the voucher was {seen['voucher']}"
+    assert final.name == "book.aaxc"
+    assert not stale.exists()
+
+
+def test_aax_fallback_recreates_partial_privately(monkeypatch, tmp_path):
+    """The aax retry rebuilds ``.partial/`` as ``0700`` too."""
+    modes: list[tuple[str, int]] = []
+
+    def fake_download(cli, env, partial, asin, fmt, emit, children, total):
+        modes.append((fmt, stat.S_IMODE(partial.stat().st_mode)))
+        if fmt == "aax":
+            (partial / f"{asin}.aax").write_bytes(b"x")
+
+    monkeypatch.setattr(dl, "_wrapper_python", lambda: "audible")
+    monkeypatch.setattr(dl, "_audible_env", lambda paths: {})
+    monkeypatch.setattr(dl, "_audible_download", fake_download)
+    monkeypatch.setattr(dl, "_find_voucher", lambda partial: None)
+    monkeypatch.setattr(dl, "_read_chapters", lambda partial, asin: [])
+    partial = tmp_path / ".partial"
+    partial.mkdir(mode=0o700)
+
+    previous = os.umask(0o022)
+    try:
+        dl._real_fetch("B0FAKE0001", partial, None, lambda *a, **k: None, None, 0)
+    finally:
+        os.umask(previous)
+
+    assert modes == [("aaxc", 0o700), ("aax", 0o700)]
+
+
+def test_every_get_child_runs_under_a_private_umask(tmp_path):
+    """audible-cli, ffprobe and fake mode's ffmpeg all start with umask 077."""
+    out = tmp_path / "umask.txt"
+    previous = os.umask(0o022)
+    try:
+        proc = dl.ChildTracker().spawn(
+            ["/bin/sh", "-c", f"umask > '{out}'"], cwd=tmp_path
+        )
+        proc.wait()
+    finally:
+        os.umask(previous)
+    assert out.read_text(encoding="utf-8").strip() == "0077"
+
+
+def test_partial_drops_an_inherited_default_acl(tmp_path):
+    """A default ACL on the books folder would override the umask; it is removed."""
+    import shutil
+    import subprocess
+
+    if shutil.which("setfacl") is None or shutil.which("getfacl") is None:
+        pytest.skip("setfacl/getfacl not installed")
+    books = tmp_path / "books"
+    books.mkdir()
+    granted = subprocess.run(
+        ["setfacl", "-d", "-m", "o::rwx", str(books)], check=False, capture_output=True
+    )
+    if granted.returncode != 0:
+        pytest.skip("this filesystem has no POSIX ACLs")
+    partial = books / "B00FAKE01" / dl.PARTIAL_DIRNAME
+
+    dl.fsutil.ensure_private_staging_dir(partial)
+
+    acl = subprocess.run(
+        ["getfacl", "-c", "-p", str(partial)],
+        check=False,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert "default:" not in acl, acl
+    assert stat.S_IMODE(partial.stat().st_mode) == 0o700
+    voucher = partial / "B00FAKE01.voucher"
+    proc = dl.ChildTracker().spawn(
+        ["/bin/sh", "-c", f"printf k > '{voucher.name}'"], cwd=partial
+    )
+    proc.wait()
+    assert stat.S_IMODE(voucher.stat().st_mode) == 0o600

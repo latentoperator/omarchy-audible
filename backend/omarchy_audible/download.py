@@ -110,6 +110,9 @@ _AUDIO_TMP = "book.audio.tmp"
 # failure has somewhere to live that goes away with the rest of the staging
 # directory (F9).
 AUDIBLE_STDERR = "audible.stderr"
+# Every child of ``get`` starts with this umask, so nothing it writes into
+# ``.partial/`` (above all audible-cli's voucher) is ever readable by others.
+PRIVATE_UMASK = 0o077
 # The commit moves the previous copy in here before installing the new one, so
 # a failure partway through can put the old files back (F35).
 _OLD_DIRNAME = "old"
@@ -213,6 +216,10 @@ class ChildTracker:
     ) -> subprocess.Popen[bytes]:
         if stderr is None:
             stderr = subprocess.DEVNULL if quiet else subprocess.PIPE
+        # Every child writes inside ``.partial/``; audible-cli writes the
+        # voucher (the book's key) before the audio is done. Umask 077 keeps
+        # whatever a child creates private from its first byte, whatever the
+        # shell's umask.
         proc = subprocess.Popen(
             argv,
             env=env,
@@ -220,6 +227,7 @@ class ChildTracker:
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=stderr,
+            umask=PRIVATE_UMASK,
         )
         self._children.append(proc)
         return proc
@@ -789,7 +797,7 @@ def _real_fetch(
             raise
         log("the aaxc download offered no voucher; retrying as aax")
     _rmtree(partial)
-    partial.mkdir(parents=True, exist_ok=True)
+    fsutil.ensure_private_staging_dir(partial)
     # The metadata size is the aaxc file's; the aax file's size is not known
     # in advance, so its progress events carry no total (the UI then shows no
     # percent rather than a wrong one).
@@ -898,7 +906,10 @@ def run_get(
         # failure at any earlier step leaves the previous copy exactly as it was.
         target_dir.mkdir(parents=True, exist_ok=True)
         _rmtree(partial)
-        partial.mkdir(parents=True, exist_ok=True)
+        # ``0700`` before any child starts: the voucher audible-cli writes
+        # here holds the book's key, and the books folder may be traversable
+        # by other local users.
+        fsutil.ensure_private_staging_dir(partial)
 
         if fake:
             raw = _fake_fetch(asin, partial, emit, tracker, fake_fail, chapter_count)

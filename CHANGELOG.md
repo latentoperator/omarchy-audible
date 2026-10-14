@@ -2,6 +2,12 @@
 
 All notable changes to Omaudible. Versions follow `manifest.json`.
 
+## 0.1.4 (unreleased)
+
+### Security
+
+- A download in progress no longer exposes the book's key to other users on the same computer. audible-cli writes the key into a temporary voucher file before the audio finishes, and the staging folder (`.partial/`) used to be created with your normal permissions, so with a books folder other users could open, they could read that voucher until the download completed (marketplace review of 0.1.3). The staging folder is now `0700` with any inherited ACL removed, and audible-cli, ffprobe and ffmpeg run with umask `077`, so every file they write there is private from the moment it exists. Finished books are unchanged: `key.json` was already `0600`.
+
 ## 0.1.3 (2026-10-13)
 
 ### Security

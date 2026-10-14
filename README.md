@@ -142,7 +142,7 @@ Setup runs once. Running it again does nothing unless `backend/requirements.lock
 |---|---|
 | `~/.local/share/omarchy-audible/` | The setup environment (`venv/`), the library catalog, cover images, and listening state |
 | `~/.config/omarchy-audible/` | Your Audible login, written `0600` in a `0700` folder |
-| `~/Audiobooks/Audible/` (or `booksDir`) | One folder per downloaded book |
+| `~/Audiobooks/Audible/` (or `booksDir`) | One folder per downloaded book. A download is staged in a private `0700` `.partial/` folder, so the book's key is never readable by other users, even mid-download |
 | `$XDG_RUNTIME_DIR/omarchy-audible/` | The player socket and job lock, which do not survive a reboot |
 | `~/.config/omarchy/shell.json` | Omarchy's own record of the bar entry and its settings |
 
