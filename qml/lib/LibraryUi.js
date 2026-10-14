@@ -14,8 +14,8 @@
 // This is pure ECMAScript for the Qt JS engine: no imports but `Positions.js`
 // (`FINISH_TRAILING_MS`: a finished book within it of the end has nothing
 // left to resume, SCOPE 6), no Qt types, and nothing here throws on bad input.
-// A row whose `state` is missing or not one of the six 5.3 values reads as the
-// cloud row, which is a catalog book with no local copy and no job.
+// A row whose `state` is missing or not one of the seven 5.3 values reads as
+// the cloud row, which is a catalog book with no local copy and no job.
 //
 // The public surface is the constants and the seven functions below. Everything
 // else lives on the private `_p` namespace so it cannot leak into QML.
@@ -29,6 +29,9 @@ var BADGE_DOWNLOADING = "downloading";
 var BADGE_CONVERTING = "converting";
 var BADGE_LOCAL = "local";
 var BADGE_ERROR = "error";
+// A held download: Audible refused the license, so it waits for the pause to
+// pass (0.1.5, ARCHITECTURE 4.8). Not a failure, and nothing to pick.
+var BADGE_PAUSED = "paused";
 
 // `primaryAction` results.
 var ACTION_PLAY = "play";
@@ -75,6 +78,8 @@ var BANNER_OFFLINE = "offline";
 var BANNER_RECONNECT = "reconnect";
 var BANNER_SYNCING = "syncing";
 var BANNER_CONNECTION = "connection";
+// Downloads are held: Audible is limiting them for this account (0.1.5).
+var BANNER_PAUSED = "paused";
 
 var _p = {};
 
@@ -85,7 +90,8 @@ _p.STATES = [
   BADGE_DOWNLOADING,
   BADGE_CONVERTING,
   BADGE_LOCAL,
-  BADGE_ERROR
+  BADGE_ERROR,
+  BADGE_PAUSED
 ];
 
 _p.isNull = function (value) {
@@ -191,6 +197,11 @@ function badge(row, progress, offline) {
   if (state === BADGE_ERROR) {
     return { "kind": BADGE_ERROR, "label": "Failed \u2014 Retry" };
   }
+  if (state === BADGE_PAUSED) {
+    // Held, not failed: Audible is throttling, and the resume time is in the
+    // Library banner (0.1.5, ARCHITECTURE 4.8 and 6).
+    return { "kind": BADGE_PAUSED, "label": "Waiting" };
+  }
   if (offline === true) {
     return { "kind": BADGE_OFFLINE, "label": "Offline" };
   }
@@ -236,12 +247,15 @@ function resumeChoice(row, durationMs) {
 }
 
 // The Library view's state and banner (FR-L2, FR-A4). Inputs: `catalogLoaded`,
-// `syncing`, `total`, `shown`, `offline`, `connectionProblem`, `errorCode`.
+// `syncing`, `total`, `shown`, `offline`, `connectionProblem`, `errorCode`,
+// `paused` (Audible is limiting downloads, 0.1.5).
 //
 // With no catalog yet the view is `loading`, or `error` when `errorCode` says
 // the load failed. Once the catalog is loaded the view is `empty` for no books
 // at all, `no-results` for a search/filter that matched none, otherwise `list`.
-// Banner priority is reconnect > connection > offline > syncing.
+// Banner priority is reconnect > connection > paused > offline > syncing: the
+// pause is something the user has to be told, while offline and syncing are
+// notes about the catalog.
 function listState(state) {
   var source = _p.isObject(state) ? state : {};
   var errorCode = _p.stringOrNull(source.errorCode);
@@ -254,6 +268,8 @@ function listState(state) {
     banner = BANNER_RECONNECT;
   } else if (source.connectionProblem === true) {
     banner = BANNER_CONNECTION;
+  } else if (source.paused === true) {
+    banner = BANNER_PAUSED;
   } else if (source.offline === true) {
     banner = BANNER_OFFLINE;
   } else if (source.syncing === true) {
@@ -351,10 +367,13 @@ function storage(localBooks) {
 
 // Whether a row's download can be cancelled from the drawer (UX1): it is
 // queued or downloading. Converting is the staged commit, which a cancel
-// would only race, so it is left to finish.
+// would only race, so it is left to finish. A held (paused) download can be
+// cancelled too — that drops it from the held list (0.1.5).
 function canCancel(row) {
   var state = _p.rowState(row);
-  return state === BADGE_QUEUED || state === BADGE_DOWNLOADING;
+  return (
+    state === BADGE_QUEUED || state === BADGE_DOWNLOADING || state === BADGE_PAUSED
+  );
 }
 
 // What the row's icon shows for `primaryAction(row, offline)`, as

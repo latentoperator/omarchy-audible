@@ -163,7 +163,9 @@ ColumnLayout {
     Text {
       id: banner
       Layout.fillWidth: true
-      text: Drawer.bannerText(root.list.banner, root.service ? root.service.catalogAgeSeconds : null)
+      text: root.list.banner === LibraryUi.BANNER_PAUSED
+        ? Drawer.pausedBanner(root.service ? root.service.downloadsPausedUntil : "")
+        : Drawer.bannerText(root.list.banner, root.service ? root.service.catalogAgeSeconds : null)
       textFormat: Text.PlainText
       wrapMode: Text.WordWrap
       color: Drawer.bannerUrgent(root.list.banner) ? Color.urgent : Color.muted

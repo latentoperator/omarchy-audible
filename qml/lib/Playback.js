@@ -75,8 +75,9 @@ function recordPosition(state, asin, ms, nowIso) {
 }
 
 // The failure map after a job ends: a failed `get` is remembered by ASIN with
-// its message, a successful or cancelled one clears it. Other commands change
-// nothing.
+// its message, a successful, cancelled or throttled one clears it. Other
+// commands change nothing. A throttled download is not a failure — Audible
+// refused the license and the book waits for the pause (0.1.5).
 function updateFailures(failures, job, outcome) {
   var next = {};
   var current = isObject(failures) ? failures : {};
@@ -86,9 +87,10 @@ function updateFailures(failures, job, outcome) {
   if (!isObject(job) || job.command !== "get" || typeof job.asin !== "string" || job.asin.length === 0) {
     return next;
   }
-  if (isObject(outcome) && (outcome.ok === true || outcome.code === "cancelled")) {
+  if (isObject(outcome) && (outcome.ok === true || outcome.code === "cancelled" || outcome.code === "throttled")) {
     // A download the user cancelled is not a failure: the row goes back to
-    // its download icon (UX1).
+    // its download icon (UX1). A throttled one goes to the held list instead,
+    // which shows it as waiting (0.1.5).
     delete next[job.asin];
   } else {
     var message = isObject(outcome) && typeof outcome.message === "string" ? outcome.message : "download failed";
@@ -98,9 +100,10 @@ function updateFailures(failures, job, outcome) {
 }
 
 // The job entries `Library.buildRows` takes: queued `get`s, the running one
-// (converting once its progress says so), and remembered failures. A book that
-// is queued or running is not shown as failed, so a retry clears the error.
-function jobStates(pending, active, progress, failures) {
+// (converting once its progress says so), the held ones Audible refused, and
+// remembered failures. A book that is queued, running or held is not shown as
+// failed, so a retry clears the error. `held` is a list of ASINs (0.1.5).
+function jobStates(pending, active, progress, failures, held) {
   var entries = [];
   var busy = {};
   var queued = Array.isArray(pending) ? pending : [];
@@ -116,10 +119,19 @@ function jobStates(pending, active, progress, failures) {
     var converting = isObject(progress) && progress.stage === "convert";
     entries.push({ "asin": active.asin, "state": converting ? "converting" : "downloading" });
   }
+  var waiting = Array.isArray(held) ? held : [];
+  for (index = 0; index < waiting.length; index++) {
+    var asin = waiting[index];
+    if (typeof asin !== "string" || asin.length === 0) {
+      continue;
+    }
+    busy[asin] = true;
+    entries.push({ "asin": asin, "state": "paused" });
+  }
   var failed = isObject(failures) ? failures : {};
-  for (var asin in failed) {
-    if (busy[asin] !== true) {
-      entries.push({ "asin": asin, "state": "error", "message": failed[asin] });
+  for (var failedAsin in failed) {
+    if (busy[failedAsin] !== true) {
+      entries.push({ "asin": failedAsin, "state": "error", "message": failed[failedAsin] });
     }
   }
   return entries;

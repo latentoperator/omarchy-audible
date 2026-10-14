@@ -27,6 +27,12 @@ var STEP_SETUP = "setup";
 var STEP_CONNECT = "connect";
 var STEP_READY = "ready";
 
+// The refusal Audible answers with when it is limiting downloads for the
+// account (0.1.5, ARCHITECTURE 4.2). The backend's `throttled` error carries
+// the same sentence in its `message`; this is the one home the drawer's
+// banner reads too, and a test keeps the two in step.
+var THROTTLED_TEXT = "Audible is limiting downloads for this account right now. Your books still play. Try again tomorrow.";
+
 var _p = {};
 
 // The base of the install command (ARCHITECTURE §4.1).
@@ -118,6 +124,13 @@ _p.ERROR_TEXT = {
   "no_voucher": {
     "title": "Book not downloadable",
     "body": "Audible did not offer downloadable audio for this book.",
+    "reconnect": false
+  },
+  "throttled": {
+    // Audible is limiting downloads for the account: nothing is broken, and
+    // the book waits for the pause to pass (0.1.5, ARCHITECTURE 4.2).
+    "title": "Audible is limiting downloads",
+    "body": THROTTLED_TEXT,
     "reconnect": false
   },
   "cancelled": {

@@ -30,6 +30,7 @@ EXPECTED_API = {
     "STATE_DOWNLOADING",
     "STATE_ERROR",
     "STATE_LOCAL",
+    "STATE_PAUSED",
     "STATE_QUEUED",
     "_p",
     "buildRows",

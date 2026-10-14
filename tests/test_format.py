@@ -22,6 +22,7 @@ EXPECTED_API = {
     "duration",
     "left",
     "names",
+    "resumeAt",
     "storageLine",
     "tooltip",
 }
