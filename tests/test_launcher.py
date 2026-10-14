@@ -196,8 +196,12 @@ def test_launcher_requires_the_ready_marker(monkeypatch, capsys, env):
 
 
 def test_launcher_dispatches_into_a_ready_venv(monkeypatch, env):
-    venv_dir = _fake_venv(env)
-    (venv_dir / "omarchy-audible.setup.json").write_text("{}", encoding="utf-8")
+    from omarchy_audible import bootstrap
+    from omarchy_audible.paths import Paths
+
+    paths = Paths.from_env(env)
+    bootstrap.run_setup(paths, run=bootstrap.FakeRunner())
+    venv_dir = paths.venv_dir
     monkeypatch.setenv("XDG_DATA_HOME", env["XDG_DATA_HOME"])
     launcher = _load_launcher()
     captured: list[str] = []

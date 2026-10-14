@@ -35,7 +35,7 @@ from .auth import (
     read_account_record,
     valid_session_id,
 )
-from .bootstrap import run_setup, venv_ready
+from .bootstrap import run_setup, venv_state
 from .catalog import open_client, run_sync
 from .download import FAKE_FAIL_MODES, parse_fake_chapters, run_get
 from .errors import Cancelled, PipelineError
@@ -192,6 +192,7 @@ def cmd_status(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -
             missing=missing,
             authenticated=authenticated,
             venv_ready=venv,
+            venv_state="current_ready" if venv else "broken",
             marketplace=DEFAULT_MARKETPLACE,
             account=FAKE_ACCOUNT,
             catalog_age_s=None,
@@ -205,7 +206,8 @@ def cmd_status(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -
 
     missing = _missing_required_tools()
     authenticated = paths.auth_file.is_file()
-    venv = venv_ready(paths.venv_dir)
+    environment_state = venv_state(paths.venv_dir)
+    venv = environment_state == "current_ready"
     record = read_account_record(paths)
     account = record.get("account")
     if not (isinstance(account, str) and account):
@@ -220,6 +222,7 @@ def cmd_status(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -
         missing=missing,
         authenticated=authenticated,
         venv_ready=venv,
+        venv_state=environment_state,
         marketplace=marketplace,
         account=account if isinstance(account, str) else None,
         catalog_age_s=_catalog_age_s(paths),
@@ -255,8 +258,8 @@ def cmd_doctor(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -
     checks.append(
         {
             "name": "venv",
-            "ok": venv_ready(paths.venv_dir),
-            "detail": str(paths.venv_dir),
+            "ok": venv_state(paths.venv_dir) == "current_ready",
+            "detail": f"{venv_state(paths.venv_dir)}; run setup to check or repair",
         }
     )
     auth_ok = paths.auth_file.is_file()

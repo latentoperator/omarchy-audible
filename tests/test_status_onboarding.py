@@ -65,9 +65,7 @@ def _status_event(result, events) -> dict:
 
 
 def _make_ready_venv(paths: Paths) -> None:
-    (paths.venv_dir / "bin").mkdir(parents=True, exist_ok=True)
-    paths.venv_python.write_text("#!/bin/sh\n", encoding="utf-8")
-    bootstrap.marker_path(paths.venv_dir).write_text("{}", encoding="utf-8")
+    bootstrap.run_setup(paths, run=bootstrap.FakeRunner())
 
 
 def _write_fake_status(fake_paths: Paths, payload: object) -> None:
