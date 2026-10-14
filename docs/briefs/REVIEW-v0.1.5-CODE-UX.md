@@ -4,7 +4,9 @@
 
 **Reviewed:** `d82b252c75ea4e069a79bf8e54f5dd52073e62af` (`main`, v0.1.5, merged PR #121).
 
-**Review date:** 2026-10-14. **Status:** findings and proposed work, not implemented fixes.
+**Disposition (v0.1.6, unreleased):** B01 fixed in #126; B02 #123; B03 #124; B04 #128; B05/R01 #125; S01/S03/S04 #129; S02 #130; U01 #127; U02/U03/U04/U05 #131; D01 #132. Fixes are on `v016`, not released to `main`; combined review and attended checks remain. #114/#115/#116 remain open separately.
+
+**Review date:** 2026-10-14. The findings and baseline evidence below describe the reviewed v0.1.5 revision; they are retained as history, not current defect claims.
 
 ## Executive decision
 

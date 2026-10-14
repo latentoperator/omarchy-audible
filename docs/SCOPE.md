@@ -1,6 +1,8 @@
 # Scope — Omaudible
 
-Status: **planning** · Last updated: 2026-10-04 · Owner: @latentoperator
+Status: **v0.1.5 released; v0.1.6 remediation in progress** · Last updated: 2026-10-14 · Owner: @latentoperator
+
+The requirements below describe the current locked-original design (D7, B11). Earlier conversion experiments and decisions remain historical in PLAN, STATE and SPIKE-RESULTS.
 
 ## 1. One-line pitch
 
@@ -33,7 +35,7 @@ The user is an Omarchy user with an Audible account who works at the computer an
 ### 4.1 Account
 - **FR-A1** Connect from inside the drawer: choose marketplace, open the sign-in page in the default browser, and paste the redirected URL back (a "Paste from clipboard" button is provided). Handles 2FA/CAPTCHA because the sign-in happens in the user's own browser.
 - **FR-A2** Offer "Use existing audible-cli login" if `~/.audible/` has a valid auth file.
-- **FR-A3** Show the connected account and marketplace, with a Disconnect action that deletes local credentials.
+- **FR-A3** Show the connected account and marketplace. Browser sign-in registers a plugin-created device; Disconnect deletes local credentials and attempts to deregister only that device when its recorded ownership matches the loaded login identity. Imported or unverified devices are left registered.
 - **FR-A4** Detect expired or revoked credentials and show a "Reconnect" banner. Never fail silently.
 
 ### 4.2 Library
@@ -45,18 +47,18 @@ The user is an Omarchy user with an Audible account who works at the computer an
 - **FR-L6** Each row shows cover, title, author, runtime, a progress bar, and a state badge: ☁ cloud, ⬇ downloading (with progress), ● on this device.
 
 ### 4.3 Local storage
-- **FR-S1** Selecting a cloud book downloads and converts it. It does not play on its own; once it is local, selecting it plays it. Only one download runs at a time, with a queue.
-- **FR-S2** "Remove from this device" is available on any local book, from the row menu and the full player.
+- **FR-S1** Selecting a cloud book, then confirming Download, downloads the locked original (`aaxc`, with `aax` fallback), its private key material and an external chapter list; no conversion or unlocked copy is written (D7, B11). It does not play on its own; once it is local, selecting it plays it. Only one download runs at a time, with a queue.
+- **FR-S2** "Remove from this device" is available on any local book, from the Library row and Full player. A book no longer in the Audible library requires title-specific confirmation warning that re-download may be unavailable.
 - **FR-S3** Removal deletes only local files. It never calls an Audible delete or return endpoint. Tests must enforce this.
 - **FR-S4** The drawer shows total local usage ("3 books · 780 MB") and a "Remove all downloads" action.
-- **FR-S5** Setting **Auto-remove finished books**, default **Off**. When on, a book is removed after it is finished (position within 30s of the end, or EOF).
-- **FR-S6** Downloads are atomic. A cancelled or failed download leaves no half-files, and an interrupted one can be retried.
+- **FR-S5** Setting **Auto-remove finished books**, default **Off**. When on, an ordinary cached book is removed after it is finished (position within 30s of the end, or EOF). Bulk removal and auto-remove exclude books no longer in the Audible library.
+- **FR-S6** Downloads are staged before replacing a working copy. Failure/cancel with successful rollback cleans staging and preserves the previous copy. Failed rollback or termination during commit retains recovery staging and refuses retry until recovered; it must never discard the sole old copy (B01, ARCHITECTURE §4.3).
 - **FR-S7** Check free disk space before downloading and show a clear error if it is short.
 
 ### 4.4 Playback
 - **FR-P1** Playback is headless and independent of the UI. A detached `mpv` process is controlled over its IPC socket. The shell can restart and reconnect without interrupting audio.
 - **FR-P2** Controls: play/pause, back N seconds, forward N seconds (N defaults to 15 and is configurable), previous/next chapter, seek, speed (0.75–3.0×), and a sleep timer (15/30/45/60 min or end of chapter).
-- **FR-P3** Chapters come from the m4b. The player shows the chapter title, supports jumping to any chapter, and shows book-level elapsed and remaining time.
+- **FR-P3** Chapters come from Audible's list, stored as `chapters.txt` and supplied to mpv separately from the locked audio. Pre-B11 `book.m4b` downloads remain playable with their embedded chapters. The player shows the chapter title, supports jumping to any chapter, and shows book-level elapsed and remaining time.
 - **FR-P4** Resume. Position is saved locally every ~10s and on pause, quit, or book switch. On play, resume from the newest of the local and Audible positions.
 - **FR-P5** Position sync to Audible is best-effort: push every ~60s and on pause or stop. A failure never interrupts playback and is retried later.
 - **FR-P6** A shell IPC target exposes `toggle`, `playPause`, `skip <±s>`, `nextChapter`, `prevChapter` so users can bind Hyprland hotkeys. Media keys work if MPRIS is enabled (see ARCHITECTURE §7).
@@ -88,7 +90,7 @@ The keys live on the widget's `shell.json` entry and are typed by the plugin man
 - Buying, browsing, or discovering books, and Audible Plus catalog browsing.
 - Podcasts and other non-book content. They are hidden from the list.
 - Multiple Audible accounts or profiles.
-- True streaming without downloading. Download and convert takes about 20–30s per book, which is acceptable.
+- True streaming without downloading. Download the locked original before playback; conversion/export is not a current requirement.
 - Bookmarks, clips, and notes (a candidate for v2).
 - Kindle/Whispersync for Voice and other ebook features.
 - Windows, macOS, or non-Omarchy desktops.
@@ -100,11 +102,11 @@ The keys live on the widget's `shell.json` entry and are typed by the plugin man
 |------|-------------------|
 | Offline | Catalog and downloaded books work. Cloud books show "offline". Sync shows "Last synced …". |
 | Credentials expired or revoked | Banner "Reconnect Audible". Local playback is unaffected. |
-| Download fails or is cancelled | Row shows "Failed — Retry". Partial files are cleaned up. |
+| Download fails or is cancelled | Failures show retry guidance; ordinary cancellation is not a failure. Clean staging after successful rollback, but retain unresolved recovery backups and refuse retry safely (FR-S6). |
 | Disk full or low | Pre-flight check and a clear error. |
 | Missing dependency (`mpv`, `ffmpeg`, `python`) | The Setup screen lists what's missing with the exact install command. No crash. |
 | Audible API change breaks the backend | `doctor` reports it. The UI shows "Audible connection problem" with a copyable diagnostic. |
-| Multi-part books (`MultiPartBook`) | Detect and either download all parts as one m4b or mark unsupported with a reason. Decided in spike S4. |
+| Multi-part books (`MultiPartBook`) | Download and play the ordinary single locked file with normal chapters; no special handling (D5, S4). |
 | Book removed from the Audible library while local | Keep the local file playable and mark it "no longer in library". |
 | Shell restart during playback | Audio keeps going and the service reconnects to mpv. |
 | Two plugin instances or double-click | Single-instance guard on the backend. Idempotent commands. |

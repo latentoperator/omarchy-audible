@@ -62,4 +62,6 @@ The marketplace lists an exact commit. After a release that should reach marketp
 
 ## Pinned dependencies
 
-`backend/requirements.lock` pins `audible-cli` and `audible`. `setup` records the lock file's digest and rebuilds the environment when it changes, but the drawer only offers **Set up** when no environment exists, so an existing install keeps its old packages after an update until `omarchy-audible setup` runs again. Before changing a pin, make the new code work with the old packages too, or add a check that offers setup again. Note any pin change in the changelog and in the README's "What setup installs" section.
+`backend/requirements.lock` pins `audible-cli` and `audible`. `setup` records the digest, installed pins, interpreter compatibility and file fingerprints, and probes the environment offline before a no-op. Status offers **Set up** again for missing, broken or usable-old environments, without spawning a probe on each poll; explicit setup repairs/rebuilds as needed. A failed rebuild restores only a probed-usable previous environment, which remains dispatchable while setup is offered again. Keep new code compatible with supported fallback packages, and note any pin change in the changelog and README's "What setup installs" section.
+
+The development `uv.lock` also records the root project version; refresh it with `uv lock --offline` after a version bump so frozen checks use consistent metadata.

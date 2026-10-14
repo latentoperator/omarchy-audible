@@ -157,7 +157,8 @@ login-start --marketplace us→ {"type":"login_url","url":"https://www.amazon.co
 login-finish --session <id>  (pasted URL on stdin) → done (warning="activation_bytes" when the
                               account AAX key could not be fetched) | error(code=bad_url|expired|auth_failed)
 login-import-cli [--dir ~/.audible]          → done | error(code=no_auth_file)
-logout                      → done (deregisters this device only, then deletes auth.json, activation_bytes, config.toml; keeps books)
+logout                      → done (deregisters only a proven plugin-created device, §4.7;
+                              deletes local login files and keeps books)
 sync [--full]               → progress {"type":"progress","stage":"library","n":40,"of":91}, then done
                               (writes catalog.json atomically, fetches missing covers)
 get <asin>                  → {"type":"progress","stage":"download","bytes":123,"total":456}
@@ -213,7 +214,7 @@ Every child of `get` (the audible-cli wrapper, ffprobe, fake mode's ffmpeg) runs
 **No `ffmpeg` or `ffprobe` argv in `get` may contain a key, iv or activation bytes**: the key is written to `key.json` and only read again by `play-info`, and it reaches mpv over the IPC socket, never as an argument (§5.1, D7).
 
 ### 4.4 Removal safety (hard requirement)
-`remove <asin>` only deletes `<booksDir>/<asin>/`. It must verify the resolved path is inside `booksDir` and refuse otherwise. The backend has no code path that calls an Audible endpoint with a mutating method except position write-back (§4.6). A test greps the package for `delete`, `remove`, and `return` calls to the API and fails if any is found.
+`remove <asin>` only deletes `<booksDir>/<asin>/`. It must verify the resolved path is inside `booksDir` and refuse otherwise. Position write-back (§4.6) is the only Audible **library** mutation. Authentication separately registers a plugin-created device during browser sign-in; logout attempts to deregister only that device when saved ownership and the loaded device identity match (§4.7). Imported or unverified devices are never deregistered. Removal makes no network call, and no code calls Audible book delete/return endpoints; tests enforce that boundary.
 
 The UI requires a title-specific destructive confirmation for a local book whose merged row has `inLibrary:false`: the warning says re-download may be unavailable. Library keeps one-click removal for ordinary cached books; Full keeps its confirmation for both kinds. Service owns the pending question, validates the book and its orphan status again on confirmation, and clears it on Cancel, panel dismissal, view change, reopening, or a new play intent. Explicit orphan consent travels with just that removal as the internal `user-confirmed` purpose, including an unload wait; it is not retained as permission for a future removal. Bulk removal and auto-remove exclude orphan copies. The auto-remove timer checks this before unloading or submitting work, and the job gate rechecks the current row before any queued removal starts. A queued ordinary or automatic removal cannot delete a book that has since become an orphan.
 
@@ -224,7 +225,7 @@ Missing from the export and needed by the UI: **subtitle, series name and part n
 
 Filtering: drop only podcast content types (`Podcast*`). **Keep `Lecture`**, which is a real content type in the test library.
 
-Multi-part books (D5, G0 decision): `content_delivery_type: MultiPartBook` downloads, decrypts, and plays as one file with normal chapters. **No special handling.** `multipart` stays in the catalog for information only.
+Multi-part books (D5, G0 decision): `content_delivery_type: MultiPartBook` downloads and plays as one locked file with normal chapters (unlocked in memory, D7). **No special handling.** `multipart` stays in the catalog for information only.
 
 `catalog.json` (written atomically, `schema` versioned):
 ```json
