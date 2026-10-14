@@ -2,6 +2,16 @@
 
 All notable changes to Omaudible. Versions follow `manifest.json`.
 
+## 0.1.5 (unreleased)
+
+### Added
+
+- Downloads now wait instead of failing when Audible is limiting them for your account. Audible sometimes refuses a download for a day or two — its answer is "throttled" — while the phone app still downloads. Omaudible pauses downloads, says in the Library when it will try again, and shows the books that were waiting as **Waiting**; they carry on by themselves, in the same order, once the pause is over, and their ✕ still cancels one. Your downloaded books play as usual throughout, and everything else — syncing, removing, playback positions — carries on. The backend writes the pause to `download-pause.json` in its data directory, reports the resume time as `downloads_paused_until` in `status`, and starts over at four hours, doubling to a day at most if Audible refuses again. Signing in again clears it; see the FAQ.
+
+### Fixed
+
+- A download Audible refused was reported as a network problem — "check the network and retry" — which sent you looking in the wrong place. The refusal is now recognised (Audible's `CustomerThrottled` reason, which only reaches audible-cli's debug log), so the plugin knows downloads are being held and says so plainly. Only the reason code is logged, never the message, which names the book.
+
 ## 0.1.4 (2026-10-13)
 
 ### Security
