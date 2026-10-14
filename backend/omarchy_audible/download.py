@@ -260,10 +260,10 @@ def _make_partial(partial: Path) -> None:
     is not ours or is writable by others, the download stops before any child
     starts (``fsutil.make_private_staging_dir``).
     """
-    if partial.is_symlink():
-        _unlink(partial)
-    _rmtree(partial)
     try:
+        if partial.is_symlink():
+            _unlink(partial)
+        _rmtree(partial)
         fsutil.make_private_staging_dir(partial)
     except OSError as exc:
         log(f"the staging folder could not be made private: {type(exc).__name__}")
@@ -926,7 +926,8 @@ def run_get(
     final: Path | None = None
     committed = False
     try:
-        # The book directory is untouched from here until the commit below: a
+        # The book directory's files are untouched from here until the commit
+        # below (only group/other write is dropped from it, for .partial): a
         # failure at any earlier step leaves the previous copy exactly as it was.
         target_dir.mkdir(parents=True, exist_ok=True)
         _make_partial(partial)

@@ -935,3 +935,18 @@ def test_ffprobe_runs_under_the_private_umask(tmp_path, monkeypatch):
     monkeypatch.setattr(dl, "_tool", lambda name: name)
     dl.probe_duration_ms(tmp_path / "book.audio.tmp")
     assert seen.get("umask") == dl.PRIVATE_UMASK
+
+
+def test_a_symlink_that_cannot_be_unlinked_is_unsafe_path(tmp_path, monkeypatch):
+    book = tmp_path / "B00FAKE01"
+    book.mkdir()
+    partial = book / dl.PARTIAL_DIRNAME
+    partial.symlink_to(tmp_path)
+
+    def refuse(path):
+        raise PermissionError("simulated")
+
+    monkeypatch.setattr(dl, "_unlink", refuse)
+    with pytest.raises(PipelineError) as excinfo:
+        dl._make_partial(partial)
+    assert excinfo.value.code == "unsafe_path"
