@@ -2,6 +2,22 @@
 
 Hand-run journeys from `docs/SCOPE.md` §3, one line per run. Chris does all the clicking; the driving CLI checks state over IPC and writes the line. Real mode unless a line says otherwise.
 
+## 0.1.5 download pause (desktop) — 2026-10-14, HMSP-OMARCHYBEE, fake mode, live folder detached at `241a16a` (PR #121)
+
+Start state: real mode on clean `main` (`902851f`), shell 138133, player idle (no mpv), 91 books, 4 local (2 796 652 955 bytes), screen unlocked, screensaver and auto-lock off for the session. `omarchy plugin validate .` on a fresh clone of `241a16a`: rc 0, no symlinks. Dante switched the live checkout to `241a16a`, set the dev-fake flag and restarted once (138133 → 3494963), then drove everything over IPC. Fake library: five books; two local copies removed first so three were in the cloud. Quickshell 0.3.1, two 1920×1080 monitors. Times UTC.
+
+| # | Check | Result |
+|---|---|---|
+| 1 | Throttled refusal | **Pass.** `fakeFailGet B0FAKE0004 throttled`: `error` `throttled` with the plugin's sentence and `until`; `download-pause.json` = until 16:24:36Z, count 1 (4 h). |
+| 2 | Banner and resume time | **Pass.** `libraryState` banner `paused`; screenshot: "Audible is limiting downloads for this account right now. Your books still play. Try again tomorrow. Downloads resume at 11:24 AM." (local time), wrapped on three lines, nothing clipped. |
+| 3 | Picks while paused | **Pass.** Picking a cloud book while paused → `held`, row **Waiting**; no `get` ran (event log: `held: Audible is limiting downloads`). |
+| 4 | Queue behind a refusal | **Pass.** A refused `get` with two downloads queued behind it: all three **Waiting**, neither queued `get` ran. |
+| 5 | Resume on their own | **Pass.** Pause end moved to 45 s ahead, then `status`: at the deadline both held books downloaded in order, rows **On this device**, banner gone, pause file removed by the successful `get`. |
+| 6 | ✕ on a held book | **Pass.** `cancelDownload` on each held book → `dropped`, row back to cloud. |
+| 7 | Repeat refusal doubles | **Pass.** Pause expired (not cleared), then a second throttled refusal: count 2, until +8 h, `since` kept from the first. |
+
+**Restore:** pause file deleted, fake library back to four local books and one cloud, the empty `books/B0FAKE0004/` a refused `get` leaves behind removed (`main` leaves the same folder after any failed `get`; not new in 0.1.5). Live checkout back to clean `main` (`902851f`), dev-fake flag removed, one restart (3494963 → 3506654). Player idle as before, 91 books, 4 local (same bytes), fake IPC refused (`dev only`), no real `download-pause.json`, `shell.json` `cmp` identical, no warnings from our files in the new shell. No real license request was made.
+
 ## 0.1.3 bounded paste (desktop) — 2026-10-13, HMSP-OMARCHYBEE, fake mode, live folder detached at `bf4ace4` (PR #119)
 
 Start state: real mode on clean `main` (`b6f6eed`), shell 57797, player idle (no mpv), 91 books, 4 local (2 796 652 955 bytes), screen unlocked. Dante switched the live checkout to `bf4ace4`, set the dev-fake flag and restarted once (57797 → 73840). Dante drove the keyboard (`wtype`) and mouse (`ydotool`, cursor via `hyprctl dispatch 'hl.dsp.cursor.move({x=…,y=…})'` on Hyprland 0.56) and read IPC; test clipboards were set with `wl-copy --sensitive`, so Omarchy's clipboard history skipped them. Quickshell 0.3.1, two 1920×1080 monitors.
