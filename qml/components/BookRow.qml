@@ -34,9 +34,12 @@ Rectangle {
   property string questionText: ""
   // A finished book's Resume / Start over question is up for this row (U10b).
   property bool asking: false
+  property bool confirmingRemove: false
 
   signal picked()
   signal removeRequested()
+  signal confirmRemoveRequested()
+  signal cancelRemoveRequested()
   signal confirmRequested()
   signal cancelRequested()
   signal cancelDownloadRequested()
@@ -180,6 +183,31 @@ Rectangle {
 
       Text {
         Layout.fillWidth: true
+        visible: root.confirmingRemove
+        text: Drawer.removeQuestion(root.row)
+        textFormat: Text.PlainText
+        wrapMode: Text.WordWrap
+        color: Color.urgent
+        font.family: Style.font.family
+        font.pixelSize: Style.font.bodySmall
+      }
+
+      RowLayout {
+        visible: root.confirmingRemove
+        spacing: Style.spacing.md
+
+        Button {
+          text: "Remove local copy"
+          onClicked: root.confirmRemoveRequested()
+        }
+        Button {
+          text: "Cancel"
+          onClicked: root.cancelRemoveRequested()
+        }
+      }
+
+      Text {
+        Layout.fillWidth: true
         visible: root.removing
         text: "Removing\u2026"
         textFormat: Text.PlainText
@@ -240,7 +268,7 @@ Rectangle {
     }
 
     PanelActionButton {
-      visible: root.removable && !root.removing
+      visible: root.removable && !root.removing && !root.confirmingRemove
       iconText: Glyphs.GLYPH_REMOVE
       tooltipText: "Remove from this device"
       hoverColor: Color.urgent

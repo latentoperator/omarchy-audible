@@ -117,9 +117,22 @@ Item {
   // passes (0.1.5, ARCHITECTURE 4.8). A shell restart loses the list; the
   // backend's own pause keeps the app from asking again meanwhile.
   property var held: Held.create()
+  property int downloadLifecycle: 0
+  property int statusLifecycle: -1
+  property bool downloadsDisconnected: false
+  // One current status read; failed pause refreshes retry separately from the
+  // cooldown clock, so a missing/slow reply never spawns a one-second loop.
+  property string statusRequest: ""
+  property int statusSerial: 0
+  property bool statusAgain: false
+  property bool statusRefreshNeeded: false
+  property int statusRetryMs: 30000
   readonly property string downloadsPausedUntil: Held.until(held)
   readonly property bool downloadsPaused: Held.paused(held, statusAtMs)
   property string pendingResume: ""
+  // Only the current read keeps a result; an obsolete read has no slot to write.
+  property var resumeRequest: null
+  property int resumeSerial: 0
   // The book a `play-info` is being read for (B11; PlayRequest.js), or null.
   // Only the newest request plays: a newer intent or a quit drops it, and a
   // reply for an older one is ignored.
@@ -129,7 +142,6 @@ Item {
   // views' "Couldn't start playback" line.
   property string playError: ""
   readonly property string playFailure: Player.playFailure(player.connection, player.lastError, playError)
-  property var resumeRemotes: ({})
 
   // ⏯ catching up with other devices (qml/CatchupFlow.qml): the book a ⏯
   // waits on an account read for, and the Mini line after a jump.
@@ -164,7 +176,7 @@ Item {
   property string lastSyncHint: ""
   property var doctorChecks: []
   property real catalogAgeSeconds: 0
-  readonly property string diagnosticText: Diagnostic.build(manifest ? manifest.version : "0.1.5",
+  readonly property string diagnosticText: Diagnostic.build(manifest ? manifest.version : "0.1.6",
     "sync", lastSyncCode, lastSyncMessage, lastSyncHint, doctorChecks)
   readonly property bool syncing: Drawer.syncing(runner.pendingJobs, runner.activeJob)
   readonly property var syncFailure: Drawer.syncFailure(lastSyncCode)
@@ -195,6 +207,12 @@ Item {
   // Books to remove once the player has unloaded them (Removals), for the
   // Library's "removing" state.
   readonly property var removeAfterUnload: removals.waiting
+  property var removeConfirm: null
+  property var removeConfirmSurface: null
+  readonly property string removeConfirmAsin: removeConfirm ? removeConfirm.asin : ""
+  readonly property bool removeConfirmStillValid: Drawer.removeConfirmValid(removeConfirm, library.rowFor(removeConfirmAsin))
+  onRemoveConfirmStillValidChanged: if (!removeConfirmStillValid) Qt.callLater(dropInvalidRemoveConfirm)
+  onViewChanged: cancelRemoveConfirm()
   property real lastSyncAttemptAtMs: 0
 
   // mpv may report playing before the new path, so check on both.
@@ -241,8 +259,81 @@ Item {
       logEvent(command, "refused: dev flag not read yet")
       return false
     }
+    if (command === "get" && !jobAllowed({ "command": command })) return false
+    if (command === "status") return requestStatus(purpose)
     runner.run(command, args, purpose)
     return true
+  }
+
+  // Disconnect discards waiting intents before logout enters the job queue.
+  function beginDisconnect() {
+    downloadsDisconnected = true
+    downloadLifecycle += 1
+    invalidateStatus()
+    held = Held.create()
+    confirmAsin = ""
+    schedulePauseWake()
+    var pending = runner.pendingJobs.slice()
+    for (var index = 0; index < pending.length; index++) {
+      var job = pending[index]
+      if (job && job.command === "get" && job.asin) runner.cancel(job.asin)
+    }
+  }
+
+  function finishDisconnect() {
+    // Invalidate reads started while logout waited for the exclusive job slot.
+    downloadLifecycle += 1
+    invalidateStatus()
+  }
+
+  function downloadsConnected() {
+    downloadLifecycle += 1
+    invalidateStatus()
+    downloadsDisconnected = false
+  }
+
+  function jobAllowed(job) {
+    if (job.command === "get")
+      return !downloadsDisconnected && statusLifecycle === downloadLifecycle && status && status.authenticated === true
+    return removals.jobAllowed(job)
+  }
+
+  function invalidateStatus() {
+    statusRequest = ""
+    statusAgain = false
+    statusRefreshNeeded = false
+    statusRetryMs = 30000
+    statusRetryTimer.stop()
+  }
+
+  function requestStatus(purpose) {
+    if (statusRequest.length > 0) {
+      // Coalesce ordinary checks too, but keep one follow-up for changed
+      // settings/job completion while the existing process was reading.
+      if (purpose !== "pause-refresh") statusAgain = true
+      return true
+    }
+    statusRetryTimer.stop()
+    statusRequest = "status:" + downloadLifecycle + ":" + (++statusSerial)
+    runner.run("status", [], statusRequest)
+    return true
+  }
+
+  function statusCurrent(job) {
+    return job.command === "status" && statusRequest.length > 0 && job.purpose === statusRequest
+  }
+
+  function finishStatus(job) {
+    if (!statusCurrent(job)) return
+    statusRequest = ""
+    if (statusAgain) {
+      statusAgain = false
+      run("status", [])
+    } else if (statusRefreshNeeded && !downloadsDisconnected) {
+      statusRetryTimer.interval = statusRetryMs
+      statusRetryMs = Math.min(300000, statusRetryMs * 2)
+      statusRetryTimer.restart()
+    }
   }
 
   function acknowledgeBooksLocation() {
@@ -257,6 +348,7 @@ Item {
 
   // Called by a widget just before its panel opens.
   function viewForOpen() {
+    cancelRemoveConfirm()
     view = Onboarding.view(onboardingStep, player.loaded, null)
     chapterListOpen = false
     sync.resetRetry()
@@ -295,13 +387,15 @@ Item {
     // were read would replace them.
     if (!store.loaded) return "error: state not loaded yet"
     if (!/^[A-Za-z0-9]+$/.test(asin)) return "error: bad asin"
-    if (startSec >= 0) {
-      pendingResume = ""
-      return playNow(asin, startSec)
-    }
+    pendingResume = ""
+    resumeRequest = null
+    playRequest = null
+    if (startSec >= 0) return playNow(asin, startSec)
     pendingResume = asin
-    if (!run("position-get", [asin], "resume")) {
+    resumeRequest = { "asin": asin, "purpose": "resume:" + (++resumeSerial), "remote": null }
+    if (!run("position-get", [asin], resumeRequest.purpose)) {
       pendingResume = ""
+      resumeRequest = null
       return playNow(asin, cachedStartSec(asin))
     }
     return "ok"
@@ -374,9 +468,24 @@ Item {
     Quickshell.execDetached(["systemctl", "--user", "stop", "omarchy-audible-fake-mpv.scope"])
   }
 
-  function finishResume(asin, remoteEntry) {
-    if (pendingResume !== asin) return
+  function resumeCurrent(job) {
+    return resumeRequest !== null && job.command === "position-get"
+      && job.purpose === resumeRequest.purpose
+      && Array.isArray(job.args) && job.args[0] === resumeRequest.asin
+  }
+
+  function recordResume(job, record) {
+    if (!resumeCurrent(job)) return
+    resumeRequest = { "asin": resumeRequest.asin, "purpose": resumeRequest.purpose,
+      "remote": record.items[resumeRequest.asin] || null }
+  }
+
+  function finishResume(job, outcome) {
+    if (!resumeCurrent(job)) return
+    var asin = resumeRequest.asin
+    var remoteEntry = outcome.ok ? resumeRequest.remote : null
     pendingResume = ""
+    resumeRequest = null
     var local = store.doc.books ? store.doc.books[asin] : null
     var start = remoteEntry ? Positions.resumeMs(local, remoteEntry) / 1000 : cachedStartSec(asin)
     playNow(asin, start)
@@ -457,10 +566,12 @@ Item {
   // resume still reading its position, and a pending removal of this book.
   // A download only downloads; the user plays the book when they choose.
   function noteIntent(asin) {
+    cancelRemoveConfirm()
     catchupFlow.noteIntent()
     askAsin = ""
     confirmAsin = ""
-    if (pendingResume !== asin) pendingResume = ""
+    pendingResume = ""
+    resumeRequest = null
     // A play still waiting for its play-info is overtaken by any new intent.
     playRequest = null
     removals.dropIntent(asin)
@@ -476,6 +587,7 @@ Item {
   // Stop: no play that is still on its way may start the player again.
   function quitPlayer() {
     pendingResume = ""
+    resumeRequest = null
     playRequest = null
     // Nothing is pending after Stop, so an old play failure is gone too (F37).
     playError = ""
@@ -528,7 +640,7 @@ Item {
   // A `release`: the pause is over, so the held downloads go to the runner in
   // the order they were held. A refusal again holds them straight back.
   function runHeldEffect(effect) {
-    if (!effect || effect.kind !== Held.EFFECT_RELEASE) return
+    if (!effect || effect.kind !== Held.EFFECT_RELEASE || !jobAllowed({ "command": "get" })) return
     logEvent("get", "pause over: " + effect.asins.length + " download(s) resume")
     for (var index = 0; index < effect.asins.length; index++) run("get", [effect.asins[index]], "download")
   }
@@ -625,15 +737,19 @@ Item {
   // case `status` is slow or the read fails — then read the real one, which
   // releases whatever is still held (0.1.5, ARCHITECTURE 4.2).
   function onPauseElapsed() {
+    var hadPause = downloadsPausedUntil.length > 0
     applyHeld({ "type": Held.EVENT_NOW, "now": Date.now() })
-    run("status", [])
+    if (!hadPause || downloadsDisconnected) return
+    statusRefreshNeeded = true
+    run("status", [], "pause-refresh")
   }
 
   // Hold the book Audible just refused, and every `get` still queued behind
   // it: none of them would be served, and asking again is another license
   // request. They come back in order when the pause ends (ARCHITECTURE 4.8).
   function holdRefusedDownloads(job, outcome) {
-    var failed = job.asin ? job.asin : ""
+    if (!jobAllowed({ "command": "get" })) return
+    var failed = job.cancelRequested === true ? "" : (job.asin ? job.asin : "")
     var queued = []
     var pending = runner.pendingJobs
     for (var index = 0; index < pending.length; index++) {
@@ -714,16 +830,56 @@ Item {
   // Any local book can be removed (FR-S2). The loaded one is unloaded first
   // (the player saves its position) and removed once it is gone (Removals).
   // `purpose` is Unload.PURPOSE_AUTO for an auto-remove, else the user's.
+  function askRemoveBook(asin) {
+    removeConfirm = Drawer.removeConfirmation(library.rowFor(asin))
+    removeConfirmSurface = removeConfirm ? openSurface() : null
+    return removeConfirm ? "confirm" : "error: not removable"
+  }
+
+  function cancelRemoveConfirm() {
+    removeConfirm = null
+    removeConfirmSurface = null
+    return "ok"
+  }
+
+  function dropInvalidRemoveConfirm() {
+    if (!Drawer.removeConfirmValid(removeConfirm, library.rowFor(removeConfirmAsin))) cancelRemoveConfirm()
+  }
+
+  function confirmRemoveBook(asin) {
+    var row = library.rowFor(asin)
+    var valid = Drawer.removeConfirmValid(removeConfirm, row)
+    cancelRemoveConfirm()
+    if (!valid) return "error: no confirmation"
+    return removeBook(asin, row.inLibrary === false ? Unload.PURPOSE_CONFIRMED : Unload.PURPOSE_USER)
+  }
+
   function removeBook(asin, purpose) {
-    if (!Drawer.canRemove(library.rowFor(asin))) return "error: not removable"
+    var row = library.rowFor(asin)
+    if (!Drawer.canRemove(row)) return "error: not removable"
+    var decision = Drawer.removalDecision(row, purpose)
+    if (decision === "confirm") return askRemoveBook(asin)
+    if (decision !== "remove") return "error: protected"
+    cancelRemoveConfirm()
+    var removalPurpose = purpose === Unload.PURPOSE_CONFIRMED || purpose === Unload.PURPOSE_AUTO ? purpose : Unload.PURPOSE_USER
     // A question about a book being removed no longer has a file to play.
     if (askAsin === asin) askAsin = ""
     // Removing is newer than a play of this book still on its way (a resume
     // read or a play-info): drop it, or its reply would start the book again.
     if (PlayRequest.busyAsin(playRequest) === asin) playRequest = null
-    if (pendingResume === asin) pendingResume = ""
-    if (asin === loadedAsin) return removals.unloadThenRemove(asin, purpose === Unload.PURPOSE_AUTO ? purpose : Unload.PURPOSE_USER)
-    return run("remove", [asin], "user") ? "ok" : "error: refused"
+    if (pendingResume === asin) {
+      pendingResume = ""
+      resumeRequest = null
+    }
+    if (asin === loadedAsin) return removals.unloadThenRemove(asin, removalPurpose)
+    return run("remove", [asin], removalPurpose) ? "ok" : "error: refused"
+  }
+
+  Connections {
+    target: root.removeConfirmSurface
+    function onOpenedChanged() {
+      if (root.removeConfirmSurface && !root.removeConfirmSurface.opened) root.cancelRemoveConfirm()
+    }
   }
 
   function removeAll() { return removals.removeAll() }
@@ -926,6 +1082,12 @@ Item {
   }
 
   Timer {
+    id: statusRetryTimer
+    repeat: false
+    onTriggered: root.run("status", [], "pause-refresh")
+  }
+
+  Timer {
     id: settingsTimer
     interval: 1000
     repeat: false
@@ -979,7 +1141,7 @@ Item {
 
   JobRunner {
     id: runner
-    gate: removals.jobAllowed
+    gate: root.jobAllowed
     launcher: root.pluginDir + "/bin/omarchy-audible"
     environment: {
       var values = root.fake ? { "OMARCHY_AUDIBLE_FAKE": "1" } : {}
@@ -991,16 +1153,26 @@ Item {
     onEvent: function(record, job) {
       var silentAckFailure = ""
       if (record.type === "status") {
+        if (!root.statusCurrent(job)) return
+        root.statusRefreshNeeded = false
+        root.statusRetryMs = 30000
+        statusRetryTimer.stop()
+        root.statusLifecycle = root.downloadLifecycle
         root.status = record
         root.statusAtMs = Date.now()
         root.refreshCatalogAge()
         root.refreshLocal()
         // The backend's pause is the authority: while it runs, nothing is
         // asked for; once it is over, the held downloads go again (0.1.5).
-        root.applyHeld({
-          "type": Held.EVENT_STATUS, "until": record.downloads_paused_until,
-          "now": Date.now()
-        })
+        if (root.jobAllowed({ "command": "get" })) {
+          root.applyHeld({
+            "type": Held.EVENT_STATUS, "until": record.downloads_paused_until,
+            "now": Date.now()
+          })
+        } else {
+          root.held = Held.create()
+          root.schedulePauseWake()
+        }
         var ackStep = BooksLocation.ackStep(root.booksAckState, record,
           root.downloadActive(), root.settingsReceived)
         root.booksAckState = ackStep.state
@@ -1013,11 +1185,8 @@ Item {
         root.doctorChecks = record.checks || []
       } else if (record.type === "play_info") {
         root.startPlayInfo(job, record)
-      } else if (record.type === "positions" && job.purpose === "resume") {
-        var resumed = job.args[0]
-        var remotes = root.resumeRemotes
-        remotes[resumed] = record.items[resumed] || null
-        root.resumeRemotes = remotes
+      } else if (record.type === "positions") {
+        root.recordResume(job, record)
       }
       catchupFlow.handleEvent(record, job)
       sync.handleEvent(record, job)
@@ -1029,6 +1198,7 @@ Item {
     }
 
     onJobFinished: function(job, outcome) {
+      if (job.command === "status") root.finishStatus(job)
       var text = outcome.ok ? "ok" : String(outcome.code) + (Signin.isOnboardingCommand(job.command)
         ? "" : ": " + String(outcome.message || ""))
       signinFlow.handleFinished(job, outcome)
@@ -1042,12 +1212,7 @@ Item {
       sync.handleFinished(job, outcome)
       catchupFlow.handleFinished(job, outcome)
       if (job.command === PlayRequest.COMMAND) root.finishPlayInfo(job, outcome)
-      if (job.purpose === "resume") {
-        var resumedAsin = job.args[0]
-        var remote = outcome.ok ? (root.resumeRemotes[resumedAsin] || null) : null
-        delete root.resumeRemotes[resumedAsin]
-        root.finishResume(resumedAsin, remote)
-      }
+      if (job.command === "position-get" && root.resumeCurrent(job)) root.finishResume(job, outcome)
       if (job.command === "sync") {
         root.lastSyncCode = outcome.ok ? "" : String(outcome.code || "internal")
         root.lastSyncMessage = outcome.ok ? "" : String(outcome.message || "")

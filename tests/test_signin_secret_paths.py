@@ -1,5 +1,5 @@
 """U3 — the pasted sign-in text never reaches a log line, an event, a file,
-a property or ``recentEvents`` (brief M3-laptop §4 U3, ARCHITECTURE 4.7).
+a service property or ``recentEvents`` (brief M3-laptop §4 U3, ARCHITECTURE 4.7).
 
 The paste goes: the view's password field → ``service.finishLogin(pasted)``
 (a one-line forwarder) → ``signinFlow.finishLogin(pasted)`` in
@@ -51,7 +51,7 @@ def test_view_uses_the_field_text_only_to_send_or_clear():
     # monitor's field never holds the text, and every view clears on
     # clearPaste.
     assert 'function onClearPaste() { paste.text = "" }' in view
-    assert "paste.pasteClipboard()" in view
+    assert "paste.pasteClipboard(true)" in view
     assert "readClipboard" not in view and "onClipboardRead" not in view
 
 
@@ -77,8 +77,8 @@ def test_service_passes_the_paste_only_to_the_check_and_stdin():
 
 def test_clipboard_text_goes_only_into_the_field():
     # The bounded paste (BoundedTextField.qml) hands the helper's line to
-    # Typing.pasteResult and the result to the field's own edit; it is never
-    # stored in a property, logged or passed on.
+    # Typing.pasteResult and holds one bounded value in this field until
+    # helper exit. It is never logged or passed to another object.
     field = read("qml/components/BoundedTextField.qml")
     paster = field[field.index("id: paster") :]
     paster = paster[: paster.index("\n  }\n")]
@@ -86,7 +86,29 @@ def test_clipboard_text_goes_only_into_the_field():
     handler = paster[paster.index("onRead: function(line)") :]
     assert re.findall(r"\bline\b", handler)[:2] == ["line", "line"]
     assert "var value = Typing.pasteResult(line)" in handler
-    assert "if (value !== null) root.edit(Typing.ACTION_PASTE, value)" in handler
+    assert "else root._pasteValue = value" in handler
+    assert "root.edit(" not in handler
+    assert "property var _pasteValue: null" in field
+    finish = function_body(field, "finishPaste")
+    assert finish.index("var value = _pasteValue") < finish.index("_pasteValue = null")
+    assert finish.index("_pasteValue = null") < finish.index("text = next.text")
+    assert "_pasteValue = null" in function_body(field, "pasteClipboard")
+    watchdog = field.split("id: watchdog", 1)[1].split("Process {", 1)[0]
+    assert "root._pasteValue = null" in watchdog
+    # The bounded temporary value has no other sink or property copy.
+    uses = re.findall(r"[^\n]*_pasteValue[^\n]*", field)
+    assert all(
+        line.strip()
+        in {
+            "property var _pasteValue: null",
+            "var value = _pasteValue",
+            "_pasteValue = null",
+            "root._pasteValue = null",
+            "if (root._pasteInvalid || root._pasteValue !== null || value === null) {",
+            "} else root._pasteValue = value",
+        }
+        for line in uses
+    ), uses
     assert "console." not in field and "logEvent" not in field
     assert not re.search(r"property \w+ (pasted|clip|value)", field)
     # Nothing else reads the clipboard: the old shared `paster` is gone.

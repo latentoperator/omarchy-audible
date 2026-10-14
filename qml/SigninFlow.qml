@@ -90,6 +90,7 @@ Item {
   }
 
   function disconnect() {
+    service.beginDisconnect()
     return service.run("logout", [], "logout") ? "ok" : "error: refused"
   }
 
@@ -153,6 +154,7 @@ Item {
       if (job.command === "login-finish") loginSession = ""
     }
     if (outcome.ok && Signin.isSignIn(job.command)) {
+      service.downloadsConnected()
       loginSession = ""
       reconnecting = false
       authFailed = false
@@ -160,6 +162,7 @@ Item {
       service.startSync("signin")
     }
     if (outcome.ok && job.command === "logout") {
+      service.finishDisconnect()
       clipboardNotice = ""
       reconnecting = false
       authFailed = false

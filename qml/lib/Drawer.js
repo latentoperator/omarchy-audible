@@ -158,7 +158,34 @@ function canRemove(row) {
   return !!row && row.local === true && typeof row.asin === "string";
 }
 
-// The ASINs "Remove all downloads" removes: every book on the laptop.
+// A confirmed removal is one user intent, not permission for future auto-removes.
+var PURPOSE_CONFIRMED = "user-confirmed";
+
+function removalDecision(row, purpose) {
+  if (!canRemove(row)) return "blocked";
+  if (row.inLibrary !== false || purpose === PURPOSE_CONFIRMED) return "remove";
+  if (purpose === "autoremove" || purpose === "autoremove-unloaded") return "blocked";
+  return "confirm";
+}
+
+function removeConfirmation(row) {
+  return canRemove(row) ? { "asin": row.asin, "orphan": row.inLibrary === false } : null;
+}
+
+function removeConfirmValid(confirm, row) {
+  return !!confirm && canRemove(row) && confirm.asin === row.asin
+    && confirm.orphan === (row.inLibrary === false);
+}
+
+function removeQuestion(row) {
+  var title = row && typeof row.title === "string" && row.title.trim().length > 0 ? row.title.trim() : "this book";
+  if (row && row.inLibrary === false) {
+    return "Remove “" + title + "” from this device? It is no longer in your Audible library. You may not be able to download it again. This deletes your local copy.";
+  }
+  return "Remove this book from this device? It stays in your library.";
+}
+
+// Bulk removal excludes potentially irreplaceable orphan copies.
 function removableAsins(rows) {
   var out = [];
   if (!Array.isArray(rows)) return out;
@@ -263,18 +290,14 @@ function bannerUrgent(banner) {
   return banner === "reconnect" || banner === "connection" || banner === "paused";
 }
 
-// The paused banner: Audible's refusal, then when downloads resume, e.g.
-// "… Try again tomorrow. Downloads resume at 9:40 PM." — or "… resume tomorrow
-// at 9:40 AM." when the pause ends on the next calendar day. The instant is
-// `status.downloads_paused_until`, and `nowMs` (the engine's clock when
-// missing) is what tells the two apart; an unusable instant leaves the
-// sentence alone (0.1.5, ARCHITECTURE 4.2 and 6).
+// The local pause deadline estimates the next automatic retry, not whether
+// Audible will accept it. Held intentions remain in memory only (§4.8).
 function pausedBanner(untilIso, nowMs) {
   var when = Format.resumeAt(untilIso, nowMs);
-  if (when.length === 0) {
-    return Onboarding.THROTTLED_TEXT;
-  }
-  return Onboarding.THROTTLED_TEXT + " Downloads resume " + when + ".";
+  var retry = when.length > 0 ? when + "."
+    : "when the pause ends. Retry time is unavailable.";
+  return Onboarding.THROTTLED_TEXT + " Waiting downloads will retry automatically "
+    + retry + " Audible may still limit the retry.";
 }
 
 // A row's author names as a plain array for `Format.names`. A row that

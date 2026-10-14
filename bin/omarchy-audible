@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import sysconfig
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -90,8 +91,76 @@ def _venv_python(env: dict[str, str]) -> Path:
 
 
 def _venv_ready(venv_python: Path) -> bool:
-    """A venv is usable only once ``setup`` has written its ready marker."""
-    return venv_python.is_file() and (venv_python.parent.parent / VENV_MARKER).is_file()
+    """Validate saved offline health evidence without importing the backend.
+
+    Kept equivalent to bootstrap.venv_ready by parametrized dispatch tests.
+    Old pins remain usable; compatibility and health evidence may not be old.
+    """
+    root = venv_python.parent.parent
+    try:
+        marker = json.loads((root / VENV_MARKER).read_text(encoding="utf-8"))
+        # Preserve 0.1.5 dispatch until status records the one-time probe.
+        # Only the complete old format qualifies, never a damaged new marker.
+        if (
+            isinstance(marker, dict)
+            and set(marker)
+            == {"schema", "requirements", "requirements_file", "created_at"}
+            and type(marker.get("schema")) is int
+            and marker["schema"] == 1
+            and isinstance(marker.get("requirements"), str)
+            and len(marker["requirements"]) == 64
+            and all(c in "0123456789abcdef" for c in marker["requirements"])
+            and marker.get("requirements_file") == "requirements.lock"
+            and isinstance(marker.get("created_at"), str)
+            and marker["created_at"]
+        ):
+            return venv_python.is_file() and os.access(venv_python, os.X_OK)
+        identity = [
+            sys.implementation.name,
+            sys.implementation.cache_tag,
+            sys.version_info.major,
+            sys.version_info.minor,
+            sysconfig.get_config_var("SOABI"),
+        ]
+        if (
+            not isinstance(marker, dict)
+            or marker.get("schema") != 2
+            or marker.get("python") != identity
+            or not venv_python.is_file()
+            or not os.access(venv_python, os.X_OK)
+        ):
+            return False
+        versions = marker.get("versions")
+        files = marker.get("files")
+        if (
+            not isinstance(versions, dict)
+            or not all(
+                isinstance(versions.get(name), str) and versions[name]
+                for name in ("audible", "audible-cli")
+            )
+            or not isinstance(files, dict)
+            or not {"bin/python", "pyvenv.cfg"}.issubset(files)
+        ):
+            return False
+        for name, saved in files.items():
+            if (
+                not isinstance(name, str)
+                or Path(name).is_absolute()
+                or ".." in Path(name).parts
+            ):
+                return False
+            stat = (root / name).stat()
+            if [
+                stat.st_ino,
+                stat.st_size,
+                stat.st_mtime_ns,
+                stat.st_ctime_ns,
+                stat.st_mode,
+            ] != saved:
+                return False
+        return True
+    except (OSError, ValueError):
+        return False
 
 
 def _emit_error(code: str, message: str, hint: str | None = None) -> None:
@@ -161,7 +230,7 @@ def main(argv: list[str]) -> int:
     if not _venv_ready(venv_python):
         _emit_error(
             "no_venv",
-            "the plugin virtualenv is not installed",
+            "the plugin virtualenv is missing, incompatible or needs repair",
             hint="run: omarchy-audible setup",
         )
         return 1

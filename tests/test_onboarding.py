@@ -31,6 +31,7 @@ EXPECTED_API = {
     "installCommand",
     "looksLikeRedirect",
     "marketplaces",
+    "setupText",
     "step",
     "view",
 }

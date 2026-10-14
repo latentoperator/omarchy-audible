@@ -31,10 +31,7 @@ MAX_PAUSE_HOURS = 24
 
 # The user-facing sentence for a refusal. The drawer shows the same text
 # (`qml/lib/Onboarding.js` `THROTTLED_TEXT`), and a test keeps the two in step.
-THROTTLED_MESSAGE = (
-    "Audible is limiting downloads for this account right now. "
-    "Your books still play. Try again tomorrow."
-)
+THROTTLED_MESSAGE = "Audible is limiting downloads. Downloaded books still play."
 
 
 @dataclass(frozen=True)

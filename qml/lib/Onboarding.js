@@ -31,7 +31,7 @@ var STEP_READY = "ready";
 // account (0.1.5, ARCHITECTURE 4.2). The backend's `throttled` error carries
 // the same sentence in its `message`; this is the one home the drawer's
 // banner reads too, and a test keeps the two in step.
-var THROTTLED_TEXT = "Audible is limiting downloads for this account right now. Your books still play. Try again tomorrow.";
+var THROTTLED_TEXT = "Audible is limiting downloads. Downloaded books still play.";
 
 var _p = {};
 
@@ -253,6 +253,18 @@ function step(status) {
     return STEP_CONNECT;
   }
   return STEP_READY;
+}
+
+// Idle setup copy distinguishes first install from repair or stale tools.
+function setupText(status) {
+  var state = _p.isObject(status) ? status.venv_state : null;
+  if (state === "broken") {
+    return "The plugin's tools need repairing. Run Set up to repair them.";
+  }
+  if (state === "usable_old") {
+    return "The plugin's tools need updating. Downloaded books still play. Run Set up to update them.";
+  }
+  return _p.ERROR_TEXT.no_venv.body;
 }
 
 // The command that installs the missing tools (ARCHITECTURE §4.1): `ffprobe`

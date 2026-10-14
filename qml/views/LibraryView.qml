@@ -35,6 +35,31 @@ ColumnLayout {
   property int selected: -1
   property bool confirmRemoveAll: false
   property bool confirmDisconnect: false
+  property var panelSurface: null
+  readonly property string removableKey: removable.slice().sort().join(",")
+  onRemovableKeyChanged: resetConfirmations()
+
+  function resetConfirmations() {
+    confirmRemoveAll = false
+    confirmDisconnect = false
+  }
+
+  Connections {
+    target: root.panelSurface
+    function onPanelClosed() { root.resetConfirmations() }
+    function onPanelEscapeRequested(event) {
+      if (root.service && root.service.view === Panel.VIEW_LIBRARY && (root.confirmRemoveAll || root.confirmDisconnect)) {
+        root.resetConfirmations()
+        event.accepted = true
+      }
+    }
+  }
+  Connections {
+    target: root.service
+    function onViewChanged() {
+      if (root.service.view !== Panel.VIEW_LIBRARY) root.resetConfirmations()
+    }
+  }
 
   signal closeRequested()
 
@@ -88,9 +113,11 @@ ColumnLayout {
       }
       Keys.onPressed: function(event) {
         var action = Drawer.searchKey(event.key, search.text)
-        // Esc first drops an open download question, then closes.
+        // Esc first cancels an open removal or download question, then closes.
         if (action === Drawer.KEY_CLOSE) {
-          if (root.service && root.service.confirmAsin.length > 0) root.service.cancelConfirm()
+          if (root.confirmRemoveAll || root.confirmDisconnect) root.resetConfirmations()
+          else if (root.service && root.service.removeConfirmAsin.length > 0) root.service.cancelRemoveConfirm()
+          else if (root.service && root.service.confirmAsin.length > 0) root.service.cancelConfirm()
           else root.closeRequested()
         }
         else if (action === Drawer.KEY_MOVE_UP) root.move(-1)
@@ -139,6 +166,17 @@ ColumnLayout {
       }
     }
 
+  }
+
+  Text {
+    Layout.fillWidth: true
+    visible: search.pasteError.length > 0
+    text: search.pasteError
+    textFormat: Text.PlainText
+    wrapMode: Text.WordWrap
+    color: Color.urgent
+    font.family: Style.font.family
+    font.pixelSize: Style.font.bodySmall
   }
 
   // A pick whose player never started (G3 finding 2). The drawer reopens on
@@ -364,7 +402,10 @@ ColumnLayout {
         questionText: confirming ? root.questionText(modelData) : ""
         asking: root.service ? root.service.askAsin === modelData.asin : false
         onPicked: root.pickAt(index)
+        confirmingRemove: root.service ? root.service.removeConfirmAsin === modelData.asin : false
         onRemoveRequested: root.service.removeBook(modelData.asin)
+        onConfirmRemoveRequested: root.service.confirmRemoveBook(modelData.asin)
+        onCancelRemoveRequested: root.service.cancelRemoveConfirm()
         onCancelDownloadRequested: root.service.cancelDownload(modelData.asin)
         // The question makes the row taller; keep all of it in view. Only for
         // a question just opened on this row: a row recreated while the user
@@ -376,7 +417,8 @@ ColumnLayout {
         Component.onCompleted: created = true
         onConfirmingChanged: if (created) revealQuestion = confirming || asking
         onAskingChanged: if (created) revealQuestion = confirming || asking
-        onHeightChanged: if (revealQuestion && (confirming || asking)) books.positionViewAtIndex(index, ListView.Contain)
+        onConfirmingRemoveChanged: if (created) revealQuestion = confirmingRemove
+        onHeightChanged: if (revealQuestion && (confirming || asking || confirmingRemove)) books.positionViewAtIndex(index, ListView.Contain)
         onConfirmRequested: root.service.confirmDownload()
         onCancelRequested: root.service.cancelConfirm()
         onResumeRequested: root.service.answerAsk(true)

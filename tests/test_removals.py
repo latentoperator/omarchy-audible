@@ -55,6 +55,7 @@ def test_the_api(unload):
             "PURPOSE_AUTO",
             "PURPOSE_AUTO_UNLOADED",
             "PURPOSE_USER",
+            "PURPOSE_CONFIRMED",
             "_p",
             "asins",
             "jobAllowed",
@@ -244,7 +245,6 @@ def test_removals_owns_the_list_and_its_timers():
         "flushRemovals",
         "abandonRemovals",
         "removeIfStillFinished",
-        "function jobAllowed",
     ):
         assert gone not in service, gone
     assert service.count("Removals {") == 1
@@ -252,7 +252,8 @@ def test_removals_owns_the_list_and_its_timers():
     block = block[: block.index("\n  }\n") + 1]
     for line in ("id: removals", "service: root", "player: player", "library: library"):
         assert f"    {line}\n" in block, line
-    assert "gate: removals.jobAllowed" in service
+    assert "gate: root.jobAllowed" in service
+    assert "return removals.jobAllowed(job)" in function_body(service, "jobAllowed")
 
 
 def test_service_keeps_the_names_views_use():
@@ -261,17 +262,17 @@ def test_service_keeps_the_names_views_use():
     assert "function removeAll() { return removals.removeAll() }" in service
     body = function_body(service, "removeBook")
     assert (
-        "if (asin === loadedAsin) return removals.unloadThenRemove(asin, "
-        "purpose === Unload.PURPOSE_AUTO ? purpose : Unload.PURPOSE_USER)"
-    ) in body
-    # Everyone else's removeBook is the user's.
-    assert 'return run("remove", [asin], "user")' in body
-    for view in (
-        "qml/views/LibraryView.qml",
-        "qml/views/FullView.qml",
-        "qml/ServiceIpc.qml",
+        "if (asin === loadedAsin) return removals.unloadThenRemove(asin, removalPurpose)"
+        in body
+    )
+    assert 'return run("remove", [asin], removalPurpose)' in body
+    assert "Unload.PURPOSE_CONFIRMED" in body
+    for view, name in (
+        ("qml/views/LibraryView.qml", "removeBook"),
+        ("qml/views/FullView.qml", "confirmRemoveBook"),
+        ("qml/ServiceIpc.qml", "removeBook"),
     ):
-        calls = re.findall(r"removeBook\(([^)]*)\)", read(view))
+        calls = re.findall(rf"{name}\(([^)]*)\)", read(view))
         assert calls and all("," not in c for c in calls), view
 
 

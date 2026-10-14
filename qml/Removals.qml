@@ -78,6 +78,8 @@ Item {
   // Checked by the job runner just before a queued job starts.
   function jobAllowed(job) {
     if (!job || job.command !== "remove" || !Array.isArray(job.args)) return true
+    var row = library.rowFor(String(job.args[0]))
+    if (Drawer.removalDecision(row, job.purpose) !== "remove") return false
     return Unload.jobAllowed(job, service.autoRemoveFinished, service.atEnd(String(job.args[0])), player.playing, service.busyAsins())
   }
 
@@ -85,6 +87,7 @@ Item {
     var asin = candidate
     candidate = ""
     if (asin.length === 0) return
+    if (Drawer.removalDecision(library.rowFor(asin), Unload.PURPOSE_AUTO) !== "remove") return
     if (!Positions.autoRemoveAllowed(service.autoRemoveFinished, service.atEnd(asin), player.playing)) return
     // The loaded book goes the way the user's Remove does: unload first, then
     // remove once mpv has let go of the file (F17), still as an auto-remove.

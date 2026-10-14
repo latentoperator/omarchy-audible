@@ -48,6 +48,7 @@ class FakeAuth:
         deregister_error: Exception | None = None,
     ) -> None:
         self.locale: object | None = None
+        self.device_info: dict | None = None
         self.activation_bytes = activation_bytes
         self.customer_info = customer_info
         self.with_username: bool | None = None
@@ -68,6 +69,7 @@ class FakeAuth:
             json.dumps(
                 {
                     "fake": True,
+                    "device_info": getattr(self, "device_info", None),
                     "locale_code": getattr(self.locale, "country_code", None),
                 }
             ),
@@ -153,6 +155,9 @@ class FakeAudible:
             customer_info=self.customer_info,
             deregister_error=self.deregister_error,
         )
+        self.last_loaded.device_info = json.loads(
+            Path(path).read_text(encoding="utf-8")
+        ).get("device_info")
         return self.last_loaded
 
 

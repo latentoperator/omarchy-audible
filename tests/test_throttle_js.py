@@ -27,10 +27,7 @@ A4 = "B0FAKE0004"
 # The sentence the drawer shows, verbatim (0.1.5, ARCHITECTURE 4.2). The
 # backend's `pause.THROTTLED_MESSAGE` is the same text; `tests/test_throttle.py`
 # keeps the two in step.
-THROTTLED_TEXT = (
-    "Audible is limiting downloads for this account right now. "
-    "Your books still play. Try again tomorrow."
-)
+THROTTLED_TEXT = "Audible is limiting downloads. Downloaded books still play."
 
 UNTIL = "2027-01-15T12:00:00Z"
 UNTIL_MS = 1_800_014_400_000  # the same instant, 2027-01-15T12:00:00Z
@@ -382,17 +379,35 @@ def test_the_resume_clock_is_empty_for_an_unusable_instant(chicago, value):
     assert qjs.load("Format").call("resumeAt", value, CHICAGO_NOON_MS) == ""
 
 
-def test_the_paused_banner_is_the_refusal_and_when_downloads_resume(chicago):
-    drawer = qjs.load("Drawer")
-    assert drawer.call("pausedBanner", "2027-01-16T03:40:00Z", CHICAGO_NOON_MS) == (
-        THROTTLED_TEXT + " Downloads resume at 9:40 PM."
+@pytest.mark.parametrize(
+    "until,when",
+    [
+        ("2027-01-15T20:00:00Z", "at 2:00 PM"),
+        ("2027-01-16T03:40:00Z", "at 9:40 PM"),
+        ("2027-01-16T15:40:00Z", "tomorrow at 9:40 AM"),
+        ("2027-01-16T06:00:00Z", "tomorrow at 12:00 AM"),
+    ],
+)
+def test_the_paused_banner_has_one_deadline_derived_retry(chicago, until, when):
+    text = qjs.load("Drawer").call("pausedBanner", until, CHICAGO_NOON_MS)
+    assert text == (
+        THROTTLED_TEXT
+        + " Waiting downloads will retry automatically "
+        + when
+        + ". Audible may still limit the retry."
     )
-    assert drawer.call("pausedBanner", "2027-01-16T15:40:00Z", CHICAGO_NOON_MS) == (
-        THROTTLED_TEXT + " Downloads resume tomorrow at 9:40 AM."
+    assert "Try again tomorrow" not in text
+    assert "Downloads resume" not in text
+    assert "restart" not in text
+
+
+@pytest.mark.parametrize("until", ["", None, "nonsense", 7])
+def test_unknown_retry_deadline_has_safe_fallback(chicago, until):
+    assert qjs.load("Drawer").call("pausedBanner", until, CHICAGO_NOON_MS) == (
+        THROTTLED_TEXT
+        + " Waiting downloads will retry automatically when the pause ends."
+        + " Retry time is unavailable. Audible may still limit the retry."
     )
-    # Nothing usable to say: the sentence alone, never a broken one.
-    for value in ("", None, "nonsense"):
-        assert drawer.call("pausedBanner", value, CHICAGO_NOON_MS) == THROTTLED_TEXT
 
 
 def test_the_throttled_error_text_is_exact():

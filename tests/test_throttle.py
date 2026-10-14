@@ -15,6 +15,7 @@ and pin the clock everywhere the pause doubles: 4, 8, 16, 24 h, then a day.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -281,6 +282,67 @@ def test_a_denial_only_in_the_message_still_reads_as_throttled(tmp_path):
         "throttled": True,
     }
     assert ASIN not in (workdir / DENIED).read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\n\t \n"])
+@pytest.mark.parametrize("structured", [False, True])
+@pytest.mark.parametrize(
+    "reason,message_tail,throttled,reasons",
+    [
+        ("CustomerThrottled", "Please wait.", True, ["CustomerThrottled"]),
+        ("OtherReason", "The customer is being throttled.", True, ["OtherReason"]),
+        ("NotOwned", "Not available.", False, ["NotOwned"]),
+        ("not a code!", "Not available.", False, []),
+    ],
+)
+def test_multiline_denial_records_keep_only_codes(
+    tmp_path, newline, structured, reason, message_tail, throttled, reasons, capsys
+):
+    message = f"{MESSAGE}{newline}{message_tail} key=INVENTEDKEY iv=INVENTEDIV"
+    args = (ASIN, message, f"\t{reason}{newline}", "validation")
+    record = logging.LogRecord(
+        aud.MODELS_LOGGER,
+        logging.DEBUG,
+        __file__,
+        0,
+        DENIAL_LINE if structured else DENIAL_LINE % args,
+        args if structured else (),
+        None,
+    )
+    watch = aud.LicenseDenialWatch()
+    assert watch.filter(record) is False
+    assert watch.denied is True
+    assert watch.throttled is throttled
+    assert watch.reasons == reasons
+    target = tmp_path / DENIED
+    watch.save(target)
+    text = target.read_text()
+    assert json.loads(text) == {"reasons": reasons, "throttled": throttled}
+    for leak in (ASIN, TITLE, MESSAGE, message_tail, "INVENTEDKEY", "INVENTEDIV"):
+        assert leak not in text
+    assert capsys.readouterr() == ("", "")
+
+
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\n\t \n"])
+def test_multiline_throttling_is_captured_by_the_wrapper(
+    tmp_path, env, monkeypatch, newline
+):
+    for name in ("HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_RUNTIME_DIR"):
+        monkeypatch.setenv(name, env[name])
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    message = f"{MESSAGE}{newline}Please wait. key=INVENTEDKEY iv=INVENTEDIV"
+    result, workdir = _run_wrapper(
+        tmp_path, reason="CustomerThrottled", message=message
+    )
+    assert result.returncode != 0
+    text = (workdir / DENIED).read_text()
+    assert json.loads(text) == {"reasons": ["CustomerThrottled"], "throttled": True}
+    diagnostics = text + result.stderr + result.stdout
+    for leak in (ASIN, TITLE, MESSAGE, "Please wait.", "INVENTEDKEY", "INVENTEDIV"):
+        assert leak not in diagnostics
+    assert result.stdout == ""
+    assert result.stderr == STDERR_LINE + "\n"
 
 
 def test_no_denial_means_no_file(tmp_path):
@@ -594,6 +656,9 @@ def test_the_fake_pause_and_the_real_pause_are_separate_files(fake_paths, paths)
 def test_the_drawer_uses_the_backend_sentence_exactly():
     onboarding = qjs.load("Onboarding")
     assert onboarding.evaluate("THROTTLED_TEXT") == pause.THROTTLED_MESSAGE
+    assert pause.THROTTLED_MESSAGE == (
+        "Audible is limiting downloads. Downloaded books still play."
+    )
     entry = onboarding.call("errorText", "throttled")
     assert entry["body"] == pause.THROTTLED_MESSAGE
     assert entry["title"] == "Audible is limiting downloads"

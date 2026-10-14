@@ -101,8 +101,9 @@ ColumnLayout {
 
     Text {
       Layout.fillWidth: true
-      text: Signin.setupLine(root.service ? root.service.settingUp : false,
-        root.service ? root.service.runner.progress : null)
+      text: root.service && root.service.settingUp
+        ? Signin.setupLine(true, root.service.runner.progress)
+        : Onboarding.setupText(root.status)
       textFormat: Text.PlainText
       wrapMode: Text.WordWrap
       color: Color.muted
@@ -209,6 +210,17 @@ ColumnLayout {
 
       Text {
         Layout.fillWidth: true
+        visible: paste.pasteError.length > 0
+        text: paste.pasteError
+        textFormat: Text.PlainText
+        wrapMode: Text.WordWrap
+        color: Color.urgent
+        font.family: Style.font.family
+        font.pixelSize: Style.font.bodySmall
+      }
+
+      Text {
+        Layout.fillWidth: true
         visible: root.service ? root.service.pasteRejected : false
         text: Signin.pasteMessage(root.service ? root.service.pasteEmpty : false)
         textFormat: Text.PlainText
@@ -222,10 +234,8 @@ ColumnLayout {
         spacing: Style.spacing.md
         Button {
           text: "Paste from clipboard"
-          onClicked: {
-            paste.text = ""
-            paste.pasteClipboard()
-          }
+          enabled: !paste.pasting
+          onClicked: paste.pasteClipboard(true)
         }
         Button {
           text: "Connect"

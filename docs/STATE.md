@@ -2,9 +2,22 @@
 
 Update this file in every PR that changes status. Newest first. See [WORKFLOW.md](WORKFLOW.md) for how work is run.
 
-**Last updated:** 2026-10-09 · **Phase:** M5 · **0.1.0** (#111: version, changelog, follow-ups from R3/R5) · **R3 passed** · **R5 passed** · **R6 docs merged** (#107) · display name **Omaudible** (#108) · **Next:** tag `v0.1.0`, GitHub release, then R7 marketplace submission
+**Last updated:** 2026-10-14 · **Released:** [v0.1.5](https://github.com/latentoperator/omarchy-audible/releases/tag/v0.1.5) · **Phase:** v0.1.6 review remediation in progress on `v016` · **Next:** docs/version integration, combined exact-head review, then attended fake-mode release checks. `main` stays at `9264a82` until the attended release step.
 
-## Where we are
+The current snapshot and next steps below supersede earlier milestones. Older decisions, environment descriptions and test logs are historical evidence, not observations of the current release.
+
+## Current release snapshot
+
+- v0.1.5 is released (PR #121); its review brief is merged in #122. `v016` contains all remediation component PRs: B02 #123, B03 #124, B05/R01 #125, B01 #126, U01 #127, B04 #128, S01/S03/S04 #129, S02 #130 and U02–U05 #131. Every parent merge SHA was verified as an ancestor of `a83b823` before docs/version integration.
+- The latest component merge was independently verified at **3,451 passed, 0 skipped**, with ruff check/format and no-symlink checks clean. This is component-handoff evidence; the integration card reruns all gates and records exact results in the release PR.
+- D01 (#132) reconciles the docs and sets version 0.1.6, still unreleased. The docs/version PR targets `v016`; the combined `main` ← `v016` PR stays draft for independent exact-head review and attended checks. No tag, release publication or live-plugin change belongs to this integration phase.
+- #114 (keyboard access), #115 (contrast), #116 (old-shell callbacks) remain open separately; no accessibility or live-shell fix is implied by headless tests.
+
+## Historical milestone and test records
+
+The following records are preserved as written, including their then-pending steps; use the current snapshot and next steps for new work.
+
+### Where we were
 
 | Item | Status |
 |------|--------|
@@ -108,6 +121,15 @@ Update this file in every PR that changes status. Newest first. See [WORKFLOW.md
 D1, D4, D5 were decided at G0 (see SCOPE §9).
 
 ## Next steps (in order)
+
+1. Merge the D01 docs/version PR into `v016` only after full offscreen pytest, ruff check/format, no-symlink checks, evidence probes and exact-head CI. Keep version 0.1.6 marked unreleased.
+2. Open the draft `main` ← `v016` release PR with the component PR map, exact test count and each probe's output; run the independent combined exact-head review.
+3. With Chris present on BEE, run fake-mode checks: orphan confirmation in Library and Full, Esc/click-away/view-switch confirmation reset, Full stale-sync notice, paste errors, throttle banner and Disconnect with held books. Run `omarchy plugin validate .` on that exact release head and record results. Hopebox must not touch BEE or the live plugin.
+4. Only after those gates, perform the attended release steps in RELEASING (including the clean-install gate for setup/sign-in/download changes), date the changelog, merge to `main`, tag and publish. Those actions are not authorized by the docs/version integration card. Keep #114/#115/#116 separate.
+
+### Historical next steps (through 2026-10-09)
+
+Preserved for context; these are not the current work queue.
 
 1. ~~A0, S1–S6, G0, M1, M2 (G2), M3 (G3) and G3 findings 1–6~~ Done.
 2. ~~Chris's day of real use → G3 follow-ups.~~ Closed 2026-10-06 when Chris moved M4 to the desktop. Follow-ups from that use: copy says "this device" (#49); a finished download no longer plays by itself (#50).

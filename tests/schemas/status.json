@@ -15,6 +15,7 @@
     "missing": { "type": "array", "items": { "type": "string" } },
     "authenticated": { "type": "boolean" },
     "venv_ready": { "type": "boolean" },
+    "venv_state": { "enum": ["current_ready", "usable_old", "broken", "missing"] },
     "marketplace": { "type": ["string", "null"] },
     "account": { "type": ["string", "null"] },
     "catalog_age_s": { "type": ["integer", "null"], "minimum": 0 },

@@ -99,7 +99,7 @@ function staleCountAfter(count, outcome) {
   return current;
 }
 
-// The Mini line to show after a run of refused pushes, or "" when there is
+// The shared player line after a run of refused pushes, or "" when there is
 // nothing to say. A single `stale` is ordinary; two or more in a row mean the
 // position is not getting through and the usual cause is this computer's clock
 // (F1). Pure: a missing, negative or nonsense count says nothing.
