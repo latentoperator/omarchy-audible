@@ -2,7 +2,7 @@
 
 All notable changes to Omaudible. Versions follow `manifest.json`.
 
-## 0.1.4 (unreleased)
+## 0.1.4 (2026-10-13)
 
 ### Security
 
