@@ -36,17 +36,17 @@ ColumnLayout {
 
   // Ticks once a second while a sleep timer counts down on screen.
   property real nowMs: Date.now()
-  property bool confirmRemove: false
+  readonly property bool confirmRemove: service ? service.removeConfirmAsin.length > 0 && service.removeConfirmAsin === asin : false
 
   signal closeRequested()
 
   spacing: Style.spacing.panelGap
 
   onVisibleChanged: {
-    confirmRemove = false
+    if (!visible && service) service.cancelRemoveConfirm()
     if (visible) chapterList.reveal()
   }
-  onAsinChanged: confirmRemove = false
+  onAsinChanged: if (service) service.cancelRemoveConfirm()
 
   Timer {
     interval: 1000
@@ -345,13 +345,13 @@ ColumnLayout {
       iconText: Glyphs.GLYPH_REMOVE
       text: "Remove from this device"
       bordered: true
-      onClicked: root.confirmRemove = true
+      onClicked: root.service.askRemoveBook(root.asin)
     }
 
     Text {
       Layout.fillWidth: true
       visible: root.confirmRemove
-      text: "Remove this book from this device? It stays in your library."
+      text: Drawer.removeQuestion(root.row)
       textFormat: Text.PlainText
       wrapMode: Text.WordWrap
       color: Color.popups.text
@@ -364,8 +364,7 @@ ColumnLayout {
       text: "Remove"
       bordered: true
       onClicked: {
-        root.confirmRemove = false
-        root.service.removeBook(root.asin)
+        root.service.confirmRemoveBook(root.asin)
         root.service.showView(Panel.VIEW_LIBRARY)
       }
     }
@@ -373,7 +372,7 @@ ColumnLayout {
     Button {
       visible: root.confirmRemove
       text: "Cancel"
-      onClicked: root.confirmRemove = false
+      onClicked: root.service.cancelRemoveConfirm()
     }
   }
 }

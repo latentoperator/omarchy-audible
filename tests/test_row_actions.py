@@ -144,7 +144,7 @@ def test_the_question_scrolls_into_view():
     # again must never confirm a question the user can't fully see.
     library = read("qml/views/LibraryView.qml")
     assert (
-        "onHeightChanged: if (revealQuestion && (confirming || asking)) "
+        "onHeightChanged: if (revealQuestion && (confirming || asking || confirmingRemove)) "
         "books.positionViewAtIndex(index, ListView.Contain)" in library
     )
     # Codex R2: only a question just opened scrolls; a delegate recreated with

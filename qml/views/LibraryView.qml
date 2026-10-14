@@ -88,9 +88,10 @@ ColumnLayout {
       }
       Keys.onPressed: function(event) {
         var action = Drawer.searchKey(event.key, search.text)
-        // Esc first drops an open download question, then closes.
+        // Esc first cancels an open removal or download question, then closes.
         if (action === Drawer.KEY_CLOSE) {
-          if (root.service && root.service.confirmAsin.length > 0) root.service.cancelConfirm()
+          if (root.service && root.service.removeConfirmAsin.length > 0) root.service.cancelRemoveConfirm()
+          else if (root.service && root.service.confirmAsin.length > 0) root.service.cancelConfirm()
           else root.closeRequested()
         }
         else if (action === Drawer.KEY_MOVE_UP) root.move(-1)
@@ -364,7 +365,10 @@ ColumnLayout {
         questionText: confirming ? root.questionText(modelData) : ""
         asking: root.service ? root.service.askAsin === modelData.asin : false
         onPicked: root.pickAt(index)
+        confirmingRemove: root.service ? root.service.removeConfirmAsin === modelData.asin : false
         onRemoveRequested: root.service.removeBook(modelData.asin)
+        onConfirmRemoveRequested: root.service.confirmRemoveBook(modelData.asin)
+        onCancelRemoveRequested: root.service.cancelRemoveConfirm()
         onCancelDownloadRequested: root.service.cancelDownload(modelData.asin)
         // The question makes the row taller; keep all of it in view. Only for
         // a question just opened on this row: a row recreated while the user
@@ -376,7 +380,8 @@ ColumnLayout {
         Component.onCompleted: created = true
         onConfirmingChanged: if (created) revealQuestion = confirming || asking
         onAskingChanged: if (created) revealQuestion = confirming || asking
-        onHeightChanged: if (revealQuestion && (confirming || asking)) books.positionViewAtIndex(index, ListView.Contain)
+        onConfirmingRemoveChanged: if (created) revealQuestion = confirmingRemove
+        onHeightChanged: if (revealQuestion && (confirming || asking || confirmingRemove)) books.positionViewAtIndex(index, ListView.Contain)
         onConfirmRequested: root.service.confirmDownload()
         onCancelRequested: root.service.cancelConfirm()
         onResumeRequested: root.service.answerAsk(true)
