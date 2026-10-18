@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "../lib/Drawer.js" as Drawer
 import "../lib/Format.js" as Format
@@ -81,7 +82,7 @@ Rectangle {
         text: root.row ? root.row.title : ""
         textFormat: Text.PlainText
         elide: Text.ElideRight
-        color: Color.popups.text
+        color: Commons.Color.popups.text
         font.family: Style.font.family
         font.pixelSize: Style.font.body
       }
@@ -119,7 +120,7 @@ Rectangle {
           // Unknown runtime (0) shows nothing rather than "0m".
           text: Drawer.runtimeMs(root.row) > 0 ? Format.duration(Drawer.runtimeMs(root.row)) : ""
           textFormat: Text.PlainText
-          color: Color.muted
+          color: Commons.Color.muted
           font.family: Style.font.family
           font.pixelSize: Style.font.bodySmall
         }
@@ -137,7 +138,7 @@ Rectangle {
           text: root.questionText
           textFormat: Text.PlainText
           wrapMode: Text.WordWrap
-          color: Color.popups.text
+          color: Commons.Color.popups.text
           font.family: Style.font.family
           font.pixelSize: Style.font.bodySmall
         }
@@ -162,7 +163,7 @@ Rectangle {
         text: Drawer.ROW_ASK_TEXT
         textFormat: Text.PlainText
         wrapMode: Text.WordWrap
-        color: Color.popups.text
+        color: Commons.Color.popups.text
         font.family: Style.font.family
         font.pixelSize: Style.font.bodySmall
       }
@@ -187,7 +188,7 @@ Rectangle {
         text: Drawer.removeQuestion(root.row)
         textFormat: Text.PlainText
         wrapMode: Text.WordWrap
-        color: Color.urgent
+        color: Commons.Color.urgent
         font.family: Style.font.family
         font.pixelSize: Style.font.bodySmall
       }
@@ -211,7 +212,7 @@ Rectangle {
         visible: root.removing
         text: "Removing\u2026"
         textFormat: Text.PlainText
-        color: Color.muted
+        color: Commons.Color.muted
         font.family: Style.font.family
         font.pixelSize: Style.font.bodySmall
       }
@@ -222,7 +223,7 @@ Rectangle {
         text: Drawer.errorText(root.row)
         textFormat: Text.PlainText
         wrapMode: Text.WordWrap
-        color: Color.urgent
+        color: Commons.Color.urgent
         font.family: Style.font.family
         font.pixelSize: Style.font.bodySmall
       }
@@ -241,7 +242,7 @@ Rectangle {
             width: parent.width * Drawer.progressFraction(root.row)
             height: parent.height
             radius: parent.radius
-            color: Color.accent
+            color: Commons.Color.accent
           }
         }
 
@@ -271,7 +272,7 @@ Rectangle {
       visible: root.removable && !root.removing && !root.confirmingRemove
       iconText: Glyphs.GLYPH_REMOVE
       tooltipText: "Remove from this device"
-      hoverColor: Color.urgent
+      hoverColor: Commons.Color.urgent
       onClicked: root.removeRequested()
     }
   }

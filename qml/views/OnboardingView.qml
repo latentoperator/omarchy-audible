@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "../components"
 import "../lib/Onboarding.js" as Onboarding
@@ -40,7 +41,7 @@ ColumnLayout {
     text: Signin.heading(root.step, root.service ? root.service.reconnecting : false)
     textFormat: Text.PlainText
     wrapMode: Text.WordWrap
-    color: Color.popups.text
+    color: Commons.Color.popups.text
     font.family: Style.font.family
     font.pixelSize: Style.font.heading
   }
@@ -56,7 +57,7 @@ ColumnLayout {
       text: "Install them in a terminal, then check again."
       textFormat: Text.PlainText
       wrapMode: Text.WordWrap
-      color: Color.muted
+      color: Commons.Color.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.body
     }
@@ -74,7 +75,7 @@ ColumnLayout {
         text: Onboarding.installCommand(root.status ? root.status.missing : [])
         textFormat: Text.PlainText
         wrapMode: Text.WrapAnywhere
-        color: Color.popups.text
+        color: Commons.Color.popups.text
         font.family: Style.font.family
         font.pixelSize: Style.font.body
       }
@@ -106,7 +107,7 @@ ColumnLayout {
         : Onboarding.setupText(root.status)
       textFormat: Text.PlainText
       wrapMode: Text.WordWrap
-      color: Color.muted
+      color: Commons.Color.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.body
     }
@@ -135,7 +136,7 @@ ColumnLayout {
         text: "Sign in with Amazon in your browser. Captcha, two-step and passkeys all happen there. Amazon then shows a “page not found” page: that's expected. Copy its address and come back here to paste it."
         textFormat: Text.PlainText
         wrapMode: Text.WordWrap
-        color: Color.muted
+        color: Commons.Color.muted
         font.family: Style.font.family
         font.pixelSize: Style.font.body
       }
@@ -169,7 +170,7 @@ ColumnLayout {
       visible: text.length > 0
       text: Signin.phaseText(root.phase)
       textFormat: Text.PlainText
-      color: Color.muted
+      color: Commons.Color.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.body
     }
@@ -185,7 +186,7 @@ ColumnLayout {
         text: "After you sign in, the browser shows a “page not found” page. Copy its address and paste it here."
         textFormat: Text.PlainText
         wrapMode: Text.WordWrap
-        color: Color.muted
+        color: Commons.Color.muted
         font.family: Style.font.family
         font.pixelSize: Style.font.body
       }
@@ -214,7 +215,7 @@ ColumnLayout {
         text: paste.pasteError
         textFormat: Text.PlainText
         wrapMode: Text.WordWrap
-        color: Color.urgent
+        color: Commons.Color.urgent
         font.family: Style.font.family
         font.pixelSize: Style.font.bodySmall
       }
@@ -225,7 +226,7 @@ ColumnLayout {
         text: Signin.pasteMessage(root.service ? root.service.pasteEmpty : false)
         textFormat: Text.PlainText
         wrapMode: Text.WordWrap
-        color: Color.urgent
+        color: Commons.Color.urgent
         font.family: Style.font.family
         font.pixelSize: Style.font.bodySmall
       }
@@ -260,7 +261,7 @@ ColumnLayout {
       text: root.error ? root.error.title : ""
       textFormat: Text.PlainText
       wrapMode: Text.WordWrap
-      color: Color.urgent
+      color: Commons.Color.urgent
       font.family: Style.font.family
       font.pixelSize: Style.font.body
     }
@@ -269,7 +270,7 @@ ColumnLayout {
       text: root.error ? root.error.body : ""
       textFormat: Text.PlainText
       wrapMode: Text.WordWrap
-      color: Color.muted
+      color: Commons.Color.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.bodySmall
     }

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Effects
 import qs.Commons
+import qs.Commons as Commons
 import "../lib/Glyphs.js" as Glyphs
 import "../lib/Parts.js" as Parts
 
@@ -41,7 +42,7 @@ Item {
     Text {
       anchors.centerIn: parent
       text: Glyphs.GLYPH_BOOK
-      color: Color.muted
+      color: Commons.Color.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.iconLarge
     }

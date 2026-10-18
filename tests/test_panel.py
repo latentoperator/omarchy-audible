@@ -144,5 +144,7 @@ def test_the_soft_text_colour_lives_in_one_place():
     # F26: the 75% popup-text colour is SoftText's, and nowhere else.
     root = pathlib.Path(__file__).resolve().parent.parent
     files = sorted((root / "qml").rglob("*.qml")) + [root / "BarWidget.qml"]
-    holders = [f.name for f in files if "Color.popups.text.b, 0.75)" in f.read_text()]
+    holders = [
+        f.name for f in files if "Commons.Color.popups.text.b, 0.75)" in f.read_text()
+    ]
     assert holders == ["SoftText.qml"]

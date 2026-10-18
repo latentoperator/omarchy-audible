@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "../components"
 import "../lib/Drawer.js" as Drawer
@@ -174,7 +175,7 @@ ColumnLayout {
     text: search.pasteError
     textFormat: Text.PlainText
     wrapMode: Text.WordWrap
-    color: Color.urgent
+    color: Commons.Color.urgent
     font.family: Style.font.family
     font.pixelSize: Style.font.bodySmall
   }
@@ -187,7 +188,7 @@ ColumnLayout {
     text: "Couldn't start playback: " + (root.service ? root.service.playFailure : "")
     textFormat: Text.PlainText
     wrapMode: Text.WordWrap
-    color: Color.urgent
+    color: Commons.Color.urgent
     font.family: Style.font.family
     font.pixelSize: Style.font.bodySmall
   }
@@ -206,7 +207,7 @@ ColumnLayout {
         : Drawer.bannerText(root.list.banner, root.service ? root.service.catalogAgeSeconds : null)
       textFormat: Text.PlainText
       wrapMode: Text.WordWrap
-      color: Drawer.bannerUrgent(root.list.banner) ? Color.urgent : Color.muted
+      color: Drawer.bannerUrgent(root.list.banner) ? Commons.Color.urgent : Commons.Color.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.bodySmall
     }
@@ -237,7 +238,7 @@ ColumnLayout {
       text: root.service ? root.service.clipboardNotice : ""
       textFormat: Text.PlainText
       wrapMode: Text.WordWrap
-      color: Color.muted
+      color: Commons.Color.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.bodySmall
     }
@@ -262,7 +263,7 @@ ColumnLayout {
         ? BooksLocation.oldBooksText(root.service.status.old_books, root.service.status.books_dir, Quickshell.env("HOME")) : ""
       textFormat: Text.PlainText
       wrapMode: Text.WordWrap
-      color: Color.muted
+      color: Commons.Color.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.bodySmall
     }
@@ -286,7 +287,7 @@ ColumnLayout {
         ? BooksLocation.problemText(root.service.status.books_dir_problem, root.service.status.books_dir, Quickshell.env("HOME")) : ""
       textFormat: Text.PlainText
       wrapMode: Text.WordWrap
-      color: Color.muted
+      color: Commons.Color.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.bodySmall
     }
@@ -303,7 +304,7 @@ ColumnLayout {
       text: Drawer.askText(root.askRow)
       textFormat: Text.PlainText
       elide: Text.ElideRight
-      color: Color.popups.text
+      color: Commons.Color.popups.text
       font.family: Style.font.family
       font.pixelSize: Style.font.body
     }
@@ -335,7 +336,7 @@ ColumnLayout {
         && root.list.banner === LibraryUi.BANNER_CONNECTION)
       text: Drawer.stateText(root.list.state)
       textFormat: Text.PlainText
-      color: Color.muted
+      color: Commons.Color.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.body
     }
@@ -352,7 +353,7 @@ ColumnLayout {
         text: "Audible connection problem"
         textFormat: Text.PlainText
         horizontalAlignment: Text.AlignHCenter
-        color: Color.urgent
+        color: Commons.Color.urgent
         font.family: Style.font.family
         font.pixelSize: Style.font.body
       }
@@ -361,7 +362,7 @@ ColumnLayout {
         text: "The library could not be read. Copy the diagnostic to help resolve the problem."
         textFormat: Text.PlainText
         wrapMode: Text.WordWrap
-        color: Color.muted
+        color: Commons.Color.muted
         font.family: Style.font.family
         font.pixelSize: Style.font.bodySmall
       }
@@ -437,7 +438,7 @@ ColumnLayout {
         : Format.storageLine(root.storage.count, root.storage.bytes)
       textFormat: Text.PlainText
       elide: Text.ElideRight
-      color: Color.muted
+      color: Commons.Color.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.bodySmall
     }
@@ -450,7 +451,7 @@ ColumnLayout {
     Button {
       visible: root.confirmRemoveAll
       text: "Remove"
-      foreground: Color.urgent
+      foreground: Commons.Color.urgent
       onClicked: {
         root.confirmRemoveAll = false
         root.service.removeAll()
@@ -476,7 +477,7 @@ ColumnLayout {
               Onboarding.marketplaces()))
       textFormat: Text.PlainText
       elide: Text.ElideRight
-      color: Color.muted
+      color: Commons.Color.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.bodySmall
     }
@@ -489,7 +490,7 @@ ColumnLayout {
     Button {
       visible: root.confirmDisconnect
       text: "Disconnect"
-      foreground: Color.urgent
+      foreground: Commons.Color.urgent
       onClicked: {
         root.confirmDisconnect = false
         root.service.disconnect()
@@ -530,7 +531,7 @@ ColumnLayout {
         text: Mini.title(root.loaded, root.service ? root.service.loadedRow : null)
         textFormat: Text.PlainText
         elide: Text.ElideRight
-        color: Color.popups.text
+        color: Commons.Color.popups.text
         font.family: Style.font.family
         font.pixelSize: Style.font.body
       }

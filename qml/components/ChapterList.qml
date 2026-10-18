@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import qs.Commons
+import qs.Commons as Commons
 import "../lib/Format.js" as Format
 import "../lib/Player.js" as Player
 
@@ -51,8 +52,8 @@ ListView {
 
     width: root.width
     height: Style.spacing.popupRowHeight
-    color: mouse.containsMouse ? Style.hoverFillFor(Color.popups.text, Color.accent)
-      : current ? Style.selectedFillFor(Color.popups.text, Color.accent)
+    color: mouse.containsMouse ? Style.hoverFillFor(Commons.Color.popups.text, Commons.Color.accent)
+      : current ? Style.selectedFillFor(Commons.Color.popups.text, Commons.Color.accent)
       : "transparent"
 
     Text {
@@ -64,9 +65,9 @@ ListView {
       text: row.modelData.label
       textFormat: Text.PlainText
       elide: Text.ElideRight
-      color: mouse.containsMouse ? Style.hoverStateColor(Color.popups.text, Color.accent)
-        : row.current ? Style.selectedStateColor(Color.popups.text, Color.accent)
-        : Color.popups.text
+      color: mouse.containsMouse ? Style.hoverStateColor(Commons.Color.popups.text, Commons.Color.accent)
+        : row.current ? Style.selectedStateColor(Commons.Color.popups.text, Commons.Color.accent)
+        : Commons.Color.popups.text
       font.family: Style.font.family
       font.pixelSize: Style.font.body
       font.bold: row.current
@@ -79,7 +80,7 @@ ListView {
       anchors.rightMargin: Style.spacing.controlPaddingX
       text: Format.clock(row.modelData.durationMs)
       textFormat: Text.PlainText
-      color: Color.muted
+      color: Commons.Color.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.bodySmall
     }

@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "../components"
 import "../lib/Drawer.js" as Drawer
@@ -82,7 +83,7 @@ ColumnLayout {
         wrapMode: Text.Wrap
         maximumLineCount: 2
         elide: Text.ElideRight
-        color: Color.popups.text
+        color: Commons.Color.popups.text
         font.family: Style.font.family
         font.pixelSize: Style.font.heading
         font.bold: true
@@ -118,7 +119,7 @@ ColumnLayout {
           + Player.percentComplete(root.positionMs, root.durationMs) + "% complete"
         textFormat: Text.PlainText
         elide: Text.ElideRight
-        color: Color.popups.text
+        color: Commons.Color.popups.text
         font.family: Style.font.family
         font.pixelSize: Style.font.bodySmall
       }
@@ -130,7 +131,7 @@ ColumnLayout {
           + " left at " + Player.speedLabel(root.speed)
         textFormat: Text.PlainText
         elide: Text.ElideRight
-        color: Color.popups.text
+        color: Commons.Color.popups.text
         font.family: Style.font.family
         font.pixelSize: Style.font.bodySmall
       }
@@ -190,7 +191,7 @@ ColumnLayout {
     text: "Couldn't start playback: " + (root.service ? root.service.playFailure : "")
     textFormat: Text.PlainText
     wrapMode: Text.WordWrap
-    color: Color.urgent
+    color: Commons.Color.urgent
     font.family: Style.font.family
     font.pixelSize: Style.font.bodySmall
   }
@@ -222,7 +223,7 @@ ColumnLayout {
       Layout.preferredWidth: Style.space(52)
       text: "Speed"
       textFormat: Text.PlainText
-      color: Color.popups.text
+      color: Commons.Color.popups.text
       font.family: Style.font.family
       font.pixelSize: Style.font.caption
       font.bold: true
@@ -256,7 +257,7 @@ ColumnLayout {
       horizontalAlignment: Text.AlignHCenter
       text: Player.speedLabel(root.speed)
       textFormat: Text.PlainText
-      color: Color.popups.text
+      color: Commons.Color.popups.text
       font.family: Style.font.family
       font.pixelSize: Style.font.body
     }
@@ -279,7 +280,7 @@ ColumnLayout {
       Layout.preferredWidth: Style.space(52)
       text: "Sleep"
       textFormat: Text.PlainText
-      color: Color.popups.text
+      color: Commons.Color.popups.text
       font.family: Style.font.family
       font.pixelSize: Style.font.caption
       font.bold: true
@@ -312,7 +313,7 @@ ColumnLayout {
       text: Glyphs.GLYPH_MOON + "  " + Player.sleepText(root.sleepTimer,
         Mpv.sleepRemainingMs(root.sleepTimer, root.nowMs, root.positionMs, root.speed))
       textFormat: Text.PlainText
-      color: Color.popups.text
+      color: Commons.Color.popups.text
       font.family: Style.font.family
       font.pixelSize: Style.font.bodySmall
     }
@@ -330,7 +331,7 @@ ColumnLayout {
   Text {
     text: "Chapters"
     textFormat: Text.PlainText
-    color: Color.popups.text
+    color: Commons.Color.popups.text
     font.family: Style.font.family
     font.pixelSize: Style.font.caption
     font.bold: true
@@ -365,7 +366,7 @@ ColumnLayout {
       text: Drawer.removeQuestion(root.row)
       textFormat: Text.PlainText
       wrapMode: Text.WordWrap
-      color: Color.popups.text
+      color: Commons.Color.popups.text
       font.family: Style.font.family
       font.pixelSize: Style.font.body
     }

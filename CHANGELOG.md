@@ -2,6 +2,12 @@
 
 All notable changes to Omaudible. Versions follow `manifest.json`.
 
+## Unreleased
+
+### Fixed
+
+- Theme colours now stay correct on Qt 6.12, which Omarchy 4.0.5 and later use. Qt 6.12 adds a `Color` type of its own, which hides the shell's palette from the plugin's screens, so text and bars could turn black or blank once Omarchy stops pinning plugins to Qt 6.11. Omaudible now asks for the palette by its full name (`Commons.Color`); nothing looks different today, and the colours keep working when that temporary pin is removed.
+
 ## 0.1.6 (2026-10-14)
 
 ### Fixed
