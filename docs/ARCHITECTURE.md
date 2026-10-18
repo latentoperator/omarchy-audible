@@ -72,7 +72,7 @@ Reference implementations to read before writing QML, all on this machine:
 
 Marketplace/validator rules (from plugins.omarchy.org/develop): run `omarchy plugin validate .` before every release. Third-party ids cannot start with `omarchy.`. **The plugin folder (this repo) may not contain symlinks.** Never start a second Quickshell process. Manifest fields must be ones the shell supports; do not invent new ones.
 
-Theming rule: import `qs.Commons` and `qs.Ui` and use `Style`/theme tokens only. Never hard-code a color.
+Theming rule: import `qs.Commons` and `qs.Ui` and use `Style`/theme tokens only. Never hard-code a color. Read palette colours as `Commons.Color` (`import qs.Commons as Commons`), because Qt 6.12 shadows bare `Color` with its own `QtQuick` singleton.
 
 ## 3. On-disk layout
 

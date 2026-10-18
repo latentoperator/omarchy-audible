@@ -1,5 +1,6 @@
 import QtQuick
 import qs.Commons
+import qs.Commons as Commons
 import "../lib/LibraryUi.js" as LibraryUi
 import "../lib/Parts.js" as Parts
 
@@ -17,10 +18,10 @@ Rectangle {
   readonly property string kind: badge.kind
   readonly property string label: badge.label
   readonly property string tone: Parts.badgeTone(kind)
-  readonly property color toneColor: tone === Parts.TONE_ACCENT ? Color.accent
-    : tone === Parts.TONE_URGENT ? Color.urgent
-    : tone === Parts.TONE_TEXT ? Color.popups.text
-    : Color.muted
+  readonly property color toneColor: tone === Parts.TONE_ACCENT ? Commons.Color.accent
+    : tone === Parts.TONE_URGENT ? Commons.Color.urgent
+    : tone === Parts.TONE_TEXT ? Commons.Color.popups.text
+    : Commons.Color.muted
 
   implicitWidth: text.implicitWidth + Style.spacing.lg * 2
   implicitHeight: text.implicitHeight + Style.spacing.xs * 2

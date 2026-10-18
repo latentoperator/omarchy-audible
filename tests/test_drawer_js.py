@@ -389,11 +389,11 @@ def test_banner_urgent_matches_the_library_ui_banner_names(drawer):
 def test_library_view_colours_problem_banners_through_banner_urgent():
     view = (qjs.REPO_ROOT / "qml/views/LibraryView.qml").read_text(encoding="utf-8")
     assert (
-        "color: Drawer.bannerUrgent(root.list.banner) ? Color.urgent : Color.muted"
-        in view
+        "color: Drawer.bannerUrgent(root.list.banner) ? Commons.Color.urgent"
+        " : Commons.Color.muted" in view
     )
     block = view.split('text: "Audible connection problem"', 1)[1].split("}", 1)[0]
-    assert "color: Color.urgent" in block
+    assert "color: Commons.Color.urgent" in block
 
 
 def test_book_row_hides_an_unknown_runtime():

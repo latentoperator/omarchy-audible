@@ -219,7 +219,7 @@ def test_author_names_are_not_muted():
         assert "color:" not in block, rel
     soft = read("qml/components/SoftText.qml")
     assert re.search(
-        r"Qt\.rgba\(Color\.popups\.text\.r, Color\.popups\.text\.g, Color\.popups\.text\.b, 0\.75\)",
+        r"Qt\.rgba\(Commons\.Color\.popups\.text\.r, Commons\.Color\.popups\.text\.g, Commons\.Color\.popups\.text\.b, 0\.75\)",
         soft,
     )
 

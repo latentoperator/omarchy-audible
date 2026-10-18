@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import qs.Commons
+import qs.Commons as Commons
 import "../lib/Format.js" as Format
 import "../lib/Mini.js" as Mini
 import "../lib/Player.js" as Player
@@ -76,7 +77,7 @@ ColumnLayout {
       height: track.height
       radius: track.radius
       width: track.width * root.shownFraction
-      color: Color.accent
+      color: Commons.Color.accent
     }
 
     // Chapter starts, cut into the track in the panel's background color.
@@ -86,7 +87,7 @@ ColumnLayout {
         required property real modelData
         width: Math.max(1, Style.space(2))
         height: track.height
-        color: Color.popups.background
+        color: Commons.Color.popups.background
         anchors.verticalCenter: track.verticalCenter
         x: Math.round(track.width * modelData - width / 2)
       }
@@ -99,8 +100,8 @@ ColumnLayout {
       height: size
       radius: size / 2
       visible: root.enabled && root.durationMs > 0
-      color: Color.accent
-      border.color: Color.popups.background
+      color: Commons.Color.accent
+      border.color: Commons.Color.popups.background
       border.width: Math.max(1, Style.space(2))
       anchors.verticalCenter: track.verticalCenter
       x: Math.max(0, Math.min(track.width - width, track.width * root.shownFraction - width / 2))
@@ -146,7 +147,7 @@ ColumnLayout {
     Text {
       text: Format.clock(root.shownMs)
       textFormat: Text.PlainText
-      color: Color.popups.text
+      color: Commons.Color.popups.text
       font.family: Style.font.family
       font.pixelSize: Style.font.bodySmall
     }
@@ -157,7 +158,7 @@ ColumnLayout {
       text: root.note.length > 0 ? root.note
         : "−" + Format.clock(Mini.remainingMs(root.shownMs, root.durationMs))
       textFormat: Text.PlainText
-      color: Color.muted
+      color: Commons.Color.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.bodySmall
     }

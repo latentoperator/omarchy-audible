@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "../lib/Format.js" as Format
 
@@ -24,8 +25,8 @@ Item {
   readonly property bool opened: popup.opened
   readonly property real listHeight: Math.min(rows.length, visibleRows) * Style.spacing.popupRowHeight
     + Border.top(popupBorder) + Border.bottom(popupBorder) + Style.spacing.hairline * 2
-  readonly property var popupBorder: Border.localOrSurfaceSpec("popups", "border", Color.popups.border,
-    Color.popups.border, Style.normalBorderWidth)
+  readonly property var popupBorder: Border.localOrSurfaceSpec("popups", "border", Commons.Color.popups.border,
+    Commons.Color.popups.border, Style.normalBorderWidth)
 
   signal chosen(int index)
   signal closed()
@@ -55,7 +56,7 @@ Item {
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
     background: BorderSurface {
-      color: Color.popups.background
+      color: Commons.Color.popups.background
       borderSpec: root.popupBorder
       radius: Style.cornerRadius
     }
@@ -100,8 +101,8 @@ Item {
 
         width: list.width
         height: Style.spacing.popupRowHeight
-        color: hot ? Style.hoverFillFor(Color.popups.text, Color.accent)
-          : current ? Style.selectedFillFor(Color.popups.text, Color.accent)
+        color: hot ? Style.hoverFillFor(Commons.Color.popups.text, Commons.Color.accent)
+          : current ? Style.selectedFillFor(Commons.Color.popups.text, Commons.Color.accent)
           : "transparent"
 
         Text {
@@ -113,9 +114,9 @@ Item {
           text: row.modelData.label
           textFormat: Text.PlainText
           elide: Text.ElideRight
-          color: row.hot ? Style.hoverStateColor(Color.popups.text, Color.accent)
-            : row.current ? Style.selectedStateColor(Color.popups.text, Color.accent)
-            : Color.popups.text
+          color: row.hot ? Style.hoverStateColor(Commons.Color.popups.text, Commons.Color.accent)
+            : row.current ? Style.selectedStateColor(Commons.Color.popups.text, Commons.Color.accent)
+            : Commons.Color.popups.text
           font.family: Style.font.family
           font.pixelSize: Style.font.body
           font.bold: row.current
@@ -128,7 +129,7 @@ Item {
           anchors.rightMargin: Style.spacing.controlPaddingX
           text: Format.clock(row.modelData.startMs)
           textFormat: Text.PlainText
-          color: Color.muted
+          color: Commons.Color.muted
           font.family: Style.font.family
           font.pixelSize: Style.font.bodySmall
         }

@@ -274,7 +274,7 @@ def test_paste_button_requests_atomic_replacement_and_views_display_errors():
         assert len(blocks) == 1
         assert "textFormat: Text.PlainText" in blocks[0]
         assert "wrapMode: Text.WordWrap" in blocks[0]
-        assert "color: Color.urgent" in blocks[0]
+        assert "color: Commons.Color.urgent" in blocks[0]
 
 
 def test_middle_click_pastes_nothing(observed):

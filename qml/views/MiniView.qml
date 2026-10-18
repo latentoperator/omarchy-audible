@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "../components"
 import "../lib/Format.js" as Format
@@ -64,7 +65,7 @@ ColumnLayout {
         text: Mini.title(root.loaded, root.row)
         textFormat: Text.PlainText
         elide: Text.ElideRight
-        color: Color.popups.text
+        color: Commons.Color.popups.text
         font.family: Style.font.family
         font.pixelSize: Style.font.title
       }
@@ -88,7 +89,7 @@ ColumnLayout {
       visible: root.player ? root.player.sleepTimer !== null : false
       text: Glyphs.GLYPH_MOON
       textFormat: Text.PlainText
-      color: Color.popups.text
+      color: Commons.Color.popups.text
       font.family: Style.font.family
       font.pixelSize: Style.font.iconSmall
     }
@@ -116,8 +117,8 @@ ColumnLayout {
     visible: root.loaded && root.chapterText.length > 0
     implicitHeight: Style.spacing.controlHeight
     radius: Style.cornerRadius
-    color: chapterMouse.pressed ? Style.pressedFillFor(Color.popups.text, Color.accent)
-      : chapterMouse.containsMouse || chapterMenu.opened ? Style.hoverFillFor(Color.popups.text, Color.accent)
+    color: chapterMouse.pressed ? Style.pressedFillFor(Commons.Color.popups.text, Commons.Color.accent)
+      : chapterMouse.containsMouse || chapterMenu.opened ? Style.hoverFillFor(Commons.Color.popups.text, Commons.Color.accent)
       : "transparent"
 
     RowLayout {
@@ -129,7 +130,7 @@ ColumnLayout {
       Text {
         text: Glyphs.GLYPH_CHAPTERS
         textFormat: Text.PlainText
-        color: Color.popups.text
+        color: Commons.Color.popups.text
         font.family: Style.font.family
         font.pixelSize: Style.font.iconSmall
       }
@@ -139,7 +140,7 @@ ColumnLayout {
         text: root.chapterText
         textFormat: Text.PlainText
         elide: Text.ElideRight
-        color: Color.popups.text
+        color: Commons.Color.popups.text
         font.family: Style.font.family
         font.pixelSize: Style.font.body
       }
@@ -209,7 +210,7 @@ ColumnLayout {
     text: "Couldn't start playback: " + (root.service ? root.service.playFailure : "")
     textFormat: Text.PlainText
     wrapMode: Text.WordWrap
-    color: Color.urgent
+    color: Commons.Color.urgent
     font.family: Style.font.family
     font.pixelSize: Style.font.bodySmall
   }
