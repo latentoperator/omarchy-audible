@@ -4,6 +4,10 @@ All notable changes to Omaudible. Versions follow `manifest.json`.
 
 ## Unreleased
 
+### Documentation
+
+- The README and the plugin description now say up front that Audible has been refusing downloads to some accounts in third-party apps since early September 2026. Books you already downloaded keep playing. The FAQ explains that signing in again is not a reliable fix: on the maintainer's account, Audible refused a freshly registered device's first download within seconds.
+
 ### Fixed
 
 - Theme colours now stay correct on Qt 6.12, which Omarchy 4.0.5 and later use. Qt 6.12 adds a `Color` type of its own, which hides the shell's palette from the plugin's screens, so text and bars could turn black or blank once Omarchy stops pinning plugins to Qt 6.11. Omaudible now asks for the palette by its full name (`Commons.Color`); nothing looks different today, and the colours keep working when that temporary pin is removed.
