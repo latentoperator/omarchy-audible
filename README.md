@@ -14,6 +14,8 @@ Your Audible audiobooks in the [Omarchy](https://omarchy.org) bar. Click the boo
 
 > This is an unofficial project, not affiliated with Audible or Amazon. Read the [Notice](#notice) before you install it.
 
+> **Downloads may not work right now.** Since early September 2026, Audible has been refusing download licenses to some accounts in third-party apps, including this one and [Libation](https://getlibation.com). Books you already downloaded keep playing, and your place still syncs. Signing in again does not reliably fix it. See the [FAQ](#faq).
+
 ## Install
 
 You need Omarchy 4.0.4 or newer and an Audible account.
@@ -189,7 +191,9 @@ The Audible stores in the United States, United Kingdom, Germany, France, Canada
 No. It plays the books it downloaded itself.
 
 **It says "Audible is limiting downloads. Downloaded books still play."**
-Audible refused a download license. Omaudible pauses downloads, shows a deadline-derived retry estimate, and keeps waiting books in the Library as **Waiting**. They retry automatically in order when the pause ends, but Audible may still refuse the retry. Downloaded books still play; syncing, removal and position sync continue. The cooldown persists across shell restarts, but the waiting list does not: select those books again after a restart. **Disconnect** discards waiting and queued download intents; reconnecting does not restore them. Signing in again clears the plugin's saved pause and registers a new device, but is not a guarantee Audible will allow downloads.
+Audible refused a download license. Omaudible pauses downloads, shows a deadline-derived retry estimate, and keeps waiting books in the Library as **Waiting**. They retry automatically in order when the pause ends, but Audible may still refuse the retry. Downloaded books still play; syncing, removal and position sync continue. The cooldown persists across shell restarts, but the waiting list does not: select those books again after a restart. **Disconnect** discards waiting and queued download intents; reconnecting does not restore them.
+
+Since early September 2026, Audible has refused downloads like this for some accounts in third-party apps, including [Libation](https://getlibation.com), while the Audible phone app keeps downloading. For some people it clears after a day or two. For others it lasts more than a week. Signing in again clears the plugin's saved pause and registers a new device, and that fixed it for some Libation users, but it is not a reliable fix: on the maintainer's account, Audible refused the new device's first download within seconds. Each retry may keep the limit in place longer, so let the automatic pause do the retrying, and use the Audible phone app for new downloads in the meantime.
 
 **It says "Audible connection problem".**
 Audible returned something the plugin didn't expect. Downloaded books still play from the saved library. **Copy diagnostic** copies a short report with credentials removed; include it if you open an issue.
