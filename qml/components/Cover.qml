@@ -5,7 +5,7 @@ import qs.Commons as Commons
 import "../lib/Glyphs.js" as Glyphs
 import "../lib/Parts.js" as Parts
 
-// A book's cover, always square. Loads `<dataDir>/covers/<asin>.jpg` off the
+// A book's cover, always square. Loads `<dataDir>/covers-v2/<asin>.jpg` off the
 // UI thread; until it is ready, or when it is missing or broken, shows the
 // book glyph on a themed tile. Corners follow the theme's rounding.
 // Bind `present` to `service.library.hasCover(asin)`, so a file that is not

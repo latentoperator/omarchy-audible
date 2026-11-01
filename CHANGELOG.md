@@ -2,6 +2,16 @@
 
 All notable changes to Omaudible. Versions follow `manifest.json`.
 
+## 0.1.9 (2026-11-01)
+
+### Security
+
+- Covers saved by 0.1.7 and earlier can no longer reach the shell before they are checked. 0.1.8 checked old covers only during a library sync, and the shell could show them first; a sync that failed (offline, signed out) or was skipped because the catalog was recent left them unchecked. The shell now reads covers only from a new folder, `covers-v2/`, that holds nothing but rebuilt JPEGs. Old covers in `covers/` are rebuilt into it, or dropped, the first time the plugin starts, with no network or sign-in needed, and the old folder is deleted. Covers look the same. Found in the marketplace review of 0.1.8.
+
+### Documentation
+
+- The README and the plugin description no longer say downloads may not work. Since 0.1.7 the plugin signs in as a current Audible for iPhone device, which Audible grants downloads to. The README now says how to switch if you signed in before 0.1.7: press **Set up**, then **Disconnect**, and sign in again.
+
 ## 0.1.8 (2026-11-01)
 
 ### Security

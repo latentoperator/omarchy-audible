@@ -88,7 +88,7 @@ Theming rule: import `qs.Commons` and `qs.Ui` and use `Style`/theme tokens only.
 | `~/.local/share/omarchy-audible/state.json` | Local positions, last-played times, push queue. **Written only by `StateStore.qml`** | |
 | `~/.local/share/omarchy-audible/books-location.json` | `{books_dir: "<absolute path>"}` acknowledged as the current books folder; written atomically by `books-location-ack` | |
 | `~/.local/share/omarchy-audible/download-pause.json` | `{until: iso, since: iso, count: n}`: downloads are held until `until`, because Audible refused a license with `CustomerThrottled` (0.1.5, §4.3). Written atomically by `get`, a successful `get` removes it, `login-finish`/`login-import-cli`/`logout` remove it too | |
-| `~/.local/share/omarchy-audible/covers/<asin>.jpg` | Cover thumbnails. Fetched over HTTPS only (every redirect hop checked, redirect bodies never read, at most 3 hops) with a 1 MB cap and a 30 s wall-clock deadline, and written only as a JPEG rebuilt by `coverimage.sanitize_jpeg` (Huffman baseline/progressive, 8-bit, 1 or 3 components, at most 1024 px a side; a leading JFIF header without thumbnail and a well-formed Adobe APP14 are kept, other ancillary segments and trailing bytes dropped). Every sync re-checks cached covers, with or without `--full`, and removes any that fail. | |
+| `~/.local/share/omarchy-audible/covers-v2/<asin>.jpg` | Cover thumbnails, the only cover folder the shell reads (0.1.9). Fetched over HTTPS only (every redirect hop checked, redirect bodies never read, at most 3 hops) with a 1 MB cap and a 30 s wall-clock deadline, and written only as a JPEG rebuilt by `coverimage.sanitize_jpeg` (Huffman baseline/progressive, 8-bit, 1 or 3 components, at most 1024 px a side; a leading JFIF header without thumbnail and a well-formed Adobe APP14 are kept, other ancillary segments and trailing bytes dropped). Every sync re-checks cached covers, with or without `--full`, and removes any that fail. Covers saved by 0.1.7 and earlier in `covers/` are never read by the shell: `status` (offline, at every shell start) and `sync` sanitise each into `covers-v2/` and then delete `covers/`, without following symlinks. | |
 | `<booksDir>/<asin>/book.m4b` | Decrypted audio, chapters embedded — **old downloads only**, before B11 | |
 | `<booksDir>/<asin>/book.aaxc` \| `book.aax` | The file exactly as Audible sent it, unlocked in memory at play time (B11, D7) | |
 | `<booksDir>/<asin>/key.json` | Decryption material: `{format:"aaxc",key,iv}` from the voucher, or `{format:"aax"}` as a **reference** to the account's activation bytes, not a copy (D7) | 0600 |
@@ -231,7 +231,7 @@ Multi-part books (D5, G0 decision): `content_delivery_type: MultiPartBook` downl
 ```json
 { "schema": 1, "synced_at": "2026-10-04T12:00:00Z", "marketplace": "us",
   "books": [ { "asin": "…", "title": "…", "subtitle": null, "authors": ["…"], "narrators": ["…"],
-               "series": {"name": "…", "part": "2"}, "cover": "covers/<asin>.jpg",
+               "series": {"name": "…", "part": "2"}, "cover": "covers-v2/<asin>.jpg",
                "runtime_min": 540, "date_added": "…", "percent_complete": 12.5,
                "is_finished": false, "multipart": false } ] }
 ```

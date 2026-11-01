@@ -20,6 +20,8 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import shutil
+import stat
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 from typing import Any, Protocol
@@ -29,7 +31,7 @@ from .auth import DEFAULT_MARKETPLACE
 from .errors import PipelineError, classify_audible_error
 from .library import _ASIN_RE, iso_now
 from .log import log
-from .paths import Paths
+from .paths import COVERS_DIR_NAME, Paths
 from .positions import (
     FakePositions,
     PositionsPort,
@@ -170,7 +172,7 @@ def book_entry(item: dict[str, Any]) -> tuple[dict[str, Any], str | None] | None
         "authors": _names(item.get("authors")),
         "narrators": _names(item.get("narrators")),
         "series": _series(item),
-        "cover": f"covers/{asin}.jpg" if url else None,
+        "cover": f"{COVERS_DIR_NAME}/{asin}.jpg" if url else None,
         "runtime_min": int(runtime) if runtime is not None else None,
         "date_added": _date_added(item),
         "percent_complete": _percent_complete(item),
@@ -351,7 +353,7 @@ def _cover_target(paths: Paths, asin: str) -> Path | None:
         return None
     target = paths.covers_dir / f"{asin}.jpg"
     try:
-        root = paths.data_dir.resolve() / "covers"
+        root = paths.data_dir.resolve() / COVERS_DIR_NAME
         if (
             paths.covers_dir.resolve() != root
             or target.is_symlink()
@@ -373,7 +375,7 @@ def fetch_covers(
     """Download the covers that are missing (all of them with ``full``).
 
     A cover that cannot be fetched is logged and skipped: the catalog still
-    points at ``covers/<asin>.jpg`` and the UI falls back to a placeholder.
+    points at ``covers-v2/<asin>.jpg`` and the UI falls back to a placeholder.
     Every cached cover is checked first, with or without ``full``, so the shell
     is never left with one that was not sanitised.
     """
@@ -399,6 +401,86 @@ def fetch_covers(
             continue
         downloaded += 1
     return downloaded
+
+
+def migrate_legacy_covers(paths: Paths) -> int:
+    """Move covers saved before 0.1.8 into the sanitised folder, then drop them.
+
+    Versions up to 0.1.7 saved covers as Audible sent them in ``covers/``, and
+    the shell read that folder directly, so a cover kept from then could reach
+    Qt's decoder before a sync checked it. The shell now reads only
+    ``covers-v2/``, which holds nothing but :func:`coverimage.sanitize_jpeg`
+    output. This runs from ``status`` (offline, no sign-in needed, at every
+    shell start) and from ``sync``. Each regular ``<asin>.jpg`` within the size
+    cap is sanitised into ``covers-v2/`` unless a cover is already there; the
+    legacy folder is then removed whatever it held.
+
+    The folder is opened once with ``O_NOFOLLOW`` and every file is opened
+    relative to that descriptor, also with ``O_NOFOLLOW``, and checked with
+    ``fstat``, so a symlink, whether present at the start or swapped in later,
+    is never read through. Returns how many covers were carried over. Never
+    raises: a cover is optional and ``status`` must always answer.
+    """
+    try:
+        return _migrate_legacy_covers(paths)
+    except Exception as exc:  # noqa: BLE001 - a cover is optional
+        log(f"legacy covers not migrated ({type(exc).__name__})")
+        return 0
+
+
+def _migrate_legacy_covers(paths: Paths) -> int:
+    legacy = paths.legacy_covers_dir
+    if legacy.is_symlink():
+        legacy.unlink()
+        return 0
+    if not legacy.is_dir():
+        return 0
+    moved = 0
+    try:
+        dir_fd = os.open(legacy, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError as exc:
+        log(f"legacy covers not opened ({type(exc).__name__})")
+    else:
+        try:
+            with os.scandir(dir_fd) as entries:
+                for entry in entries:
+                    if _migrate_one(paths, dir_fd, entry.name):
+                        moved += 1
+        finally:
+            os.close(dir_fd)
+    try:
+        shutil.rmtree(legacy)
+    except OSError as exc:
+        log(f"legacy covers not removed ({type(exc).__name__})")
+    return moved
+
+
+def _migrate_one(paths: Paths, dir_fd: int, name: str) -> bool:
+    """Sanitise one legacy ``<asin>.jpg`` into ``covers-v2/``; True if written."""
+    if not name.endswith(".jpg") or not _ASIN_RE.fullmatch(name[:-4]):
+        return False
+    asin = name[:-4]
+    try:
+        target = _cover_target(paths, asin)
+        if target is None or target.exists():
+            return False
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dir_fd)
+        with os.fdopen(fd, "rb") as handle:
+            info = os.fstat(handle.fileno())
+            if (
+                not stat.S_ISREG(info.st_mode)
+                or info.st_size > coverimage.MAX_COVER_BYTES
+            ):
+                return False
+            data = handle.read(coverimage.MAX_COVER_BYTES + 1)
+        clean = coverimage.sanitize_jpeg(data)
+        if _cover_target(paths, asin) is None:
+            return False
+        fsutil.atomic_write_bytes(target, clean)
+        return True
+    except Exception as exc:  # noqa: BLE001 - a cover is optional
+        log(f"legacy cover dropped ({type(exc).__name__})")
+        return False
 
 
 def _check_cached_cover(target: Path) -> bool:
@@ -469,6 +551,8 @@ def run_sync(
     Accumulates everything in memory and writes ``catalog.json`` last, through an
     atomic rename, so an interruption never leaves a half-written catalog.
     """
+    # Before the client: a failed sign-in must not leave old covers in place.
+    migrate_legacy_covers(paths)
     with contextlib.ExitStack() as stack:
         client = None
         if not fake and (library is None or positions_port is None):

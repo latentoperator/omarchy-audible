@@ -119,7 +119,7 @@ def test_book_entry_maps_the_fixture_fields():
     assert book["authors"] == ["Ilse Varga"]
     assert book["narrators"] == ["Priya Ndlovu"]
     assert book["series"] == {"name": "The Cinder Cycle", "part": "2"}
-    assert book["cover"] == "covers/B0FAKE0002.jpg"
+    assert book["cover"] == "covers-v2/B0FAKE0002.jpg"
     assert book["runtime_min"] == 731
     assert book["date_added"] == "2026-01-02T09:10:11.000Z"
     assert book["percent_complete"] == 0.0

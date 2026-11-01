@@ -23,7 +23,7 @@ def parts() -> qjs.JsModule:
 def test_cover_url(parts, data_dir):
     assert (
         parts.call("coverUrl", data_dir, "B0FAKE0001")
-        == "file:///home/u/.local/share/omarchy-audible/covers/B0FAKE0001.jpg"
+        == "file:///home/u/.local/share/omarchy-audible/covers-v2/B0FAKE0001.jpg"
     )
 
 
@@ -42,7 +42,7 @@ def test_cover_url(parts, data_dir):
 def test_cover_url_version(parts, version, suffix):
     assert (
         parts.call("coverUrl", "/d", "B0FAKE0001", version)
-        == "file:///d/covers/B0FAKE0001.jpg" + suffix
+        == "file:///d/covers-v2/B0FAKE0001.jpg" + suffix
     )
 
 
@@ -50,7 +50,7 @@ def test_cover_url_version(parts, version, suffix):
 def test_cover_url_version_not_finite(parts, version):
     assert (
         parts.evaluate(f'coverUrl("/d", "B0FAKE0001", {version})')
-        == "file:///d/covers/B0FAKE0001.jpg"
+        == "file:///d/covers-v2/B0FAKE0001.jpg"
     )
 
 
@@ -118,7 +118,7 @@ def test_file_url_round_trips_through_qurl(parts):
     ]:
         assert QUrl(parts.call("fileUrl", path)).toLocalFile() == path
     url = QUrl(parts.call("coverUrl", "/tmp/cache#test", "B0FAKE0001", 42))
-    assert url.toLocalFile() == "/tmp/cache#test/covers/B0FAKE0001.jpg"
+    assert url.toLocalFile() == "/tmp/cache#test/covers-v2/B0FAKE0001.jpg"
     assert url.query() == "v=42"
 
 

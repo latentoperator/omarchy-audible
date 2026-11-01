@@ -28,6 +28,13 @@ BOOKS_LOCATION_FILE = "books-location.json"
 # Real mode resolves to the real data dir, fake mode to the fake tree, so the
 # two never read each other's pause.
 DOWNLOAD_PAUSE_FILE = "download-pause.json"
+# Only ``catalog.fetch_covers`` and ``catalog.migrate_legacy_covers`` write
+# here, and only bytes ``coverimage.sanitize_jpeg`` rebuilt, so the shell never
+# decodes a cover kept from a version that did not sanitise. ``qml/lib/Parts.js``
+# has the same name in ``COVERS_DIR``.
+COVERS_DIR_NAME = "covers-v2"
+# Where 0.1.7 and earlier kept covers, unchecked. Moved, then removed.
+LEGACY_COVERS_DIR_NAME = "covers"
 
 
 def requested_books_dir(value: str | None, home: Path) -> Path:
@@ -281,7 +288,13 @@ class Paths:
 
     @property
     def covers_dir(self) -> Path:
-        return self.data_dir / "covers"
+        """Sanitised covers, the only cover folder the shell reads (0.1.9)."""
+        return self.data_dir / COVERS_DIR_NAME
+
+    @property
+    def legacy_covers_dir(self) -> Path:
+        """Covers saved before 0.1.8, never read by the shell (0.1.9)."""
+        return self.data_dir / LEGACY_COVERS_DIR_NAME
 
     @property
     def mpv_socket(self) -> Path:
