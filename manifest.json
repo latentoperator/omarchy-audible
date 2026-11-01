@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "latentoperator.audible",
   "name": "Omaudible: Omarchy Audible",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "author": "latentoperator",
   "description": "Your Audible audiobooks in the Omarchy bar: browse your audiobook library, download, and listen without a browser tab. Since September 2026 Audible has been refusing downloads to some accounts in third-party apps; books you already downloaded still play.",
   "kinds": [

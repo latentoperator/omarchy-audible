@@ -58,7 +58,7 @@ wheels = [
 
 [[package]]
 name = "omarchy-audible"
-version = "0.1.7"
+version = "0.1.8"
 source = { virtual = "." }
 
 [package.optional-dependencies]
