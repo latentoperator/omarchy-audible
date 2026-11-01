@@ -19,9 +19,13 @@ from pathlib import Path
 import pytest
 
 from omarchy_audible import catalog, commands, positions, protocol
+from omarchy_audible.coverimage import sanitize_jpeg
 from omarchy_audible.errors import PipelineError, classify_audible_error
 
 FIXTURE = catalog.fixture_items()
+COVER_JPEG = (
+    Path(__file__).parent / "fixtures" / "cover-jpeg" / "baseline.jpg"
+).read_bytes()
 FIXTURE_ASINS = [item["asin"] for item in FIXTURE]
 
 # Exactly the fields ARCHITECTURE 4.5 documents for a catalog book.
@@ -304,7 +308,7 @@ def test_covers_are_downloaded_only_when_missing_unless_full(paths):
 
     def fetch(url: str) -> bytes:
         fetched.append(url)
-        return b"fake-jpeg"
+        return COVER_JPEG
 
     item = _item(
         "B0COVER001",
@@ -323,7 +327,7 @@ def test_covers_are_downloaded_only_when_missing_unless_full(paths):
     )
     target = paths.covers_dir / "B0COVER001.jpg"
     assert fetched == ["https://example.invalid/B0COVER001.jpg"]
-    assert target.read_bytes() == b"fake-jpeg"
+    assert target.read_bytes() == sanitize_jpeg(COVER_JPEG)
 
     # A second run finds the cover present and does not download it again.
     catalog.run_sync(

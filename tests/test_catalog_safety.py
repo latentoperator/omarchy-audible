@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
 from omarchy_audible import catalog
+from omarchy_audible.coverimage import sanitize_jpeg
+
+COVERS = Path(__file__).parent / "fixtures" / "cover-jpeg"
+BASELINE = (COVERS / "baseline.jpg").read_bytes()
+PROGRESSIVE = (COVERS / "progressive.jpg").read_bytes()
 
 
 @pytest.fixture(autouse=True)
@@ -183,13 +189,15 @@ def test_cover_destination_is_rechecked_after_fetch(paths, tmp_path):
 def test_valid_identifiers_keep_missing_and_full_cover_refresh(paths, asin):
     fetched = []
 
+    covers = [BASELINE, PROGRESSIVE]
+
     def fetch(url):
         fetched.append(url)
-        return f"synthetic cover {len(fetched)}".encode()
+        return covers[len(fetched) - 1]
 
     assert sync(paths, asin, fetch)[0] == {"books": 1, "covers": 1, "positions": 1}
     assert sync(paths, asin, fetch)[0]["covers"] == 0
     assert sync(paths, asin, fetch, full=True)[0]["covers"] == 1
     assert len(fetched) == 2
-    assert (paths.covers_dir / f"{asin}.jpg").read_bytes() == b"synthetic cover 2"
+    assert (paths.covers_dir / f"{asin}.jpg").read_bytes() == sanitize_jpeg(PROGRESSIVE)
     assert json.loads(paths.catalog_file.read_text())["books"][0]["asin"] == asin

@@ -20,12 +20,11 @@ from __future__ import annotations
 import contextlib
 import json
 import os
-import urllib.request
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 from typing import Any, Protocol
 
-from . import fsutil, protocol
+from . import coverimage, fsutil, protocol
 from .auth import DEFAULT_MARKETPLACE
 from .errors import PipelineError, classify_audible_error
 from .library import _ASIN_RE, iso_now
@@ -338,10 +337,8 @@ def open_client(paths: Paths) -> Any:
 
 # --- covers ------------------------------------------------------------------
 def http_fetch_cover(url: str) -> bytes:
-    """Download one cover image (real mode only)."""
-    request = urllib.request.Request(url, headers={"User-Agent": COVER_USER_AGENT})
-    with urllib.request.urlopen(request, timeout=20) as response:
-        return response.read()
+    """Download one cover image (real mode only), bounded in size and time."""
+    return coverimage.fetch_bounded(url, COVER_USER_AGENT)
 
 
 def _cover_target(paths: Paths, asin: str) -> Path | None:
@@ -383,20 +380,43 @@ def fetch_covers(
     downloaded = 0
     for asin, url in covers.items():
         target = _cover_target(paths, asin)
-        if target is None or (target.is_file() and not full):
+        if target is None or (not full and _keep_cached_cover(target)):
             continue
         try:
-            data = fetch(url)
+            data = coverimage.sanitize_jpeg(fetch(url))
         except Exception as exc:  # noqa: BLE001 - a cover is optional
             log(f"cover download failed ({type(exc).__name__})")
             continue
-        if not isinstance(data, (bytes, bytearray)) or not data:
-            continue
         if _cover_target(paths, asin) is None:
             continue
-        fsutil.atomic_write_bytes(target, bytes(data))
+        fsutil.atomic_write_bytes(target, data)
         downloaded += 1
     return downloaded
+
+
+def _keep_cached_cover(target: Path) -> bool:
+    """True when ``target`` is a cover the shell may load as it is.
+
+    A cover cached before covers were sanitised is rewritten in place once; one
+    that cannot be sanitised is deleted so the sync fetches it again.
+    """
+    try:
+        if not target.is_file():
+            return False
+        if target.stat().st_size > coverimage.MAX_COVER_BYTES:
+            raise coverimage.CoverRejected("cached cover is too large")
+        data = target.read_bytes()
+        clean = coverimage.sanitize_jpeg(data)
+    except coverimage.CoverRejected:
+        log("cached cover rejected; fetching it again")
+        with contextlib.suppress(OSError):
+            target.unlink()
+        return False
+    except OSError:
+        return False
+    if clean != data:
+        fsutil.atomic_write_bytes(target, clean)
+    return True
 
 
 # --- the command -------------------------------------------------------------
