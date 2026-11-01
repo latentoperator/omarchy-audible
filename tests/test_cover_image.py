@@ -460,8 +460,32 @@ def test_redirect_chains_are_bounded(server):
     for n in range(10):
         server.routes[f"/r{n}"] = redirect(server.url(f"/r{n + 1}"))
     server.routes["/r10"] = body(BASELINE)
-    with pytest.raises(Exception, match="redirect"):
+    with pytest.raises(coverimage.CoverRejected, match="too many cover redirects"):
         fetch(server.url("/r0"))
+
+
+def test_redirect_cycles_count_every_hop(server):
+    hits = []
+
+    def bounce(target):
+        def handler(request):
+            hits.append(request.path)
+            redirect(server.url(target))(request)
+
+        return handler
+
+    server.routes["/a"] = bounce("/b")
+    server.routes["/b"] = bounce("/a")
+    with pytest.raises(coverimage.CoverRejected, match="too many cover redirects"):
+        fetch(server.url("/a"))
+    assert len(hits) == coverimage.MAX_REDIRECTS + 1
+
+
+def test_the_last_allowed_hop_is_followed(server):
+    for n in range(coverimage.MAX_REDIRECTS):
+        server.routes[f"/r{n}"] = redirect(server.url(f"/r{n + 1}"))
+    server.routes[f"/r{coverimage.MAX_REDIRECTS}"] = body(BASELINE)
+    assert fetch(server.url("/r0")) == BASELINE
 
 
 def test_a_slow_drip_is_cut_off_by_the_wall_clock(server, monkeypatch):

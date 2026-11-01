@@ -76,7 +76,15 @@ class _BoundedRedirects(urllib.request.HTTPRedirectHandler):
     ) -> Any:
         fp.close()
         _require_allowed(newurl)
-        return super().redirect_request(req, fp, code, msg, headers, newurl)
+        # urllib's own limits count distinct URLs, so an A -> B -> A cycle runs
+        # longer; count every hop instead.
+        hops = getattr(req, "cover_hops", 0) + 1
+        if hops > MAX_REDIRECTS:
+            raise CoverRejected("too many cover redirects")
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None:
+            new.cover_hops = hops
+        return new
 
 
 def _opener() -> urllib.request.OpenerDirector:
