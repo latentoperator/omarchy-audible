@@ -6,7 +6,7 @@ All notable changes to Omaudible. Versions follow `manifest.json`.
 
 ### Security
 
-- Cover images are now limited before the shell sees them. The backend downloads a cover only over HTTPS, stops at 1 MB or 30 seconds, and accepts only a plain JPEG of at most 1024 by 1024 pixels. It then rebuilds the file from the parts needed to draw it, dropping embedded metadata (EXIF, ICC profiles, comments, thumbnails) and anything after the image. Anything else is refused and the book shows the placeholder cover. Covers already on disk are cleaned the same way at the next library sync, without downloading them again. Real Audible covers are small JPEGs and look exactly as before. Found in the marketplace review of the 0.1.6 update.
+- Cover images are now limited before the shell sees them. The backend downloads a cover only over HTTPS, including every redirect, without reading redirect bodies, and stops at 1 MB or 30 seconds of wall-clock time. It accepts only a plain JPEG of at most 1024 by 1024 pixels, then rebuilds the file from the parts needed to draw it: embedded metadata (EXIF, ICC profiles, comments, thumbnails) and anything after the image are dropped, while the JFIF header that sets the colours is kept. Anything else is refused and the book shows the placeholder cover. Covers already on disk are checked the same way at every library sync, without downloading them again; one that fails is removed. Real Audible covers are small JPEGs and look exactly as before. Found in the marketplace review of the 0.1.6 update.
 
 ## 0.1.7 (2026-11-01)
 

@@ -374,13 +374,16 @@ def fetch_covers(
 
     A cover that cannot be fetched is logged and skipped: the catalog still
     points at ``covers/<asin>.jpg`` and the UI falls back to a placeholder.
+    Every cached cover is checked first, with or without ``full``, so the shell
+    is never left with one that was not sanitised.
     """
-    if fetch is None:
-        return 0
     downloaded = 0
     for asin, url in covers.items():
         target = _cover_target(paths, asin)
-        if target is None or (not full and _keep_cached_cover(target)):
+        if target is None:
+            continue
+        cached = _check_cached_cover(target)
+        if fetch is None or (cached and not full):
             continue
         try:
             data = coverimage.sanitize_jpeg(fetch(url))
@@ -389,16 +392,21 @@ def fetch_covers(
             continue
         if _cover_target(paths, asin) is None:
             continue
-        fsutil.atomic_write_bytes(target, data)
+        try:
+            fsutil.atomic_write_bytes(target, data)
+        except OSError as exc:
+            log(f"cover write failed ({type(exc).__name__})")
+            continue
         downloaded += 1
     return downloaded
 
 
-def _keep_cached_cover(target: Path) -> bool:
-    """True when ``target`` is a cover the shell may load as it is.
+def _check_cached_cover(target: Path) -> bool:
+    """True when ``target`` holds a sanitised cover the shell may load.
 
-    A cover cached before covers were sanitised is rewritten in place once; one
-    that cannot be sanitised is deleted so the sync fetches it again.
+    A cover cached before covers were sanitised is rewritten in place. One that
+    cannot be sanitised, or whose rewrite fails, is deleted so the shell never
+    loads it and the sync fetches it again. Never raises: a cover is optional.
     """
     try:
         if not target.is_file():
@@ -407,16 +415,14 @@ def _keep_cached_cover(target: Path) -> bool:
             raise coverimage.CoverRejected("cached cover is too large")
         data = target.read_bytes()
         clean = coverimage.sanitize_jpeg(data)
-    except coverimage.CoverRejected:
-        log("cached cover rejected; fetching it again")
+        if clean != data:
+            fsutil.atomic_write_bytes(target, clean)
+        return True
+    except Exception as exc:  # noqa: BLE001 - a cover is optional
+        log(f"cached cover dropped ({type(exc).__name__}); fetching it again")
         with contextlib.suppress(OSError):
             target.unlink()
         return False
-    except OSError:
-        return False
-    if clean != data:
-        fsutil.atomic_write_bytes(target, clean)
-    return True
 
 
 # --- the command -------------------------------------------------------------
