@@ -148,7 +148,7 @@ def test_one_cloud_row_per_catalog_book(library: qjs.JsModule, catalog: dict) ->
     first = rows_by_asin(rows)[A1]
     assert first["authors"] == ["Mara Quill"]
     assert first["narrators"] == ["Owen Hale"]
-    assert first["cover"] == "covers/B0FAKE0001.jpg"
+    assert first["cover"] == "covers-v2/B0FAKE0001.jpg"
     assert first["runtimeMin"] == 512
     assert first["multipart"] is False
 

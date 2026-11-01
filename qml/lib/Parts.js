@@ -17,6 +17,11 @@ var TONE_MUTED = "muted";
 // carry a path, so it never reaches a file URL.
 var ASIN_PATTERN = /^[A-Z0-9]{10}$/;
 
+// The cover folder under the data dir. Only the backend's sanitiser writes
+// here (0.1.9); the `covers` folder older versions filled is never read.
+// `backend/omarchy_audible/paths.py` has the same name in `COVERS_DIR_NAME`.
+var COVERS_DIR = "covers-v2";
+
 // `file://` URL for an absolute path, each segment percent-encoded so a
 // `#`, `?`, `%` or space in a directory name stays part of the path. Runs of
 // `/` collapse to one (the same path on Linux), so a leading `//` can never
@@ -38,7 +43,7 @@ function listable(path) {
   return fileUrl(path).length > 0 && !/[#?%]/.test(path);
 }
 
-// `file://` URL of `<dataDir>/covers/<asin>.jpg` (ARCHITECTURE file table),
+// `file://` URL of `<dataDir>/covers-v2/<asin>.jpg` (ARCHITECTURE file table),
 // or "" when the data dir is unknown or the ASIN is not a plain ASIN. A
 // positive `version` (the file's modified time in ms) is added as `?v=`, so a
 // cover that `sync` replaces is a new URL and is not served from Qt's image
@@ -47,7 +52,7 @@ function coverUrl(dataDir, asin, version) {
   if (typeof asin !== "string" || !ASIN_PATTERN.test(asin)) return "";
   var dir = fileUrl(dataDir);
   if (dir.length === 0) return "";
-  var url = dir + "/covers/" + asin + ".jpg";
+  var url = dir + "/" + COVERS_DIR + "/" + asin + ".jpg";
   if (typeof version === "number" && isFinite(version) && version > 0) {
     url += "?v=" + Math.floor(version);
   }

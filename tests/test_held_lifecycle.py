@@ -96,7 +96,7 @@ this.runner = {
   cancel:function(a){var out=JobQueue.cancel(this.queue,a);
     if(out.action==='send_cancel') run('cancel',[a]);this.sync();return out.action;}
 };
-this.library = {rowFor:function(a){return {asin:a,state:'downloading'};},localBooks:[]};
+this.library = {rowFor:function(a){return {asin:a,state:'downloading'};},localBooks:[],rescanCovers:function(){}};
 this.removals = {jobAllowed:function(){return true;}};
 this.booksAckState = {}; this.settingsReceived = false;
 this.BooksLocation = {ackStep:function(s){return {state:s};}};

@@ -14,7 +14,7 @@ Your Audible audiobooks in the [Omarchy](https://omarchy.org) bar. Click the boo
 
 > This is an unofficial project, not affiliated with Audible or Amazon. Read the [Notice](#notice) before you install it.
 
-> **Downloads may not work right now.** Since early September 2026, Audible has been refusing download licenses to some accounts in third-party apps, including this one and [Libation](https://getlibation.com). Books you already downloaded keep playing, and your place still syncs. Signing in again does not reliably fix it. See the [FAQ](#faq).
+> **Downloads work again from 0.1.7.** From September 2026, Audible refused downloads to the older device type this plugin signed in as. Since 0.1.7 the plugin signs in as a current Audible for iPhone device, and on the Omaudible maintainer's account that device downloads books the old one was refused. **If you signed in before 0.1.7**, update the plugin, then press **Set up**, **Disconnect** and sign in again; until you do, it keeps the old device. Books you already downloaded keep playing either way. See the [FAQ](#faq).
 
 ## Install
 
@@ -193,7 +193,9 @@ No. It plays the books it downloaded itself.
 **It says "Audible is limiting downloads. Downloaded books still play."**
 Audible refused a download license. Omaudible pauses downloads, shows a deadline-derived retry estimate, and keeps waiting books in the Library as **Waiting**. They retry automatically in order when the pause ends, but Audible may still refuse the retry. Downloaded books still play; syncing, removal and position sync continue. The cooldown persists across shell restarts, but the waiting list does not: select those books again after a restart. **Disconnect** discards waiting and queued download intents; reconnecting does not restore them.
 
-Since early September 2026, Audible has refused downloads like this for some accounts in third-party apps, including [Libation](https://getlibation.com), while the Audible phone app keeps downloading. For some people it clears after a day or two. For others it lasts more than a week. Signing in again clears the plugin's saved pause and registers a new device, and that fixed it for some Libation users, but it is not a reliable fix: on the maintainer's account, Audible refused the new device's first download within seconds. Each retry may keep the limit in place longer, so let the automatic pause do the retrying, and use the Audible phone app for new downloads in the meantime.
+From early September 2026, Audible refused downloads like this for some accounts in third-party apps, including [Libation](https://getlibation.com), while the Audible phone app kept downloading. The maintainer of the `audible` library traced it to the device type: devices registered as an old version of the iPhone app were refused, while a device registered as the current version on the same account was granted. Omaudible 0.1.7 and later register the current version, and on the Omaudible maintainer's account the new device downloaded books the old one was refused.
+
+If you signed in before 0.1.7, your plugin still uses the old device. Press **Set up** if the drawer asks to update its tools, then **Disconnect** and sign in again. Disconnect removes the old plugin device from your Amazon account. If Audible still refuses after that, let the automatic pause do the retrying rather than signing in again and again, and use the Audible phone app for new downloads in the meantime.
 
 **It says "Audible connection problem".**
 Audible returned something the plugin didn't expect. Downloaded books still play from the saved library. **Copy diagnostic** copies a short report with credentials removed; include it if you open an issue.

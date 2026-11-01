@@ -12,6 +12,7 @@ import "qml/lib/LibraryUi.js" as LibraryUi
 import "qml/lib/Mpv.js" as Mpv
 import "qml/lib/Onboarding.js" as Onboarding
 import "qml/lib/Panel.js" as Panel
+import "qml/lib/Parts.js" as Parts
 import "qml/lib/Playback.js" as Playback
 import "qml/lib/BooksLocation.js" as BooksLocation
 import "qml/lib/Player.js" as Player
@@ -176,7 +177,7 @@ Item {
   property string lastSyncHint: ""
   property var doctorChecks: []
   property real catalogAgeSeconds: 0
-  readonly property string diagnosticText: Diagnostic.build(manifest ? manifest.version : "0.1.8",
+  readonly property string diagnosticText: Diagnostic.build(manifest ? manifest.version : "0.1.9",
     "sync", lastSyncCode, lastSyncMessage, lastSyncHint, doctorChecks)
   readonly property bool syncing: Drawer.syncing(runner.pendingJobs, runner.activeJob)
   readonly property var syncFailure: Drawer.syncFailure(lastSyncCode)
@@ -950,7 +951,7 @@ Item {
   LibraryModel {
     id: library
     stateDoc: store.doc
-    coversDir: root.dataDir.length > 0 ? root.dataDir + "/covers" : ""
+    coversDir: root.dataDir.length > 0 ? root.dataDir + "/" + Parts.COVERS_DIR : ""
     jobs: Playback.jobStates(runner.pendingJobs, runner.activeJob, runner.progress, root.failures, root.held.asins)
   }
 
@@ -1164,6 +1165,8 @@ Item {
         root.statusAtMs = Date.now()
         root.refreshCatalogAge()
         root.refreshLocal()
+        // `status` may have just created the covers folder (0.1.9 migration).
+        library.rescanCovers()
         // The backend's pause is the authority: while it runs, nothing is
         // asked for; once it is over, the held downloads go again (0.1.5).
         if (root.jobAllowed({ "command": "get" })) {

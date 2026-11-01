@@ -177,6 +177,9 @@ def _books_location(paths: Paths) -> dict[str, object]:
 
 def cmd_status(args: Sequence[str], *, command: str, fake: bool, paths: Paths) -> int:
     """Report readiness (ARCHITECTURE 4.2)."""
+    # Offline and cheap once done: covers kept from before 0.1.8 are sanitised
+    # into the folder the shell reads before the shell is told where it is.
+    catalog.migrate_legacy_covers(paths)
     if fake:
         # Fake mode pretends the tools and the venv are ready so the UI can run
         # with no account, no network and no virtualenv. Its sign-in state and
