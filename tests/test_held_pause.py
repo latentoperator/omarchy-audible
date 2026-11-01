@@ -13,7 +13,7 @@ def set_pause(service, asins=()):
     service.call("run", "status", [])
     job = service.evaluate("commands[commands.length-1]")
     status_event(service, job, until=DEADLINE)
-    service.call("onJobFinished", job, {"ok": True})
+    service.call("finishedHandler", job, {"ok": True})
     if asins:
         service.call(
             "applyHeld", {"type": "hold", "asins": list(asins), "until": DEADLINE}
@@ -67,7 +67,7 @@ def test_missing_status_record_uses_bounded_failure_backoff(service, outcome):
     intervals = []
     for _ in range(7):
         job = service.evaluate("commands[commands.length-1]")
-        service.call("onJobFinished", job, outcome)
+        service.call("finishedHandler", job, outcome)
         assert service.evaluate("pauseTimer.running") is False
         assert service.evaluate("statusRetryTimer.running") is True
         intervals.append(service.evaluate("statusRetryTimer.interval"))
@@ -81,7 +81,7 @@ def test_delayed_record_after_expiry_cannot_restore_expired_banner(service):
     service.call("onPauseElapsed")
     job = service.evaluate("commands[commands.length-1]")
     status_event(service, job, until=DEADLINE)
-    service.call("onJobFinished", job, {"ok": True})
+    service.call("finishedHandler", job, {"ok": True})
     assert service.evaluate("held.until") == ""
     assert service.evaluate("statusRetryTimer.running") is False
     assert service.evaluate("pauseTimer.running") is False
@@ -92,11 +92,11 @@ def test_fresh_extended_deadline_rearms_once_and_resets_backoff(service):
     set_pause(service)
     service.call("onPauseElapsed")
     old = service.evaluate("commands[commands.length-1]")
-    service.call("onJobFinished", old, {"ok": False, "code": "internal"})
+    service.call("finishedHandler", old, {"ok": False, "code": "internal"})
     service.call("run", "status", [], "pause-refresh")
     new = service.evaluate("commands[commands.length-1]")
     status_event(service, new, until=UNTIL)
-    service.call("onJobFinished", new, {"ok": True})
+    service.call("finishedHandler", new, {"ok": True})
     assert service.evaluate("downloadsPaused") is True
     assert service.evaluate("pauseTimer.running") is True
     assert service.evaluate("pauseTimer.interval") > 1000
@@ -123,7 +123,7 @@ def test_disconnect_invalidates_pending_refresh_and_retry(service):
     service.call("onPauseElapsed")
     job = service.evaluate("commands[commands.length-1]")
     service.call("disconnect")
-    service.call("onJobFinished", job, {"ok": False, "code": "internal"})
+    service.call("finishedHandler", job, {"ok": False, "code": "internal"})
     assert service.evaluate("statusRetryTimer.running") is False
     assert service.evaluate("statusRequest") == ""
 
@@ -135,10 +135,10 @@ def test_ordinary_status_checks_coalesce_without_losing_followup(service):
         service.call("run", "status", [])
     assert service.evaluate("commands.length") == 1
     status_event(service, first, until=None)
-    service.call("onJobFinished", first, {"ok": True})
+    service.call("finishedHandler", first, {"ok": True})
     assert service.evaluate("commands.length") == 2
     current = service.evaluate("statusRequest")
-    service.call("onJobFinished", first, {"ok": False, "code": "internal"})
+    service.call("finishedHandler", first, {"ok": False, "code": "internal"})
     assert service.evaluate("statusRequest") == current
     assert service.evaluate("statusRetryTimer.running") is False
 

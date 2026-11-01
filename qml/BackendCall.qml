@@ -25,8 +25,12 @@ Item {
   property int exitCode: -1
   property string stderrText: ""
 
-  signal record(var record)
-  signal finished(var outcome)
+  // Called with each record, then once with the outcome. Plain function
+  // properties, not signals: from Qt 6.12 a `var` signal argument reaches the
+  // handler as a converted copy (arrays become objects keyed "0", "1", ...),
+  // while a direct call hands over the JS value itself on every Qt version.
+  property var recordHandler: null
+  property var finishedHandler: null
 
   function start() {
     process.running = true
@@ -38,7 +42,7 @@ Item {
 
   function emitRecords(records) {
     for (var index = 0; index < records.length; index++) {
-      root.record(records[index])
+      if (root.recordHandler) root.recordHandler(records[index])
       // play-info's key has now reached the service, which hands it straight
       // to mpv. Don't keep it in `splitter.events` until this call is
       // destroyed (B11); the outcome only needs the terminal event.
@@ -52,7 +56,7 @@ Item {
     emitRecords(Ndjson.flush(splitter))
     var outcome = Ndjson.finish(root.exitCode, splitter.events)
     outcome.stderr = root.stderrText
-    root.finished(outcome)
+    if (root.finishedHandler) root.finishedHandler(outcome)
   }
 
   Process {

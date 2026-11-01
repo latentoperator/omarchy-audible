@@ -258,11 +258,11 @@ def test_the_service_keeps_the_names_views_use():
 
 def test_the_runner_hands_every_record_and_finish_to_the_flow():
     service = read("Service.qml")
-    events = service[service.index("onEvent: function(record, job)") :]
-    events = events[: events.index("onJobFinished:")]
+    events = service[service.index("eventHandler: function(record, job)") :]
+    events = events[: events.index("finishedHandler:")]
     assert "catchupFlow.handleEvent(record, job)" in events
     assert events.index("catchupFlow.handleEvent(") < events.index("sync.handleEvent(")
-    finished = service[service.index("onJobFinished: function(job, outcome)") :]
+    finished = service[service.index("finishedHandler: function(job, outcome)") :]
     assert "catchupFlow.handleFinished(job, outcome)" in finished
     assert finished.index("sync.handleFinished(") < finished.index(
         "catchupFlow.handleFinished("

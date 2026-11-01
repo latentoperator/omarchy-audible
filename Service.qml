@@ -1150,7 +1150,9 @@ Item {
       return values
     }
 
-    onEvent: function(record, job) {
+    // Function properties, not signal handlers: Qt 6.12 converts `var`
+    // signal arguments (see JobRunner.qml).
+    eventHandler: function(record, job) {
       var silentAckFailure = ""
       if (record.type === "status") {
         if (!root.statusCurrent(job)) return
@@ -1197,7 +1199,7 @@ Item {
         Signin.isOnboardingCommand(job.command) ? "" : EventLog.summarize(record, 160)))
     }
 
-    onJobFinished: function(job, outcome) {
+    finishedHandler: function(job, outcome) {
       if (job.command === "status") root.finishStatus(job)
       var text = outcome.ok ? "ok" : String(outcome.code) + (Signin.isOnboardingCommand(job.command)
         ? "" : ": " + String(outcome.message || ""))
