@@ -197,14 +197,14 @@ def test_the_step_still_switches_the_view_on_the_service():
 
 def test_the_runner_hands_every_record_and_finish_to_the_flow():
     service = read("Service.qml")
-    events = service[service.index("onEvent: function(record, job)") :]
-    events = events[: events.index("onJobFinished:")]
+    events = service[service.index("eventHandler: function(record, job)") :]
+    events = events[: events.index("finishedHandler:")]
     assert "signinFlow.handleEvent(record, job)" in events
     # Same order as before the split: after the sync, before the log line, so
     # "fake: browser not opened" still comes before the login_url entry.
     assert events.index("sync.handleEvent(") < events.index("signinFlow.handleEvent(")
     assert events.index("signinFlow.handleEvent(") < events.index("root.logEvent(")
-    finished = service[service.index("onJobFinished: function(job, outcome)") :]
+    finished = service[service.index("finishedHandler: function(job, outcome)") :]
     assert "signinFlow.handleFinished(job, outcome)" in finished
     assert finished.index("signinFlow.handleFinished(") < finished.index(
         'root.logEvent(job.command + " exit", text)'

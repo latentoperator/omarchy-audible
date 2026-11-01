@@ -32,7 +32,7 @@ def backend_boundary(service):
     )
     code = (
         """backend = (function() {
-var root = {splitter:Ndjson.createSplitter(),exitCode:-1,stderrText:'',record:function(){}};
+var root = {splitter:Ndjson.createSplitter(),exitCode:-1,stderrText:'',recordHandler:function(){}};
 var splitter = root.splitter;
 var drain = {running:false,restart:function(){this.running=true;}};
 """
@@ -42,10 +42,10 @@ var drain = {running:false,restart:function(){this.running=true;}};
         + """
 root.emitRecords = emitRecords; root.settle = settle; root.exited = exited; root.drain = drain;
 root.feed = function(text){emitRecords(Ndjson.feed(splitter,text));};
-root.finished = function(outcome){
+root.finishedHandler = function(outcome){
   completedOutcome = outcome;
   completion = JobQueue.complete(runner.queue,outcome);
-  runner.sync(); onJobFinished(job,outcome);
+  runner.sync(); finishedHandler(job,outcome);
 };
 return root;
 })()"""
@@ -71,7 +71,7 @@ def test_cancelled_throttled_request_never_reappears_at_expiry(service, timing):
     assert service.evaluate("backend.drain.running") is True
     # The separate cancel command may be too late; its result must not erase intent.
     service.call(
-        "onJobFinished",
+        "finishedHandler",
         {"command": "cancel", "args": [A]},
         {"ok": False, "code": "not_running"},
     )
@@ -134,7 +134,7 @@ def test_cancel_after_held_display_drops_only_that_intent(service):
     service.evaluate("JobQueue.complete(runner.queue,{ok:false,code:'throttled'})")
     service.evaluate("runner.sync()")
     service.call(
-        "onJobFinished",
+        "finishedHandler",
         job,
         {"ok": False, "code": "throttled", "terminal": {"until": UNTIL}},
     )
@@ -149,7 +149,7 @@ def test_cancellation_of_other_asin_does_not_cancel_running_request(service):
     service.evaluate("JobQueue.complete(runner.queue,{ok:false,code:'throttled'})")
     service.evaluate("runner.sync()")
     service.call(
-        "onJobFinished",
+        "finishedHandler",
         service.evaluate("job"),
         {"ok": False, "code": "throttled", "terminal": {"until": UNTIL}},
     )
@@ -179,7 +179,7 @@ Item {
   JobRunner {
     id: runner
     launcher: "/invented/backend"
-    onJobFinished: function(job, outcome) {
+    finishedHandler: function(job, outcome) {
       if (job.command === "get") top.outcomes = top.outcomes.concat([{
         cancelled: job.cancelRequested === true, ok: outcome.ok, code: outcome.code
       }])

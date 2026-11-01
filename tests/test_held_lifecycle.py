@@ -54,7 +54,10 @@ def service():
         if f"function {name}(" in source:
             module._check(module._engine.evaluate(function_body(source, name)), name)
     # Execute the product's signal bodies too, rather than copying their decisions.
-    for signal, args in (("onEvent", "record, job"), ("onJobFinished", "job, outcome")):
+    for signal, args in (
+        ("eventHandler", "record, job"),
+        ("finishedHandler", "job, outcome"),
+    ):
         start = source.index(f"    {signal}: function(")
         body = function_body(
             source[start:].replace(f"{signal}: function", "function callback", 1),
@@ -125,7 +128,7 @@ def hold_and_queue(service):
 
 def status_event(service, job, authenticated=True, until=None):
     service.call(
-        "onEvent",
+        "eventHandler",
         {
             "type": "status",
             "authenticated": authenticated,

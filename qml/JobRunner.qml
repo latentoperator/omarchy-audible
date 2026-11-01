@@ -39,11 +39,23 @@ Item {
   property var progress: null
   property var lastError: null
 
-  signal event(var record, var job)
-  signal jobFinished(var job, var outcome)
+  // `function(record, job)` for every backend record, and
+  // `function(job, outcome)` once a job ends. Function properties rather than
+  // signals, so the caller gets the records' arrays as arrays and the job
+  // object itself on Qt 6.12 as well as older Qt (see BackendCall.qml).
+  property var eventHandler: null
+  property var finishedHandler: null
 
-  // `purpose` is a free tag the caller uses to recognise its own jobs in the
-  // `event` and `jobFinished` signals.
+  function event(record, job) {
+    if (root.eventHandler) root.eventHandler(record, job)
+  }
+
+  function jobFinished(job, outcome) {
+    if (root.finishedHandler) root.finishedHandler(job, outcome)
+  }
+
+  // `purpose` is a free tag the caller uses to recognise its own jobs in
+  // `eventHandler` and `finishedHandler`.
   function run(command, args, purpose) {
     var job = { "command": String(command), "args": args || [], "purpose": purpose || "" }
     if (JobQueue.isJobCommand(job.command)) {
@@ -139,13 +151,13 @@ Item {
     if (!isJob) {
       root.bypassCount += 1
     }
-    call.record.connect(function(record) {
+    call.recordHandler = function(record) {
       if (isJob && record.type === "progress") {
         root.progress = record
       }
       root.event(record, job)
-    })
-    call.finished.connect(function(outcome) {
+    }
+    call.finishedHandler = function(outcome) {
       call.destroy()
       if (isJob) {
         root.jobDone(job, outcome)
@@ -154,7 +166,7 @@ Item {
         root.noteFailure(job, outcome)
         root.jobFinished(job, outcome)
       }
-    })
+    }
     call.start()
   }
 

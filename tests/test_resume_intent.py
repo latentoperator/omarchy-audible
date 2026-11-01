@@ -41,7 +41,7 @@ def service():
     ):
         if f"function {name}(" in source:
             module._check(module._engine.evaluate(function_body(source, name)), name)
-    for signal in ("onEvent", "onJobFinished"):
+    for signal in ("eventHandler", "finishedHandler"):
         start = source.index(f"    {signal}: function(")
         body = function_body(
             source[start:].replace(f"{signal}: function", "function callback", 1),
@@ -91,7 +91,7 @@ def start(service, asin=A):
 
 def record(service, job, ms):
     service.call(
-        "onEvent",
+        "eventHandler",
         {
             "type": "positions",
             "items": {job["args"][0]: {"ms": ms, "updated_at": "2027-01-15T12:00:00Z"}},
@@ -101,7 +101,7 @@ def record(service, job, ms):
 
 
 def finish(service, job, ok=True):
-    service.call("onJobFinished", job, {"ok": ok, "code": "" if ok else "network"})
+    service.call("finishedHandler", job, {"ok": ok, "code": "" if ok else "network"})
 
 
 def assert_latest_load(service, expected=200):
@@ -109,7 +109,7 @@ def assert_latest_load(service, expected=200):
     assert len(loads) == 1
     assert service.evaluate("playRequest.startSec") == expected
     service.call(
-        "onEvent",
+        "eventHandler",
         {"type": "play_info", "path": f"/invented/books/{A}/book.m4b"},
         loads[0],
     )
@@ -238,7 +238,7 @@ def test_latest_resume_keeps_defined_cached_fallback(service, fallback):
         if fallback == "failure":
             record(service, new, 200000)
         elif fallback == "missing_item":
-            service.call("onEvent", {"type": "positions", "items": {}}, new)
+            service.call("eventHandler", {"type": "positions", "items": {}}, new)
         finish(service, new, fallback != "failure")
     finish(service, old)
     assert_latest_load(service, 42)
@@ -249,7 +249,7 @@ def test_a_new_resume_supersedes_pending_play_info(service):
     old_load = service.evaluate("loads()[0]")
     start(service, B)
     service.call(
-        "onEvent",
+        "eventHandler",
         {"type": "play_info", "path": f"/invented/books/{A}/book.m4b"},
         old_load,
     )
