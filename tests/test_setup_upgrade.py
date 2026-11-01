@@ -13,7 +13,12 @@ from threading import Barrier
 
 import pytest
 from test_launcher import _load_launcher
-from test_setup_repair import offline_env, offline_repair, status  # noqa: F401
+from test_setup_repair import (  # noqa: F401
+    AUDIBLE_DIST,
+    offline_env,
+    offline_repair,
+    status,
+)
 
 import qjs
 from omarchy_audible import bootstrap
@@ -126,7 +131,7 @@ def test_legacy_stale_digest_preserved_and_dispatchable(legacy_env, monkeypatch)
 
 def test_legacy_stale_installed_pin_is_usable_old(legacy_env, monkeypatch):
     paths, site, _ = legacy_env
-    (site / "audible-0.12.0.dist-info/METADATA").write_text(
+    (site / AUDIBLE_DIST / "METADATA").write_text(
         "Metadata-Version: 2.1\nName: audible\nVersion: 0.0.0\n"
     )
     report = status(paths, monkeypatch)

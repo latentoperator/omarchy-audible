@@ -69,7 +69,7 @@ def _digest() -> str:
 def test_requirements_lock_pins_the_spike_versions():
     text = bootstrap.requirements_path().read_text(encoding="utf-8")
     assert "audible-cli==0.6.0" in text
-    assert "audible[cryptography]==0.12.0" in text
+    assert "audible[cryptography]==0.13.1" in text
 
 
 def test_setup_runs_venv_two_pips_and_the_import_check(paths: Paths):

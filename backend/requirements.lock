@@ -3,4 +3,4 @@
 # (see docs/SPIKE-RESULTS.md). `audible-cli` pulls `audible` in as well, but the
 # explicit pin keeps the extra (cryptography) and the exact version in one place.
 audible-cli==0.6.0
-audible[cryptography]==0.12.0
+audible[cryptography]==0.13.1
