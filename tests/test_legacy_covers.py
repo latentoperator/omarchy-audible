@@ -226,3 +226,64 @@ def test_unreadable_legacy_folder_does_not_fail_status(run_cli, paths):
             os.chmod(folder, 0o700)
     assert result.returncode == 0, result.stderr
     assert not (paths.covers_dir / "B0FAKE0001.jpg").exists()
+
+
+# --- review notes on 802cd28 ---------------------------------------------------
+def test_an_unexpected_error_never_escapes_status(paths, monkeypatch, capsys):
+    from omarchy_audible import commands
+
+    legacy(paths, {"B0FAKE0001.jpg": BASELINE})
+
+    def boom(*_args, **_kwargs):
+        raise MemoryError("synthetic")
+
+    monkeypatch.setattr(catalog.os, "scandir", boom)
+    assert catalog.migrate_legacy_covers(paths) == 0
+    rc = commands.cmd_status([], command="status", fake=False, paths=paths)
+    assert rc == 0
+    lines = [json.loads(x) for x in capsys.readouterr().out.splitlines()]
+    assert [x["type"] for x in lines] == ["status", "done"]
+
+
+def test_a_folder_swapped_for_a_symlink_mid_run_is_not_read_through(
+    paths, tmp_path, monkeypatch
+):
+    folder = legacy(paths, {"B0FAKE0001.jpg": BASELINE})
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "B0FAKE0001.jpg").write_bytes(PROGRESSIVE)
+    moved_aside = tmp_path / "moved-aside"
+    real_target = catalog._cover_target
+    swapped = []
+
+    def swap_then_check(p, asin):
+        if not swapped:
+            folder.rename(moved_aside)
+            folder.symlink_to(outside, target_is_directory=True)
+            swapped.append(True)
+        return real_target(p, asin)
+
+    monkeypatch.setattr(catalog, "_cover_target", swap_then_check)
+    assert catalog.migrate_legacy_covers(paths) == 1
+    # Read from the folder opened at the start, not the swapped-in symlink.
+    assert (
+        paths.covers_dir / "B0FAKE0001.jpg"
+    ).read_bytes() == coverimage.sanitize_jpeg(BASELINE)
+    assert (outside / "B0FAKE0001.jpg").read_bytes() == PROGRESSIVE
+
+
+def test_a_fifo_named_like_a_cover_is_skipped_without_blocking(paths):
+    folder = legacy(paths, {})
+    os.mkfifo(folder / "B0FAKE0001.jpg")
+    assert catalog.migrate_legacy_covers(paths) == 0
+    assert not folder.exists()
+
+
+def test_a_real_sync_that_cannot_sign_in_still_converts(paths):
+    legacy(paths, {"B0FAKE0001.jpg": PNG, "B0FAKE0002.jpg": BASELINE})
+    with pytest.raises(PipelineError):
+        catalog.run_sync(paths, fake=False, emit=lambda *_a, **_k: None)
+    assert not paths.legacy_covers_dir.exists()
+    assert (
+        paths.covers_dir / "B0FAKE0002.jpg"
+    ).read_bytes() == coverimage.sanitize_jpeg(BASELINE)
