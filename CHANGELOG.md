@@ -4,6 +4,10 @@ All notable changes to Omaudible. Versions follow `manifest.json`.
 
 ## Unreleased
 
+### Changed
+
+- Setup now installs `audible` 0.13.1 (was 0.12.0). New sign-ins register the plugin as a current Audible for iPhone device (app 4.60, 40-character serial) instead of the 3.56 profile. Audible's maintainer found that devices registered with the old profile were refused download licenses (`CustomerThrottled`) while a device with the new profile on the same account was granted. The update keeps your existing device; to get the new one, press **Set up** when the drawer asks to update the tools, then **Disconnect** and sign in again. Disconnect removes the old plugin device from your Amazon account.
+
 ### Documentation
 
 - The README and the plugin description now say up front that Audible has been refusing downloads to some accounts in third-party apps since early September 2026. Books you already downloaded keep playing. The FAQ explains that signing in again is not a reliable fix: on the maintainer's account, Audible refused a freshly registered device's first download within seconds.

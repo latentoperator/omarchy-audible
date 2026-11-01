@@ -128,7 +128,7 @@ Speed is snapped only when it matches a preset (`0.75`, `1.0`, `1.25`, `1.5`, `1
 The plugin itself is QML and Python source. Nothing is compiled, and the plugin never asks for administrator rights. The only third-party code comes from the **Set up** step in the drawer (or `omarchy-audible setup` in a terminal), which:
 
 1. Creates a Python virtual environment at `~/.local/share/omarchy-audible/venv` with your system `python3`.
-2. Runs `pip install -r backend/requirements.lock` inside it. That downloads two packages from [PyPI](https://pypi.org) at pinned versions, [`audible-cli`](https://pypi.org/project/audible-cli/) 0.6.0 and [`audible[cryptography]`](https://pypi.org/project/audible/) 0.12.0 (both AGPL-3.0, by mkb79), plus the libraries they depend on: about 30 packages and 75 MB in all. The two named packages are pinned by version, not by hash, and their dependencies resolve to current releases.
+2. Runs `pip install -r backend/requirements.lock` inside it. That downloads two packages from [PyPI](https://pypi.org) at pinned versions, [`audible-cli`](https://pypi.org/project/audible-cli/) 0.6.0 and [`audible[cryptography]`](https://pypi.org/project/audible/) 0.13.1 (both AGPL-3.0, by mkb79), plus the libraries they depend on: about 30 packages and 75 MB in all. The two named packages are pinned by version, not by hash, and their dependencies resolve to current releases.
 3. Installs this repository's `backend/` package into the same environment. pip fetches the `hatchling` build tool from PyPI to do it.
 4. Checks the installed dependencies, backend, interpreter compatibility and package pins with a bounded offline probe, then writes a ready marker with file fingerprints.
 

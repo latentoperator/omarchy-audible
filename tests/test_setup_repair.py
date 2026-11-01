@@ -13,6 +13,10 @@ import pytest
 from omarchy_audible import bootstrap, commands
 from omarchy_audible.errors import PipelineError
 
+# Synthetic venvs mirror the lock file, so bumping a pin needs no test edits.
+PINS = bootstrap.requirement_pins()
+AUDIBLE_DIST = f"audible-{PINS['audible']}.dist-info"
+
 
 @pytest.fixture
 def offline_env(paths, env, monkeypatch, tmp_path):
@@ -42,7 +46,10 @@ def offline_env(paths, env, monkeypatch, tmp_path):
         package = site / name
         package.mkdir()
         (package / "__init__.py").write_text("", encoding="utf-8")
-    for name, version in (("audible", "0.12.0"), ("audible_cli", "0.6.0")):
+    for name, version in (
+        ("audible", PINS["audible"]),
+        ("audible_cli", PINS["audible-cli"]),
+    ):
         metadata = site / f"{name}-{version}.dist-info"
         metadata.mkdir()
         (metadata / "METADATA").write_text(
@@ -174,7 +181,7 @@ def test_setup_checks_import_even_when_snapshot_is_unchanged(offline_env):
 
 def test_wrong_installed_pin_cannot_noop(offline_env):
     paths, site = offline_env
-    metadata = site / "audible-0.12.0.dist-info/METADATA"
+    metadata = site / AUDIBLE_DIST / "METADATA"
     metadata.write_text("Metadata-Version: 2.1\nName: audible\nVersion: 0.0.0\n")
     with pytest.raises(PipelineError):
         bootstrap.run_setup(paths, run=offline_failure)
@@ -255,7 +262,7 @@ def test_setup_really_repairs_offline_environment(offline_env, damage):
             (site / "audible/__init__.py").unlink()
             (site / "audible").rmdir()
     elif damage == "pins":
-        (site / "audible-0.12.0.dist-info/METADATA").write_text(
+        (site / AUDIBLE_DIST / "METADATA").write_text(
             "Metadata-Version: 2.1\nName: audible\nVersion: 0.0.0\n"
         )
     else:
@@ -294,7 +301,10 @@ def test_actual_incompatible_probe_forces_repair_not_fallback(offline_env, rebui
                 json.dumps(
                     {
                         "python": ["cpython", "cpython-000", 0, 0],
-                        "versions": {"audible": "0.12.0", "audible-cli": "0.6.0"},
+                        "versions": {
+                            "audible": PINS["audible"],
+                            "audible-cli": PINS["audible-cli"],
+                        },
                         "files": ["pyvenv.cfg"],
                     }
                 ),
@@ -383,7 +393,7 @@ def test_launcher_and_backend_reject_same_unusable_health(offline_env, damage):
     elif damage == "abi":
         marker["python"] = ["cpython", "cpython-000", 0, 0]
     elif damage == "metadata":
-        (site / "audible-0.12.0.dist-info/METADATA").unlink()
+        (site / AUDIBLE_DIST / "METADATA").unlink()
     elif damage == "malformed":
         marker["files"] = []
     else:
